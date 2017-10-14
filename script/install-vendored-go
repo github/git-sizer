@@ -1,0 +1,53 @@
+#!/bin/bash
+
+GO_VERSION=go1.8.1
+
+if [ $(uname -s) = "Darwin" ]; then
+  GO_PKG=${GO_VERSION}.darwin-amd64.tar.gz
+  GO_PKG_SHA=25b026fe2f4de7c80b227f69588b06b93787f5b5f134fbf2d652926c08c04bcd
+else
+  GO_PKG=${GO_VERSION}.linux-amd64.tar.gz
+  GO_PKG_SHA=a579ab19d5237e263254f1eac5352efcf1d70b9dacadb6d6bb12b0911ede8994
+fi
+
+archivesum() {
+  shasum -a256 "$ARCHIVE"
+}
+
+archiveok() {
+  test -f "$ARCHIVE" && archivesum | grep -q $GO_PKG_SHA
+}
+
+if go version 2>/dev/null | grep -q $GO_VERSION; then
+  go version
+  exit 0
+fi
+
+ROOTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+VENDORDIR="$ROOTDIR/vendor"
+DOWNLOAD_URL=https://storage.googleapis.com/golang/$GO_PKG
+ARCHIVE="$VENDORDIR/$GO_PKG"
+INSTALLDIR="$VENDORDIR/$GO_VERSION"
+export GOROOT="$INSTALLDIR/go"
+INSTALLEDGO="$GOROOT/bin/go"
+
+if [ -x $INSTALLEDGO ]; then
+  "$INSTALLEDGO" version
+  exit 0
+fi
+
+if ! archiveok; then
+  echo "Downloading $DOWNLOAD_URL"
+  mkdir -p "$VENDORDIR"
+  curl -L -o "$ARCHIVE" $DOWNLOAD_URL
+  if ! archiveok; then
+    archivesum 1>&2
+    echo expected checksum $GO_PKG_SHA 1>&2
+    exit 1
+  fi
+fi
+
+rm -rf "$INSTALLDIR"
+mkdir -p "$INSTALLDIR"
+tar xf "$ARCHIVE" -C "$INSTALLDIR"
+"$INSTALLEDGO" version

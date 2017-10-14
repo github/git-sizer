@@ -1,0 +1,58 @@
+#!/bin/bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+clone_url() {
+  local cloneUrl=$(git config remote.origin.url)
+
+  if [[ "$cloneUrl" == "https://github.com/"* ]]; then
+    echo "https://github.com/$1.git"
+  elif [[ "$cloneUrl" == "git@github.com:"* ]]; then
+    echo "git@github.com:$1.git"
+  elif [ "$(uname -s)" = "Darwin" ]; then
+    echo "https://github.com/$1.git"
+  else
+    echo "git@github.com:$1.git"
+  fi
+}
+
+ROOTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+SUBPROJECT=$1
+SUBPROJECT_VENDOR="$ROOTDIR/.gopath/src/github.com/$SUBPROJECT"
+SUBPROJECT_REPO="$SUBPROJECT"
+SUBPROJECT_GIT_URL="$(clone_url $SUBPROJECT_REPO)"
+SUBPROJECT_VERSION_CONFIG="$ROOTDIR/config/versions/$SUBPROJECT"
+
+if [ $# -gt 1 ]; then
+  SUBPROJECT_VERSION="$2"
+elif [ -f "$SUBPROJECT_VERSION_CONFIG" ]; then
+  SUBPROJECT_VERSION="$(cat $SUBPROJECT_VERSION_CONFIG)"
+else
+  printf '\e[31m' >&2
+  echo "ERROR: No $SUBPROJECT project is configured."
+  printf '\e[0m' >&2
+  exit 1
+fi
+
+if ! [ -d "$SUBPROJECT_VENDOR" ]; then
+  mkdir -p "$SUBPROJECT_VENDOR"
+fi
+cd "$SUBPROJECT_VENDOR"
+
+if [ "$(git rev-parse --verify HEAD 2>/dev/null)" = "$SUBPROJECT_VERSION" ]; then
+  echo "$SUBPROJECT build $(echo $SUBPROJECT_VERSION | cut -c1-10) is up-to-date."
+else
+  if ! [ -d ".git" ]; then
+    git init
+  fi
+  if ! git config --local remote.origin.url >/dev/null; then
+    git remote add origin "$SUBPROJECT_GIT_URL"
+  fi
+  git fetch origin --prune
+  git reset --hard "$SUBPROJECT_VERSION"
+
+  mkdir -p "$(dirname "$SUBPROJECT_VERSION_CONFIG")"
+  git rev-parse --verify HEAD > "$SUBPROJECT_VERSION_CONFIG"
+fi

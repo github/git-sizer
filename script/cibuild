@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -e
+
+cd $(dirname "$0")/..
+
+script/install-vendored-go
+script/bootstrap
+script/build
+make test

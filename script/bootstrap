@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -e
+
+cd $(dirname "$0")/..
+
+if [[ "$(uname -s)" = "Darwin" ]]; then
+  brew bundle
+fi
+script/ensure-go-installed
+
+rm -f .gopath/src/github.com/github/git-sizer
+mkdir -p .gopath/src/github.com/github
+ln -s "$PWD/src" .gopath/src/github.com/github/git-sizer
+
+make deps

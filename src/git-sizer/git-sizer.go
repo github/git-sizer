@@ -34,12 +34,12 @@ func outputJSON(oid sizes.Oid, objectType sizes.Type, size sizes.Size) {
 	fmt.Printf("%s\n", s)
 }
 
-func processObject(cache *sizes.SizeCache, oid sizes.Oid, output outputFunction) {
-	objectType, objectSize, err := cache.ObjectSize(oid)
+func processObject(cache *sizes.SizeCache, spec string, output outputFunction) {
+	oid, objectType, objectSize, err := cache.ObjectSize(spec)
 	if err != nil {
 		fmt.Fprintf(
 			os.Stderr, "error: could not compute object size for '%s': %v\n",
-			oid, err,
+			spec, err,
 		)
 		return
 	}
@@ -51,16 +51,7 @@ func processSpec(
 	repo *sizes.Repository, cache *sizes.SizeCache,
 	spec string, output outputFunction,
 ) {
-	oid, err := sizes.NewOid(spec)
-	if err != nil {
-		fmt.Fprintf(
-			os.Stderr, "error: could not parse '%s': %v\n",
-			spec, err,
-		)
-		return
-	}
-
-	processObject(cache, oid, output)
+	processObject(cache, spec, output)
 }
 
 type outputValue struct {
@@ -134,16 +125,8 @@ func main() {
 	if stdin {
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
-			line := scanner.Text()
-			oid, err := sizes.NewOid(line)
-			if err != nil {
-				fmt.Fprintf(
-					os.Stderr, "error: could not parse '%s': %v\n",
-					line, err,
-				)
-				continue
-			}
-			processObject(cache, oid, output)
+			spec := scanner.Text()
+			processObject(cache, spec, output)
 		}
 	}
 }

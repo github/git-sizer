@@ -106,24 +106,28 @@ func (oid Oid) String() string {
 	return hex.EncodeToString(oid[:])
 }
 
-func (repo *Repository) ReadHeader(oid Oid) (Type, Count, error) {
-	fmt.Fprintf(repo.checkStdin, "%s\n", oid)
+func (repo *Repository) ReadHeader(spec string) (Oid, Type, Count, error) {
+	fmt.Fprintf(repo.checkStdin, "%s\n", spec)
 	header, err := repo.checkStdout.ReadString('\n')
 	if err != nil {
-		return "missing", 0, err
+		return Oid{}, "missing", 0, err
 	}
 	header = header[:len(header)-1]
 	words := strings.Split(header, " ")
-	switch words[1] {
-	case "missing":
-		return "missing", 0, errors.New(fmt.Sprintf("missing object %s", oid))
-	default:
-		size, err := strconv.ParseUint(words[2], 10, 0)
-		if err != nil {
-			return "missing", 0, err
-		}
-		return Type(words[1]), Count(size), nil
+	if words[len(words)-1] == "missing" {
+		return Oid{}, "missing", 0, errors.New(fmt.Sprintf("missing object %s", spec))
 	}
+
+	oid, err := NewOid(words[0])
+	if err != nil {
+		return Oid{}, "missing", 0, err
+	}
+
+	size, err := strconv.ParseUint(words[2], 10, 0)
+	if err != nil {
+		return Oid{}, "missing", 0, err
+	}
+	return oid, Type(words[1]), Count(size), nil
 }
 
 type Tree struct {
@@ -372,33 +376,38 @@ func NewSizeCache(repo *Repository) (*SizeCache, error) {
 	return cache, nil
 }
 
-func (cache *SizeCache) ObjectSize(oid Oid) (Type, Size, error) {
-	objectType, objectSize, err := cache.repo.ReadHeader(oid)
+func (cache *SizeCache) ObjectSize(spec string) (Oid, Type, Size, error) {
+	oid, objectType, objectSize, err := cache.repo.ReadHeader(spec)
 	if err != nil {
-		return "missing", nil, err
+		return Oid{}, "missing", nil, err
 	}
 
 	switch objectType {
 	case "blob":
 		blobSize := BlobSize(objectSize)
 		cache.blobSizes[oid] = blobSize
-		return "blob", blobSize, nil
+		return oid, "blob", blobSize, nil
 	case "tree":
 		treeSize, err := cache.TreeSize(oid)
-		return "tree", treeSize, err
+		return oid, "tree", treeSize, err
 	case "commit":
-		return "commit", nil, fmt.Errorf("object %v has unexpected type '%s'", oid, objectType)
+		return oid, "commit", nil, fmt.Errorf("object %v has unexpected type '%s'", oid, objectType)
 	case "tag":
-		return "tag", nil, fmt.Errorf("object %v has unexpected type '%s'", oid, objectType)
+		return oid, "tag", nil, fmt.Errorf("object %v has unexpected type '%s'", oid, objectType)
 	default:
 		panic(fmt.Sprintf("object %v has unknown type", oid))
 	}
 }
 
+func (cache *SizeCache) OidObjectSize(oid Oid) (Type, Size, error) {
+	_, objectType, size, error := cache.ObjectSize(oid.String())
+	return objectType, size, error
+}
+
 func (cache *SizeCache) BlobSize(oid Oid) (BlobSize, error) {
 	size, ok := cache.blobSizes[oid]
 	if !ok {
-		objectType, objectSize, err := cache.repo.ReadHeader(oid)
+		_, objectType, objectSize, err := cache.repo.ReadHeader(oid.String())
 		if err != nil {
 			return 0, err
 		}

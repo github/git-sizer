@@ -231,53 +231,54 @@ func (s BlobSize) String() string {
 }
 
 type TreeSize struct {
-	// The maximum depth of items starting at this object (including
-	// this object).
-	MaxDepth Count `json:"max_depth"`
+	// The maximum depth of trees and blobs starting at this object
+	// (including this object).
+	MaxPathDepth Count `json:"max_path_depth"`
 
-	// The maximum length of any path relative to this object.
+	// The maximum length of any path relative to this object, in
+	// characters.
 	MaxPathLength Count `json:"max_path_length"`
 
-	// The total number of trees.
-	TreeCount Count `json:"tree_count"`
+	// The total number of trees, including duplicities.
+	ExpandedTreeCount Count `json:"expanded_tree_count"`
 
 	// The maximum number of entries an a tree.
 	MaxTreeEntries Count `json:"max_tree_entries"`
 
 	// The total number of blobs.
-	BlobCount Count `json:"blob_count"`
+	ExpandedBlobCount Count `json:"expanded_blob_count"`
 
 	// The total size of all blobs.
-	BlobSize Count `json:"blob_size"`
+	ExpandedBlobSize Count `json:"expanded_blob_size"`
 
 	// The total number of symbolic links.
-	LinkCount Count `json:"link_count"`
+	ExpandedLinkCount Count `json:"expanded_link_count"`
 
 	// The total number of submodules referenced.
-	SubmoduleCount Count `json:"submodule_count"`
+	ExpandedSubmoduleCount Count `json:"expanded_submodule_count"`
 }
 
 func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
-	s.recordDepth(s2.MaxDepth)
+	s.recordPathDepth(s2.MaxPathDepth)
 	if s2.MaxPathLength > 0 {
 		s.recordPathLength(addCapped(Count(len(filename))+1, s2.MaxPathLength))
 	} else {
 		s.recordPathLength(Count(len(filename)))
 	}
-	s.TreeCount = addCapped(s.TreeCount, s2.TreeCount)
+	s.ExpandedTreeCount = addCapped(s.ExpandedTreeCount, s2.ExpandedTreeCount)
 	if s2.MaxTreeEntries > s.MaxTreeEntries {
 		s.MaxTreeEntries = s2.MaxTreeEntries
 	}
-	s.BlobCount = addCapped(s.BlobCount, s2.BlobCount)
-	s.BlobSize = addCapped(s.BlobSize, s2.BlobSize)
-	s.LinkCount = addCapped(s.LinkCount, s2.LinkCount)
-	s.SubmoduleCount = addCapped(s.SubmoduleCount, s2.SubmoduleCount)
+	s.ExpandedBlobCount = addCapped(s.ExpandedBlobCount, s2.ExpandedBlobCount)
+	s.ExpandedBlobSize = addCapped(s.ExpandedBlobSize, s2.ExpandedBlobSize)
+	s.ExpandedLinkCount = addCapped(s.ExpandedLinkCount, s2.ExpandedLinkCount)
+	s.ExpandedSubmoduleCount = addCapped(s.ExpandedSubmoduleCount, s2.ExpandedSubmoduleCount)
 }
 
-// Set the object's MaxDepth to `max(s.MaxDepth, maxDepth)`.
-func (s *TreeSize) recordDepth(maxDepth Count) {
-	if maxDepth > s.MaxDepth {
-		s.MaxDepth = maxDepth
+// Set the object's MaxPathDepth to `max(s.MaxPathDepth, maxPathDepth)`.
+func (s *TreeSize) recordPathDepth(maxPathDepth Count) {
+	if maxPathDepth > s.MaxPathDepth {
+		s.MaxPathDepth = maxPathDepth
 	}
 }
 
@@ -291,30 +292,30 @@ func (s *TreeSize) recordPathLength(pathLength Count) {
 // Record that the object has a blob of the specified `size` as a
 // direct descendant.
 func (s *TreeSize) addBlob(filename string, size BlobSize) {
-	s.recordDepth(1)
+	s.recordPathDepth(1)
 	s.recordPathLength(Count(len(filename)))
-	s.BlobSize = addCapped(s.BlobSize, Count(size))
-	s.BlobCount = addCapped(s.BlobCount, 1)
+	s.ExpandedBlobSize = addCapped(s.ExpandedBlobSize, Count(size))
+	s.ExpandedBlobCount = addCapped(s.ExpandedBlobCount, 1)
 }
 
 // Record that the object has a link as a direct descendant.
 func (s *TreeSize) addLink(filename string) {
-	s.recordDepth(1)
+	s.recordPathDepth(1)
 	s.recordPathLength(Count(len(filename)))
-	s.LinkCount = addCapped(s.LinkCount, 1)
+	s.ExpandedLinkCount = addCapped(s.ExpandedLinkCount, 1)
 }
 
 // Record that the object has a submodule as a direct descendant.
 func (s *TreeSize) addSubmodule(filename string) {
-	s.recordDepth(1)
+	s.recordPathDepth(1)
 	s.recordPathLength(Count(len(filename)))
-	s.SubmoduleCount = addCapped(s.SubmoduleCount, 1)
+	s.ExpandedSubmoduleCount = addCapped(s.ExpandedSubmoduleCount, 1)
 }
 
 func (s TreeSize) String() string {
 	return fmt.Sprintf(
-		"max_depth=%d, max_path_length=%d, tree_count=%d, max_tree_entries=%d, blob_count=%d, blob_size=%d, link_count=%d, submodule_count=%d",
-		s.MaxDepth, s.MaxPathLength, s.TreeCount, s.MaxTreeEntries, s.BlobCount, s.BlobSize, s.LinkCount, s.SubmoduleCount,
+		"max_path_depth=%d, max_path_length=%d, expanded_tree_count=%d, max_tree_entries=%d, expanded_blob_count=%d, expanded_blob_size=%d, expanded_link_count=%d, expanded_submodule_count=%d",
+		s.MaxPathDepth, s.MaxPathLength, s.ExpandedTreeCount, s.MaxTreeEntries, s.ExpandedBlobCount, s.ExpandedBlobSize, s.ExpandedLinkCount, s.ExpandedSubmoduleCount,
 	)
 }
 
@@ -491,7 +492,7 @@ func (cache *SizeCache) queueTree(oid Oid) (TreeSize, error) {
 	// First accumulate all of the sizes (including maximum depth) for
 	// all descendants:
 	size := TreeSize{
-		TreeCount: 1,
+		ExpandedTreeCount: 1,
 	}
 
 	var entry TreeEntry
@@ -557,7 +558,7 @@ func (cache *SizeCache) queueTree(oid Oid) (TreeSize, error) {
 
 	// Now add one to the depth and to the tree count to account for
 	// this tree itself:
-	size.MaxDepth = addCapped(size.MaxDepth, 1)
+	size.MaxPathDepth = addCapped(size.MaxPathDepth, 1)
 	if entryCount > size.MaxTreeEntries {
 		size.MaxTreeEntries = entryCount
 	}

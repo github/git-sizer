@@ -160,6 +160,66 @@ func (repo *Repository) readObject(spec string) (Oid, Type, []byte, error) {
 	return oid, objectType, data[:len(data)-1], nil
 }
 
+type Commit struct {
+	Size    Count
+	Parents []Oid
+	Tree    Oid
+}
+
+func (repo *Repository) ReadCommit(oid Oid) (*Commit, error) {
+	oid, objectType, data, err := repo.readObject(oid.String())
+	if err != nil {
+		return nil, err
+	}
+	if objectType != "commit" {
+		return nil, fmt.Errorf("expected commit; found %s for object %s", objectType, oid)
+	}
+	headerEnd := bytes.Index(data, []byte("\n\n"))
+	if headerEnd == -1 {
+		return nil, fmt.Errorf("commit %s has no header separator", oid)
+	}
+	header := string(data[:headerEnd+1])
+	var parents []Oid
+	var tree Oid
+	var treeFound bool
+	for len(header) != 0 {
+		keyEnd := strings.IndexByte(header, ' ')
+		if keyEnd == -1 {
+			return nil, fmt.Errorf("malformed header in commit %s", oid)
+		}
+		key := header[:keyEnd]
+		header = header[keyEnd+1:]
+		valueEnd := strings.IndexByte(header, '\n')
+		if valueEnd == -1 {
+			return nil, fmt.Errorf("malformed header in commit %s", oid)
+		}
+		value := header[:valueEnd]
+		header = header[valueEnd+1:]
+		switch key {
+		case "parent":
+			parent, err := NewOid(value)
+			if err != nil {
+				return nil, fmt.Errorf("malformed parent header in commit %s", oid)
+			}
+			parents = append(parents, parent)
+		case "tree":
+			if treeFound {
+				return nil, fmt.Errorf("multiple trees found in commit %s", oid)
+			}
+			tree, err = NewOid(value)
+			if err != nil {
+				return nil, fmt.Errorf("malformed tree header in commit %s", oid)
+			}
+			treeFound = true
+		}
+	}
+	return &Commit{
+		Size:    Count(len(data)),
+		Parents: parents,
+		Tree:    tree,
+	}, nil
+}
+
 type Tree struct {
 	data []byte
 }
@@ -326,6 +386,27 @@ func (s TreeSize) String() string {
 	)
 }
 
+type CommitSize struct {
+	// The height of the ancestor graph, including this commit.
+	MaxAncestorDepth Count `json:"max_ancestor_depth"`
+}
+
+func (s *CommitSize) addParent(s2 CommitSize) {
+	if s2.MaxAncestorDepth > s.MaxAncestorDepth {
+		s.MaxAncestorDepth = s2.MaxAncestorDepth
+	}
+}
+
+func (s *CommitSize) addTree(s2 TreeSize) {
+}
+
+func (s CommitSize) String() string {
+	return fmt.Sprintf(
+		"max_ancestor_depth=%d",
+		s.MaxAncestorDepth,
+	)
+}
+
 type ToDoList struct {
 	list []Oid
 }
@@ -366,20 +447,30 @@ type SizeCache struct {
 	// The size of blobs whose sizes have been looked up so far.
 	blobSizes map[Oid]BlobSize
 
-	// The OIDs of trees whose sizes are in the process of being
-	// computed. This is, roughly, the call stack. As long as there
-	// are no SHA-1 collisions, the size of this list is bounded by
-	// the total number of direct non-blob referents in all unique
-	// objects along a single lineage of descendants of the starting
-	// point.
-	todo ToDoList
+	// The size of commits whose sizes have been looked up so far.
+	commitSizes map[Oid]CommitSize
+
+	// The OIDs of commits and trees whose sizes are in the process of
+	// being computed. This is, roughly, the call stack. As long as
+	// there are no SHA-1 collisions, the sizes of these lists are
+	// bounded:
+	//
+	// * commitsToDo is at most the total number of direct parents
+	//   along a single ancestry path through history.
+	//
+	// * treesToDo is at most the total number of direct non-blob
+	//   referents in all unique objects along a single lineage of
+	//   descendants of the starting point.
+	commitsToDo ToDoList
+	treesToDo   ToDoList
 }
 
 func NewSizeCache(repo *Repository) (*SizeCache, error) {
 	cache := &SizeCache{
-		repo:      repo,
-		treeSizes: make(map[Oid]TreeSize),
-		blobSizes: make(map[Oid]BlobSize),
+		repo:        repo,
+		treeSizes:   make(map[Oid]TreeSize),
+		blobSizes:   make(map[Oid]BlobSize),
+		commitSizes: make(map[Oid]CommitSize),
 	}
 	return cache, nil
 }
@@ -399,7 +490,8 @@ func (cache *SizeCache) ObjectSize(spec string) (Oid, Type, Size, error) {
 		treeSize, err := cache.TreeSize(oid)
 		return oid, "tree", treeSize, err
 	case "commit":
-		return oid, "commit", nil, fmt.Errorf("object %v has unexpected type '%s'", oid, objectType)
+		commitSize, err := cache.CommitSize(oid)
+		return oid, "commit", commitSize, err
 	case "tag":
 		return oid, "tag", nil, fmt.Errorf("object %v has unexpected type '%s'", oid, objectType)
 	default:
@@ -434,7 +526,7 @@ func (cache *SizeCache) TreeSize(oid Oid) (TreeSize, error) {
 		return s, nil
 	}
 
-	cache.todo.Push(oid)
+	cache.treesToDo.Push(oid)
 	err := cache.fill()
 	if err != nil {
 		return TreeSize{}, err
@@ -448,42 +540,148 @@ func (cache *SizeCache) TreeSize(oid Oid) (TreeSize, error) {
 	panic("queueTree() didn't fill tree")
 }
 
-// Compute the sizes of any trees listed in `cache.todo`. This might
-// involve computing the sizes of referred-to objects. Do this without
-// recursion to avoid unlimited stack growth.
-func (cache *SizeCache) fill() error {
-	for cache.todo.Length() != 0 {
-		oid := cache.todo.Peek()
+func (cache *SizeCache) CommitSize(oid Oid) (CommitSize, error) {
+	s, ok := cache.commitSizes[oid]
+	if ok {
+		return s, nil
+	}
 
-		// See if the object's size has been computed since it was
-		// enqueued. This can happen if it is used in multiple places
-		// in the ancestry graph.
-		_, ok := cache.treeSizes[oid]
-		if ok {
-			cache.todo.Drop()
+	cache.commitsToDo.Push(oid)
+	err := cache.fill()
+	if err != nil {
+		return CommitSize{}, err
+	}
+
+	// Now the size should be in the cache:
+	s, ok = cache.commitSizes[oid]
+	if ok {
+		return s, nil
+	}
+	panic("fill() didn't fill commit")
+}
+
+// Compute the sizes of any trees listed in `cache.commitsToDo` or
+// `cache.treesToDo`. This might involve computing the sizes of
+// referred-to objects. Do this without recursion to avoid unlimited
+// stack growth.
+func (cache *SizeCache) fill() error {
+	for {
+		if cache.treesToDo.Length() != 0 {
+			oid := cache.treesToDo.Peek()
+
+			// See if the object's size has been computed since it was
+			// enqueued. This can happen if it is used in multiple places
+			// in the ancestry graph.
+			_, ok := cache.treeSizes[oid]
+			if ok {
+				cache.treesToDo.Drop()
+				continue
+			}
+
+			s, err := cache.queueTree(oid)
+			if err == nil {
+				cache.treeSizes[oid] = s
+				cache.treesToDo.Drop()
+			} else if err == NotYetKnown {
+				// Let loop continue (the tree's constituents were added
+				// to `treesToDo` by `queueTree()`).
+			} else {
+				return err
+			}
 			continue
 		}
 
-		s, err := cache.queueTree(oid)
-		if err == nil {
-			cache.treeSizes[oid] = s
-			cache.todo.Drop()
-		} else if err == NotYetKnown {
-			// Let loop continue (the tree's constituents were
-			// added to todo by `queueTree()`).
-		} else {
-			return err
+		if cache.commitsToDo.Length() != 0 {
+			oid := cache.commitsToDo.Peek()
+
+			// See if the object's size has been computed since it was
+			// enqueued. This can happen if it is used in multiple places
+			// in the ancestry graph.
+			_, ok := cache.commitSizes[oid]
+			if ok {
+				cache.commitsToDo.Drop()
+				continue
+			}
+
+			s, err := cache.queueCommit(oid)
+			if err == nil {
+				cache.commitSizes[oid] = s
+				cache.commitsToDo.Drop()
+			} else if err == NotYetKnown {
+				// Let loop continue (the commits's constituents were
+				// added to `commitsToDo` and `treesToDo` by
+				// `queueCommit()`).
+			} else {
+				return err
+			}
+			continue
 		}
+
+		// There is nothing left to do:
+		return nil
 	}
-	return nil
 }
 
-// Compute and return the size of `tree` if we already know the size
-// of its constituents. If the constituents' sizes are not yet known
-// but believed to be computable, add any unknown constituents to
-// `todo` and return an `NotYetKnown` error. If another error occurred
-// while looking up an object, return that error. `tree` is not
-// already in the cache.
+// Compute and return the size of the commit with the specified `oid`
+// if we already know the size of its constituents. If the
+// constituents' sizes are not yet known but believed to be
+// computable, add any unknown constituents to `commitsToDo` and
+// `treesToDo` and return an `NotYetKnown` error. If another error
+// occurred while looking up an object, return that error. `oid` is
+// not already in the cache.
+func (cache *SizeCache) queueCommit(oid Oid) (CommitSize, error) {
+	var err error
+
+	commit, err := cache.repo.ReadCommit(oid)
+	if err != nil {
+		return CommitSize{}, err
+	}
+
+	ok := true
+
+	size := CommitSize{}
+
+	// First accumulate all of the sizes for all parents:
+	for _, parent := range commit.Parents {
+		parentSize, parentOK := cache.commitSizes[parent]
+		if parentOK {
+			if ok {
+				size.addParent(parentSize)
+			}
+		} else {
+			ok = false
+			// Schedule this one to be computed:
+			cache.commitsToDo.Push(parent)
+		}
+	}
+
+	// Now gather information about the tree:
+	treeSize, treeOk := cache.treeSizes[commit.Tree]
+	if treeOk {
+		if ok {
+			size.addTree(treeSize)
+		}
+	} else {
+		ok = false
+		cache.treesToDo.Push(commit.Tree)
+	}
+
+	if !ok {
+		return CommitSize{}, NotYetKnown
+	}
+
+	// Now add one to the ancestor depth to account for this commit
+	// itself:
+	size.MaxAncestorDepth = addCapped(size.MaxAncestorDepth, 1)
+	return size, nil
+}
+
+// Compute and return the size of the tree with the specified `oid` if
+// we already know the size of its constituents. If the constituents'
+// sizes are not yet known but believed to be computable, add any
+// unknown constituents to `treesToDo` and return an `NotYetKnown`
+// error. If another error occurred while looking up an object, return
+// that error. `oid` is not already in the cache.
 func (cache *SizeCache) queueTree(oid Oid) (TreeSize, error) {
 	var err error
 
@@ -527,7 +725,7 @@ func (cache *SizeCache) queueTree(oid Oid) (TreeSize, error) {
 			} else {
 				ok = false
 				// Schedule this one to be computed:
-				cache.todo.Push(entry.Oid)
+				cache.treesToDo.Push(entry.Oid)
 			}
 
 		case entry.Filemode&0170000 == 0160000:

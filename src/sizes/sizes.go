@@ -136,22 +136,15 @@ func (repo *Repository) ReadHeader(spec string) (Oid, Type, Count, error) {
 	return repo.parseHeader(spec, header)
 }
 
-type Tree struct {
-	data []byte
-}
-
-func (repo *Repository) ReadTree(oid Oid) (*Tree, error) {
-	fmt.Fprintf(repo.batchStdin, "%s\n", oid)
+func (repo *Repository) readObject(spec string) (Oid, Type, []byte, error) {
+	fmt.Fprintf(repo.batchStdin, "%s\n", spec)
 	header, err := repo.batchStdout.ReadString('\n')
 	if err != nil {
-		return nil, err
+		return Oid{}, "missing", []byte{}, err
 	}
-	_, objectType, size, err := repo.parseHeader(oid.String(), header)
+	oid, objectType, size, err := repo.parseHeader(spec, header)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("missing object %s", oid))
-	}
-	if objectType != "tree" {
-		return nil, errors.New(fmt.Sprintf("expected tree; found %s for object %s", objectType, oid))
+		return Oid{}, "missing", []byte{}, err
 	}
 	// +1 for LF:
 	data := make([]byte, size+1)
@@ -159,12 +152,26 @@ func (repo *Repository) ReadTree(oid Oid) (*Tree, error) {
 	for len(rest) > 0 {
 		n, err := repo.batchStdout.Read(rest)
 		if err != nil {
-			return nil, err
+			return Oid{}, "missing", []byte{}, err
 		}
 		rest = rest[n:]
 	}
-	// remove LF:
-	data = data[:len(data)-1]
+	// -1 to remove LF:
+	return oid, objectType, data[:len(data)-1], nil
+}
+
+type Tree struct {
+	data []byte
+}
+
+func (repo *Repository) ReadTree(oid Oid) (*Tree, error) {
+	oid, objectType, data, err := repo.readObject(oid.String())
+	if err != nil {
+		return nil, err
+	}
+	if objectType != "tree" {
+		return nil, errors.New(fmt.Sprintf("expected tree; found %s for object %s", objectType, oid))
+	}
 	return &Tree{data}, nil
 }
 

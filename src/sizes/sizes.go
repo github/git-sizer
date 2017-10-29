@@ -34,6 +34,13 @@ func (n1 *Count) Increment(n2 Count) {
 	*n1 = addCapped(*n1, n2)
 }
 
+// Adjust `*n1` to be `max(*n1, n2)`.
+func (n1 *Count) AdjustMax(n2 Count) {
+	if n2 > *n1 {
+		*n1 = n2
+	}
+}
+
 type Repository struct {
 	path string
 
@@ -338,9 +345,7 @@ func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
 		s.recordPathLength(Count(len(filename)))
 	}
 	s.ExpandedTreeCount.Increment(s2.ExpandedTreeCount)
-	if s2.MaxTreeEntries > s.MaxTreeEntries {
-		s.MaxTreeEntries = s2.MaxTreeEntries
-	}
+	s.MaxTreeEntries.AdjustMax(s2.MaxTreeEntries)
 	s.ExpandedBlobCount.Increment(s2.ExpandedBlobCount)
 	s.ExpandedBlobSize.Increment(s2.ExpandedBlobSize)
 	s.ExpandedLinkCount.Increment(s2.ExpandedLinkCount)
@@ -349,16 +354,12 @@ func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
 
 // Set the object's MaxPathDepth to `max(s.MaxPathDepth, maxPathDepth)`.
 func (s *TreeSize) recordPathDepth(maxPathDepth Count) {
-	if maxPathDepth > s.MaxPathDepth {
-		s.MaxPathDepth = maxPathDepth
-	}
+	s.MaxPathDepth.AdjustMax(maxPathDepth)
 }
 
 // Set the object's MaxPathLength to `max(s.MaxPathLength, pathLength)`.
 func (s *TreeSize) recordPathLength(pathLength Count) {
-	if pathLength > s.MaxPathLength {
-		s.MaxPathLength = pathLength
-	}
+	s.MaxPathLength.AdjustMax(pathLength)
 }
 
 // Record that the object has a blob of the specified `size` as a
@@ -397,9 +398,7 @@ type CommitSize struct {
 }
 
 func (s *CommitSize) addParent(s2 CommitSize) {
-	if s2.MaxAncestorDepth > s.MaxAncestorDepth {
-		s.MaxAncestorDepth = s2.MaxAncestorDepth
-	}
+	s.MaxAncestorDepth.AdjustMax(s2.MaxAncestorDepth)
 }
 
 func (s *CommitSize) addTree(s2 TreeSize) {
@@ -769,8 +768,6 @@ func (cache *SizeCache) queueTree(oid Oid) (TreeSize, error) {
 	// Now add one to the depth and to the tree count to account for
 	// this tree itself:
 	size.MaxPathDepth.Increment(1)
-	if entryCount > size.MaxTreeEntries {
-		size.MaxTreeEntries = entryCount
-	}
+	size.MaxTreeEntries.AdjustMax(entryCount)
 	return size, nil
 }

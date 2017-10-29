@@ -303,10 +303,12 @@ type Size interface {
 	fmt.Stringer
 }
 
-type BlobSize Count
+type BlobSize struct {
+	Size Count
+}
 
 func (s BlobSize) String() string {
-	return fmt.Sprintf("blob_size=%d", Count(s))
+	return fmt.Sprintf("blob_size=%d", Count(s.Size))
 }
 
 type TreeSize struct {
@@ -357,7 +359,7 @@ func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
 func (s *TreeSize) addBlob(filename string, size BlobSize) {
 	s.MaxPathDepth.AdjustMax(1)
 	s.MaxPathLength.AdjustMax(Count(len(filename)))
-	s.ExpandedBlobSize.Increment(Count(size))
+	s.ExpandedBlobSize.Increment(size.Size)
 	s.ExpandedBlobCount.Increment(1)
 }
 
@@ -477,7 +479,7 @@ func (cache *SizeCache) ObjectSize(spec string) (Oid, Type, Size, error) {
 
 	switch objectType {
 	case "blob":
-		blobSize := BlobSize(objectSize)
+		blobSize := BlobSize{objectSize}
 		cache.blobSizes[oid] = blobSize
 		return oid, "blob", blobSize, nil
 	case "tree":
@@ -503,12 +505,12 @@ func (cache *SizeCache) BlobSize(oid Oid) (BlobSize, error) {
 	if !ok {
 		_, objectType, objectSize, err := cache.repo.ReadHeader(oid.String())
 		if err != nil {
-			return 0, err
+			return BlobSize{}, err
 		}
 		if objectType != "blob" {
-			return 0, fmt.Errorf("object %s is a %s, not a blob", oid, objectType)
+			return BlobSize{}, fmt.Errorf("object %s is a %s, not a blob", oid, objectType)
 		}
-		size = BlobSize(objectSize)
+		size = BlobSize{objectSize}
 		cache.blobSizes[oid] = size
 	}
 	return size, nil

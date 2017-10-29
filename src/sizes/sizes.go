@@ -480,7 +480,7 @@ func (cache *SizeCache) ObjectSize(spec string) (Oid, Type, Size, error) {
 	switch objectType {
 	case "blob":
 		blobSize := BlobSize{objectSize}
-		cache.blobSizes[oid] = blobSize
+		cache.recordBlob(oid, blobSize)
 		return oid, "blob", blobSize, nil
 	case "tree":
 		treeSize, err := cache.TreeSize(oid)
@@ -511,7 +511,7 @@ func (cache *SizeCache) BlobSize(oid Oid) (BlobSize, error) {
 			return BlobSize{}, fmt.Errorf("object %s is a %s, not a blob", oid, objectType)
 		}
 		size = BlobSize{objectSize}
-		cache.blobSizes[oid] = size
+		cache.recordBlob(oid, size)
 	}
 	return size, nil
 }
@@ -562,6 +562,10 @@ func (cache *SizeCache) recordCommit(oid Oid, s CommitSize) {
 
 func (cache *SizeCache) recordTree(oid Oid, s TreeSize) {
 	cache.treeSizes[oid] = s
+}
+
+func (cache *SizeCache) recordBlob(oid Oid, s BlobSize) {
+	cache.blobSizes[oid] = s
 }
 
 // Compute the sizes of any trees listed in `cache.commitsToDo` or

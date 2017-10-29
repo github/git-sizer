@@ -554,6 +554,14 @@ func (cache *SizeCache) CommitSize(oid Oid) (CommitSize, error) {
 	panic("fill() didn't fill commit")
 }
 
+func (cache *SizeCache) recordCommit(oid Oid, s CommitSize) {
+	cache.commitSizes[oid] = s
+}
+
+func (cache *SizeCache) recordTree(oid Oid, s TreeSize) {
+	cache.treeSizes[oid] = s
+}
+
 // Compute the sizes of any trees listed in `cache.commitsToDo` or
 // `cache.treesToDo`. This might involve computing the sizes of
 // referred-to objects. Do this without recursion to avoid unlimited
@@ -574,7 +582,7 @@ func (cache *SizeCache) fill() error {
 
 			s, err := cache.queueTree(oid)
 			if err == nil {
-				cache.treeSizes[oid] = s
+				cache.recordTree(oid, s)
 				cache.treesToDo.Drop()
 			} else if err == NotYetKnown {
 				// Let loop continue (the tree's constituents were added
@@ -599,7 +607,7 @@ func (cache *SizeCache) fill() error {
 
 			s, err := cache.queueCommit(oid)
 			if err == nil {
-				cache.commitSizes[oid] = s
+				cache.recordCommit(oid, s)
 				cache.commitsToDo.Drop()
 			} else if err == NotYetKnown {
 				// Let loop continue (the commits's constituents were

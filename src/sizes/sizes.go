@@ -118,6 +118,74 @@ func (oid Oid) String() string {
 	return hex.EncodeToString(oid[:])
 }
 
+type Reference struct {
+	Refname    string
+	ObjectType Type
+	ObjectSize Count
+	Oid        Oid
+}
+
+type ReferenceOrError struct {
+	Reference Reference
+	Error     error
+}
+
+func (repo *Repository) ForEachRef(done <-chan interface{}) (<-chan ReferenceOrError, error) {
+	command := exec.Command(
+		"git", "-C", repo.path,
+		"for-each-ref", "--format=%(objectname) %(objecttype) %(objectsize) %(refname)",
+	)
+	stdoutFile, err := command.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	err = command.Start()
+	if err != nil {
+		return nil, err
+	}
+	stdout := bufio.NewReader(stdoutFile)
+
+	out := make(chan ReferenceOrError)
+
+	go func(done <-chan interface{}, out chan<- ReferenceOrError) {
+		defer func() {
+			close(out)
+			stdoutFile.Close()
+			command.Wait()
+		}()
+
+		for {
+			line, err := stdout.ReadString('\n')
+			if err != nil {
+				if err != io.EOF {
+					out <- ReferenceOrError{Reference{}, err}
+				}
+				return
+			}
+			line = line[:len(line)-1]
+			words := strings.Split(line, " ")
+			if len(words) != 4 {
+				break
+			}
+			oid, err := NewOid(words[0])
+			if err != nil {
+				break
+			}
+			objectType := Type(words[1])
+			objectSize, err := strconv.ParseUint(words[2], 10, 0)
+			if err != nil {
+				break
+			}
+			refname := words[3]
+			out <- ReferenceOrError{Reference{refname, objectType, Count(objectSize), oid}, nil}
+		}
+
+		out <- ReferenceOrError{Reference{}, errors.New("invalid for-each-ref output")}
+	}(done, out)
+
+	return out, nil
+}
+
 // Parse a `cat-file --batch[-check]` output header line (including
 // the trailing LF). `spec` is used in error messages.
 func (repo *Repository) parseHeader(spec string, header string) (Oid, Type, Count, error) {
@@ -572,7 +640,8 @@ func (cache *SizeCache) TypedObjectSize(
 		commitSize, err := cache.CommitSize(oid)
 		return commitSize, err
 	case "tag":
-		return nil, fmt.Errorf("object %v has unexpected type '%s'", oid, objectType)
+		// FIXME
+		return nil, nil
 	default:
 		panic(fmt.Sprintf("object %v has unknown type", oid))
 	}
@@ -586,6 +655,10 @@ func (cache *SizeCache) ObjectSize(spec string) (Oid, Type, Size, error) {
 
 	size, err := cache.TypedObjectSize(spec, oid, objectType, objectSize)
 	return oid, objectType, size, err
+}
+
+func (cache *SizeCache) ReferenceSize(ref Reference) (Size, error) {
+	return cache.TypedObjectSize(ref.Refname, ref.Oid, ref.ObjectType, ref.ObjectSize)
 }
 
 func (cache *SizeCache) OidObjectSize(oid Oid) (Type, Size, error) {

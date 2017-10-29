@@ -24,9 +24,11 @@ func processObject(cache *sizes.SizeCache, spec string) {
 }
 
 func main() {
+	var processAll bool
 	var stdin bool
 	var cpuprofile string
 
+	flag.BoolVar(&processAll, "all", false, "process all references")
 	flag.BoolVar(&stdin, "stdin", false, "read objects from stdin, one per line")
 
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
@@ -60,6 +62,29 @@ func main() {
 
 	for _, spec := range specs {
 		processObject(cache, spec)
+	}
+
+	if processAll {
+		done := make(chan interface{})
+		refOrErrors, err := repo.ForEachRef(done)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %s", err)
+			return
+		}
+		for refOrError := range refOrErrors {
+			if refOrError.Error != nil {
+				fmt.Fprintf(os.Stderr, "error reading references: %s", err)
+				return
+			}
+			_, err := cache.ReferenceSize(refOrError.Reference)
+			if err != nil {
+				fmt.Fprintf(
+					os.Stderr, "error: could not compute object size for '': %v\n",
+					refOrError.Reference.Refname, err,
+				)
+				return
+			}
+		}
 	}
 
 	if stdin {

@@ -339,6 +339,78 @@ type TreeSize struct {
 	ExpandedSubmoduleCount Count `json:"expanded_submodule_count"`
 }
 
+type HistorySize struct {
+	// The total number of unique commits analyzed.
+	UniqueCommitCount Count `json:"unique_commit_count"`
+
+	// The total size of all commits analyzed.
+	UniqueCommitSize Count `json:"unique_commit_size"`
+
+	// The maximum size of any analyzed commit.
+	MaxCommitSize Count `json:"max_commit_size"`
+
+	// The maximum ancestor depth of any analyzed commit.
+	MaxHistoryDepth Count `json:"max_history_depth"`
+
+	// The maximum number of direct parents of any analyzed commit.
+	MaxParentCount Count `json:"max_parent_count"`
+
+	// The total number of unique trees analyzed.
+	UniqueTreeCount Count `json:"unique_tree_count"`
+
+	// The total size of all trees analyzed.
+	UniqueTreeSize Count `json:"unique_tree_size"`
+
+	// The total number of tree entries in all unique trees analyzed.
+	UniqueTreeEntries Count `json:"unique_tree_entries"`
+
+	// The total number of unique blobs analyzed.
+	UniqueBlobCount Count `json:"unique_blob_count"`
+
+	// The total size of all of the unique blobs analyzed.
+	UniqueBlobSize Count `json:"unique_blob_size"`
+
+	// The total number of unique tag objects analyzed.
+	UniqueTagCount Count `json:"unique_tag_count"`
+
+	// The maximum TreeSize in the analyzed history (where each
+	// attribute is maximized separately).
+	TreeSize
+}
+
+func (s *HistorySize) recordBlob(blobSize BlobSize) {
+	s.UniqueBlobCount.Increment(1)
+	s.UniqueBlobSize.Increment(blobSize.Size)
+}
+
+func (s *HistorySize) recordTree(treeSize TreeSize, size Count, treeEntries Count) {
+	s.UniqueTreeCount.Increment(1)
+	s.UniqueTreeSize.Increment(size)
+	s.UniqueTreeEntries.Increment(treeEntries)
+	s.TreeSize.adjustMaxima(treeSize)
+}
+
+func (s *HistorySize) recordCommit(commitSize CommitSize, size Count, parentCount Count) {
+	s.UniqueCommitCount.Increment(1)
+	s.UniqueCommitSize.Increment(size)
+	s.MaxCommitSize.AdjustMax(size)
+	s.MaxHistoryDepth.AdjustMax(commitSize.MaxAncestorDepth)
+	s.MaxParentCount.AdjustMax(parentCount)
+}
+
+func (s HistorySize) String() string {
+	return fmt.Sprintf(
+		"unique_commit_count=%d, unique_commit_count = %d, max_commit_size = %d, "+
+			"max_history_depth=%d, max_parent_count=%d, "+
+			"unique_tree_count=%d, unique_tree_entries=%d, unique_blob_count=%d, "+
+			"unique_blob_size=%d, unique_tag_count=%d, %s",
+		s.UniqueCommitCount, s.UniqueCommitSize, s.MaxCommitSize,
+		s.MaxHistoryDepth, s.MaxParentCount,
+		s.UniqueTreeCount, s.UniqueTreeEntries, s.UniqueBlobCount,
+		s.UniqueBlobSize, s.UniqueTagCount, s.TreeSize,
+	)
+}
+
 func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
 	s.MaxPathDepth.AdjustMax(s2.MaxPathDepth)
 	if s2.MaxPathLength > 0 {
@@ -352,6 +424,17 @@ func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
 	s.ExpandedBlobSize.Increment(s2.ExpandedBlobSize)
 	s.ExpandedLinkCount.Increment(s2.ExpandedLinkCount)
 	s.ExpandedSubmoduleCount.Increment(s2.ExpandedSubmoduleCount)
+}
+
+func (s *TreeSize) adjustMaxima(s2 TreeSize) {
+	s.MaxPathDepth.AdjustMax(s2.MaxPathDepth)
+	s.MaxPathLength.AdjustMax(s2.MaxPathLength)
+	s.ExpandedTreeCount.AdjustMax(s2.ExpandedTreeCount)
+	s.MaxTreeEntries.AdjustMax(s2.MaxTreeEntries)
+	s.ExpandedBlobCount.AdjustMax(s2.ExpandedBlobCount)
+	s.ExpandedBlobSize.AdjustMax(s2.ExpandedBlobSize)
+	s.ExpandedLinkCount.AdjustMax(s2.ExpandedLinkCount)
+	s.ExpandedSubmoduleCount.AdjustMax(s2.ExpandedSubmoduleCount)
 }
 
 // Record that the object has a blob of the specified `size` as a
@@ -445,6 +528,9 @@ type SizeCache struct {
 
 	// The size of commits whose sizes have been looked up so far.
 	commitSizes map[Oid]CommitSize
+
+	// Statistics about the overall history size:
+	HistorySize HistorySize
 
 	// The OIDs of commits and trees whose sizes are in the process of
 	// being computed. This is, roughly, the call stack. As long as
@@ -556,16 +642,19 @@ func (cache *SizeCache) CommitSize(oid Oid) (CommitSize, error) {
 	panic("fill() didn't fill commit")
 }
 
-func (cache *SizeCache) recordCommit(oid Oid, s CommitSize) {
-	cache.commitSizes[oid] = s
+func (cache *SizeCache) recordCommit(oid Oid, commitSize CommitSize, size Count, parentCount Count) {
+	cache.commitSizes[oid] = commitSize
+	cache.HistorySize.recordCommit(commitSize, size, parentCount)
 }
 
-func (cache *SizeCache) recordTree(oid Oid, s TreeSize) {
-	cache.treeSizes[oid] = s
+func (cache *SizeCache) recordTree(oid Oid, treeSize TreeSize, size Count, treeEntries Count) {
+	cache.treeSizes[oid] = treeSize
+	cache.HistorySize.recordTree(treeSize, size, treeEntries)
 }
 
-func (cache *SizeCache) recordBlob(oid Oid, s BlobSize) {
-	cache.blobSizes[oid] = s
+func (cache *SizeCache) recordBlob(oid Oid, blobSize BlobSize) {
+	cache.blobSizes[oid] = blobSize
+	cache.HistorySize.recordBlob(blobSize)
 }
 
 // Compute the sizes of any trees listed in `cache.commitsToDo` or
@@ -586,9 +675,9 @@ func (cache *SizeCache) fill() error {
 				continue
 			}
 
-			s, err := cache.queueTree(oid)
+			treeSize, size, treeEntries, err := cache.queueTree(oid)
 			if err == nil {
-				cache.recordTree(oid, s)
+				cache.recordTree(oid, treeSize, size, treeEntries)
 				cache.treesToDo.Drop()
 			} else if err == NotYetKnown {
 				// Let loop continue (the tree's constituents were added
@@ -611,9 +700,9 @@ func (cache *SizeCache) fill() error {
 				continue
 			}
 
-			s, err := cache.queueCommit(oid)
+			commitSize, size, parentCount, err := cache.queueCommit(oid)
 			if err == nil {
-				cache.recordCommit(oid, s)
+				cache.recordCommit(oid, commitSize, size, parentCount)
 				cache.commitsToDo.Drop()
 			} else if err == NotYetKnown {
 				// Let loop continue (the commits's constituents were
@@ -637,12 +726,12 @@ func (cache *SizeCache) fill() error {
 // `treesToDo` and return an `NotYetKnown` error. If another error
 // occurred while looking up an object, return that error. `oid` is
 // not already in the cache.
-func (cache *SizeCache) queueCommit(oid Oid) (CommitSize, error) {
+func (cache *SizeCache) queueCommit(oid Oid) (CommitSize, Count, Count, error) {
 	var err error
 
 	commit, err := cache.repo.ReadCommit(oid)
 	if err != nil {
-		return CommitSize{}, err
+		return CommitSize{}, 0, 0, err
 	}
 
 	ok := true
@@ -675,13 +764,13 @@ func (cache *SizeCache) queueCommit(oid Oid) (CommitSize, error) {
 	}
 
 	if !ok {
-		return CommitSize{}, NotYetKnown
+		return CommitSize{}, 0, 0, NotYetKnown
 	}
 
 	// Now add one to the ancestor depth to account for this commit
 	// itself:
 	size.MaxAncestorDepth.Increment(1)
-	return size, nil
+	return size, commit.Size, Count(len(commit.Parents)), nil
 }
 
 // Compute and return the size of the tree with the specified `oid` if
@@ -690,12 +779,12 @@ func (cache *SizeCache) queueCommit(oid Oid) (CommitSize, error) {
 // unknown constituents to `treesToDo` and return an `NotYetKnown`
 // error. If another error occurred while looking up an object, return
 // that error. `oid` is not already in the cache.
-func (cache *SizeCache) queueTree(oid Oid) (TreeSize, error) {
+func (cache *SizeCache) queueTree(oid Oid) (TreeSize, Count, Count, error) {
 	var err error
 
 	tree, err := cache.repo.ReadTree(oid)
 	if err != nil {
-		return TreeSize{}, err
+		return TreeSize{}, 0, 0, err
 	}
 
 	ok := true
@@ -715,7 +804,7 @@ func (cache *SizeCache) queueTree(oid Oid) (TreeSize, error) {
 	for {
 		entryOk, err := iter.NextEntry(&entry)
 		if err != nil {
-			return TreeSize{}, err
+			return TreeSize{}, 0, 0, err
 		}
 		if !entryOk {
 			break
@@ -758,7 +847,7 @@ func (cache *SizeCache) queueTree(oid Oid) (TreeSize, error) {
 			} else {
 				blobSize, err := cache.BlobSize(entry.Oid)
 				if err != nil {
-					return TreeSize{}, err
+					return TreeSize{}, 0, 0, err
 				}
 				size.addBlob(entry.Name, blobSize)
 			}
@@ -766,12 +855,12 @@ func (cache *SizeCache) queueTree(oid Oid) (TreeSize, error) {
 	}
 
 	if !ok {
-		return TreeSize{}, NotYetKnown
+		return TreeSize{}, 0, 0, NotYetKnown
 	}
 
 	// Now add one to the depth and to the tree count to account for
 	// this tree itself:
 	size.MaxPathDepth.Increment(1)
 	size.MaxTreeEntries.AdjustMax(entryCount)
-	return size, nil
+	return size, Count(len(tree.data)), entryCount, nil
 }

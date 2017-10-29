@@ -8,34 +8,12 @@ import (
 	"log"
 	"os"
 	"runtime/pprof"
-	"strconv"
 
 	"github.com/github/git-sizer/sizes"
 )
 
-type outputFunction func(oid sizes.Oid, objectType sizes.Type, size sizes.Size)
-
-func outputNothing(oid sizes.Oid, objectType sizes.Type, size sizes.Size) {
-}
-
-func outputLine(oid sizes.Oid, objectType sizes.Type, size sizes.Size) {
-	fmt.Printf("%s %s %s\n", oid, objectType, size)
-}
-
-func outputJSON(oid sizes.Oid, objectType sizes.Type, size sizes.Size) {
-	results := [...]interface{}{oid.String(), objectType, size}
-	s, err := json.MarshalIndent(results, "", "    ")
-	if err != nil {
-		fmt.Fprintf(
-			os.Stderr, "error: could not convert %v to json: %v\n",
-			results, err,
-		)
-	}
-	fmt.Printf("%s\n", s)
-}
-
-func processObject(cache *sizes.SizeCache, spec string, output outputFunction) {
-	oid, objectType, objectSize, err := cache.ObjectSize(spec)
+func processObject(cache *sizes.SizeCache, spec string) {
+	_, _, _, err := cache.ObjectSize(spec)
 	if err != nil {
 		fmt.Fprintf(
 			os.Stderr, "error: could not compute object size for '%s': %v\n",
@@ -43,49 +21,15 @@ func processObject(cache *sizes.SizeCache, spec string, output outputFunction) {
 		)
 		return
 	}
-
-	output(oid, objectType, objectSize)
 }
 
-func processSpec(
-	repo *sizes.Repository, cache *sizes.SizeCache,
-	spec string, output outputFunction,
-) {
-	processObject(cache, spec, output)
-}
-
-type outputValue struct {
-	p         *outputFunction
-	value     outputFunction
-	defaultOn bool
-}
-
-func (v outputValue) IsBoolFlag() bool {
-	return true
-}
-
-func (v outputValue) String() string {
-	return strconv.FormatBool(v.defaultOn)
-}
-
-func (v outputValue) Set(_ string) error {
-	*v.p = v.value
-	return nil
+func processSpec(repo *sizes.Repository, cache *sizes.SizeCache, spec string) {
+	processObject(cache, spec)
 }
 
 func main() {
-	var output outputFunction = outputLine
 	var stdin bool
 	var cpuprofile string
-
-	flag.Var(outputValue{&output, outputLine, true}, "line", "linewise output")
-	flag.Var(outputValue{&output, outputLine, true}, "l", "linewise output")
-
-	flag.Var(outputValue{&output, outputNothing, false}, "quiet", "suppress output")
-	flag.Var(outputValue{&output, outputNothing, false}, "q", "suppress output")
-
-	flag.Var(outputValue{&output, outputJSON, false}, "json", "output results as JSON")
-	flag.Var(outputValue{&output, outputJSON, false}, "j", "output results as JSON")
 
 	flag.BoolVar(&stdin, "stdin", false, "read objects from stdin, one per line")
 
@@ -119,14 +63,23 @@ func main() {
 	}
 
 	for _, spec := range specs {
-		processSpec(repo, cache, spec, output)
+		processSpec(repo, cache, spec)
 	}
 
 	if stdin {
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
 			spec := scanner.Text()
-			processObject(cache, spec, output)
+			processObject(cache, spec)
 		}
 	}
+
+	s, err := json.MarshalIndent(cache.HistorySize, "", "    ")
+	if err != nil {
+		fmt.Fprintf(
+			os.Stderr, "error: could not convert %v to json: %v\n",
+			cache.HistorySize, err,
+		)
+	}
+	fmt.Printf("%s\n", s)
 }

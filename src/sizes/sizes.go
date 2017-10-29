@@ -338,7 +338,7 @@ type TreeSize struct {
 }
 
 func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
-	s.recordPathDepth(s2.MaxPathDepth)
+	s.MaxPathDepth.AdjustMax(s2.MaxPathDepth)
 	if s2.MaxPathLength > 0 {
 		s.recordPathLength(addCapped(Count(len(filename))+1, s2.MaxPathLength))
 	} else {
@@ -352,11 +352,6 @@ func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
 	s.ExpandedSubmoduleCount.Increment(s2.ExpandedSubmoduleCount)
 }
 
-// Set the object's MaxPathDepth to `max(s.MaxPathDepth, maxPathDepth)`.
-func (s *TreeSize) recordPathDepth(maxPathDepth Count) {
-	s.MaxPathDepth.AdjustMax(maxPathDepth)
-}
-
 // Set the object's MaxPathLength to `max(s.MaxPathLength, pathLength)`.
 func (s *TreeSize) recordPathLength(pathLength Count) {
 	s.MaxPathLength.AdjustMax(pathLength)
@@ -365,7 +360,7 @@ func (s *TreeSize) recordPathLength(pathLength Count) {
 // Record that the object has a blob of the specified `size` as a
 // direct descendant.
 func (s *TreeSize) addBlob(filename string, size BlobSize) {
-	s.recordPathDepth(1)
+	s.MaxPathDepth.AdjustMax(1)
 	s.recordPathLength(Count(len(filename)))
 	s.ExpandedBlobSize.Increment(Count(size))
 	s.ExpandedBlobCount.Increment(1)
@@ -373,14 +368,14 @@ func (s *TreeSize) addBlob(filename string, size BlobSize) {
 
 // Record that the object has a link as a direct descendant.
 func (s *TreeSize) addLink(filename string) {
-	s.recordPathDepth(1)
+	s.MaxPathDepth.AdjustMax(1)
 	s.recordPathLength(Count(len(filename)))
 	s.ExpandedLinkCount.Increment(1)
 }
 
 // Record that the object has a submodule as a direct descendant.
 func (s *TreeSize) addSubmodule(filename string) {
-	s.recordPathDepth(1)
+	s.MaxPathDepth.AdjustMax(1)
 	s.recordPathLength(Count(len(filename)))
 	s.ExpandedSubmoduleCount.Increment(1)
 }

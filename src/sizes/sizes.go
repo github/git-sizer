@@ -29,6 +29,11 @@ func addCapped(n1, n2 Count) Count {
 	return n
 }
 
+// Increment `*n1` by `n2`, capped at math.MaxUint64.
+func (n1 *Count) Increment(n2 Count) {
+	*n1 = addCapped(*n1, n2)
+}
+
 type Repository struct {
 	path string
 
@@ -332,14 +337,14 @@ func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
 	} else {
 		s.recordPathLength(Count(len(filename)))
 	}
-	s.ExpandedTreeCount = addCapped(s.ExpandedTreeCount, s2.ExpandedTreeCount)
+	s.ExpandedTreeCount.Increment(s2.ExpandedTreeCount)
 	if s2.MaxTreeEntries > s.MaxTreeEntries {
 		s.MaxTreeEntries = s2.MaxTreeEntries
 	}
-	s.ExpandedBlobCount = addCapped(s.ExpandedBlobCount, s2.ExpandedBlobCount)
-	s.ExpandedBlobSize = addCapped(s.ExpandedBlobSize, s2.ExpandedBlobSize)
-	s.ExpandedLinkCount = addCapped(s.ExpandedLinkCount, s2.ExpandedLinkCount)
-	s.ExpandedSubmoduleCount = addCapped(s.ExpandedSubmoduleCount, s2.ExpandedSubmoduleCount)
+	s.ExpandedBlobCount.Increment(s2.ExpandedBlobCount)
+	s.ExpandedBlobSize.Increment(s2.ExpandedBlobSize)
+	s.ExpandedLinkCount.Increment(s2.ExpandedLinkCount)
+	s.ExpandedSubmoduleCount.Increment(s2.ExpandedSubmoduleCount)
 }
 
 // Set the object's MaxPathDepth to `max(s.MaxPathDepth, maxPathDepth)`.
@@ -361,22 +366,22 @@ func (s *TreeSize) recordPathLength(pathLength Count) {
 func (s *TreeSize) addBlob(filename string, size BlobSize) {
 	s.recordPathDepth(1)
 	s.recordPathLength(Count(len(filename)))
-	s.ExpandedBlobSize = addCapped(s.ExpandedBlobSize, Count(size))
-	s.ExpandedBlobCount = addCapped(s.ExpandedBlobCount, 1)
+	s.ExpandedBlobSize.Increment(Count(size))
+	s.ExpandedBlobCount.Increment(1)
 }
 
 // Record that the object has a link as a direct descendant.
 func (s *TreeSize) addLink(filename string) {
 	s.recordPathDepth(1)
 	s.recordPathLength(Count(len(filename)))
-	s.ExpandedLinkCount = addCapped(s.ExpandedLinkCount, 1)
+	s.ExpandedLinkCount.Increment(1)
 }
 
 // Record that the object has a submodule as a direct descendant.
 func (s *TreeSize) addSubmodule(filename string) {
 	s.recordPathDepth(1)
 	s.recordPathLength(Count(len(filename)))
-	s.ExpandedSubmoduleCount = addCapped(s.ExpandedSubmoduleCount, 1)
+	s.ExpandedSubmoduleCount.Increment(1)
 }
 
 func (s TreeSize) String() string {
@@ -672,7 +677,7 @@ func (cache *SizeCache) queueCommit(oid Oid) (CommitSize, error) {
 
 	// Now add one to the ancestor depth to account for this commit
 	// itself:
-	size.MaxAncestorDepth = addCapped(size.MaxAncestorDepth, 1)
+	size.MaxAncestorDepth.Increment(1)
 	return size, nil
 }
 
@@ -763,7 +768,7 @@ func (cache *SizeCache) queueTree(oid Oid) (TreeSize, error) {
 
 	// Now add one to the depth and to the tree count to account for
 	// this tree itself:
-	size.MaxPathDepth = addCapped(size.MaxPathDepth, 1)
+	size.MaxPathDepth.Increment(1)
 	if entryCount > size.MaxTreeEntries {
 		size.MaxTreeEntries = entryCount
 	}

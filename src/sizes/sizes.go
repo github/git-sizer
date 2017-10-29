@@ -106,12 +106,9 @@ func (oid Oid) String() string {
 	return hex.EncodeToString(oid[:])
 }
 
-func (repo *Repository) ReadHeader(spec string) (Oid, Type, Count, error) {
-	fmt.Fprintf(repo.checkStdin, "%s\n", spec)
-	header, err := repo.checkStdout.ReadString('\n')
-	if err != nil {
-		return Oid{}, "missing", 0, err
-	}
+// Parse a `cat-file --batch[-check]` output header line (including
+// the trailing LF). `spec` is used in error messages.
+func (repo *Repository) parseHeader(spec string, header string) (Oid, Type, Count, error) {
 	header = header[:len(header)-1]
 	words := strings.Split(header, " ")
 	if words[len(words)-1] == "missing" {
@@ -130,6 +127,15 @@ func (repo *Repository) ReadHeader(spec string) (Oid, Type, Count, error) {
 	return oid, Type(words[1]), Count(size), nil
 }
 
+func (repo *Repository) ReadHeader(spec string) (Oid, Type, Count, error) {
+	fmt.Fprintf(repo.checkStdin, "%s\n", spec)
+	header, err := repo.checkStdout.ReadString('\n')
+	if err != nil {
+		return Oid{}, "missing", 0, err
+	}
+	return repo.parseHeader(spec, header)
+}
+
 type Tree struct {
 	data []byte
 }
@@ -140,32 +146,26 @@ func (repo *Repository) ReadTree(oid Oid) (*Tree, error) {
 	if err != nil {
 		return nil, err
 	}
-	header = header[:len(header)-1]
-	words := strings.Split(header, " ")
-	switch words[1] {
-	case "missing":
+	_, objectType, size, err := repo.parseHeader(oid.String(), header)
+	if err != nil {
 		return nil, errors.New(fmt.Sprintf("missing object %s", oid))
-	case "tree":
-		size, err := strconv.ParseUint(words[2], 10, 0)
+	}
+	if objectType != "tree" {
+		return nil, errors.New(fmt.Sprintf("expected tree; found %s for object %s", objectType, oid))
+	}
+	// +1 for LF:
+	data := make([]byte, size+1)
+	rest := data
+	for len(rest) > 0 {
+		n, err := repo.batchStdout.Read(rest)
 		if err != nil {
 			return nil, err
 		}
-		// +1 for LF:
-		data := make([]byte, size+1)
-		rest := data
-		for len(rest) > 0 {
-			n, err := repo.batchStdout.Read(rest)
-			if err != nil {
-				return nil, err
-			}
-			rest = rest[n:]
-		}
-		// remove LF:
-		data = data[:len(data)-1]
-		return &Tree{data}, nil
-	default:
-		return nil, errors.New(fmt.Sprintf("unexpected type %s for object %s", words[1], oid))
+		rest = rest[n:]
 	}
+	// remove LF:
+	data = data[:len(data)-1]
+	return &Tree{data}, nil
 }
 
 type TreeEntry struct {

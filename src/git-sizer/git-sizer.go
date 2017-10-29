@@ -23,10 +23,6 @@ func processObject(cache *sizes.SizeCache, spec string) {
 	}
 }
 
-func processSpec(repo *sizes.Repository, cache *sizes.SizeCache, spec string) {
-	processObject(cache, spec)
-}
-
 func main() {
 	var stdin bool
 	var cpuprofile string
@@ -63,7 +59,7 @@ func main() {
 	}
 
 	for _, spec := range specs {
-		processSpec(repo, cache, spec)
+		processObject(cache, spec)
 	}
 
 	if stdin {

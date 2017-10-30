@@ -11,7 +11,7 @@ import (
 type Count uint64
 
 // Return the sum of two Counts, capped at math.MaxUint64.
-func addCapped(n1, n2 Count) Count {
+func (n1 Count) Plus(n2 Count) Count {
 	n := n1 + n2
 	if n < n1 {
 		// Overflow
@@ -22,7 +22,7 @@ func addCapped(n1, n2 Count) Count {
 
 // Increment `*n1` by `n2`, capped at math.MaxUint64.
 func (n1 *Count) Increment(n2 Count) {
-	*n1 = addCapped(*n1, n2)
+	*n1 = n1.Plus(n2)
 }
 
 // Adjust `*n1` to be `max(*n1, n2)`.
@@ -147,7 +147,7 @@ func (s HistorySize) String() string {
 func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
 	s.MaxPathDepth.AdjustMax(s2.MaxPathDepth)
 	if s2.MaxPathLength > 0 {
-		s.MaxPathLength.AdjustMax(addCapped(Count(len(filename))+1, s2.MaxPathLength))
+		s.MaxPathLength.AdjustMax((Count(len(filename)) + 1).Plus(s2.MaxPathLength))
 	} else {
 		s.MaxPathLength.AdjustMax(Count(len(filename)))
 	}

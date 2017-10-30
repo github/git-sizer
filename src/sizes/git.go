@@ -162,7 +162,7 @@ func (repo *Repository) ForEachRef(done <-chan interface{}) (<-chan ReferenceOrE
 
 // Parse a `cat-file --batch[-check]` output header line (including
 // the trailing LF). `spec` is used in error messages.
-func (repo *Repository) parseHeader(spec string, header string) (Oid, Type, Count, error) {
+func (repo *Repository) parseBatchHeader(spec string, header string) (Oid, Type, Count, error) {
 	header = header[:len(header)-1]
 	words := strings.Split(header, " ")
 	if words[len(words)-1] == "missing" {
@@ -187,7 +187,7 @@ func (repo *Repository) ReadHeader(spec string) (Oid, Type, Count, error) {
 	if err != nil {
 		return Oid{}, "missing", 0, err
 	}
-	return repo.parseHeader(spec, header)
+	return repo.parseBatchHeader(spec, header)
 }
 
 func (repo *Repository) readObject(spec string) (Oid, Type, []byte, error) {
@@ -196,7 +196,7 @@ func (repo *Repository) readObject(spec string) (Oid, Type, []byte, error) {
 	if err != nil {
 		return Oid{}, "missing", []byte{}, err
 	}
-	oid, objectType, size, err := repo.parseHeader(spec, header)
+	oid, objectType, size, err := repo.parseBatchHeader(spec, header)
 	if err != nil {
 		return Oid{}, "missing", []byte{}, err
 	}

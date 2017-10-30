@@ -34,61 +34,57 @@ func (oid Oid) String() string {
 	return hex.EncodeToString(oid[:])
 }
 
+type commandPipe struct {
+	command      *exec.Cmd
+	stdin        io.WriteCloser
+	stdoutWriter io.ReadCloser
+	stdout       *bufio.Reader
+}
+
+func newCommandPipe(name string, arg ...string) (*commandPipe, error) {
+	command := exec.Command(name, arg...)
+	stdin, err := command.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	err = command.Start()
+	if err != nil {
+		return nil, err
+	}
+	return &commandPipe{
+		command:      command,
+		stdin:        stdin,
+		stdoutWriter: stdout,
+		stdout:       bufio.NewReader(stdout),
+	}, nil
+}
+
 type Repository struct {
 	path string
 
-	batchCommand      *exec.Cmd
-	batchStdin        io.WriteCloser
-	batchStdoutWriter io.ReadCloser
-	batchStdout       *bufio.Reader
-
-	checkCommand      *exec.Cmd
-	checkStdin        io.WriteCloser
-	checkStdoutWriter io.ReadCloser
-	checkStdout       *bufio.Reader
+	batch *commandPipe
+	check *commandPipe
 }
 
 func NewRepository(path string) (*Repository, error) {
-	batchCommand := exec.Command("git", "-C", path, "cat-file", "--batch")
-	batchStdin, err := batchCommand.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-	batchStdout, err := batchCommand.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	err = batchCommand.Start()
+	batch, err := newCommandPipe("git", "-C", path, "cat-file", "--batch")
 	if err != nil {
 		return nil, err
 	}
 
-	checkCommand := exec.Command("git", "-C", path, "cat-file", "--batch-check")
-	checkStdin, err := checkCommand.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-	checkStdout, err := checkCommand.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	err = checkCommand.Start()
+	check, err := newCommandPipe("git", "-C", path, "cat-file", "--batch-check")
 	if err != nil {
 		return nil, err
 	}
 
 	return &Repository{
-		path: path,
-
-		batchCommand:      batchCommand,
-		batchStdin:        batchStdin,
-		batchStdoutWriter: batchStdout,
-		batchStdout:       bufio.NewReader(batchStdout),
-
-		checkCommand:      checkCommand,
-		checkStdin:        checkStdin,
-		checkStdoutWriter: checkStdout,
-		checkStdout:       bufio.NewReader(checkStdout),
+		path:  path,
+		batch: batch,
+		check: check,
 	}, nil
 }
 
@@ -182,8 +178,8 @@ func (repo *Repository) parseBatchHeader(spec string, header string) (Oid, Objec
 }
 
 func (repo *Repository) ReadHeader(spec string) (Oid, ObjectType, Count32, error) {
-	fmt.Fprintf(repo.checkStdin, "%s\n", spec)
-	header, err := repo.checkStdout.ReadString('\n')
+	fmt.Fprintf(repo.check.stdin, "%s\n", spec)
+	header, err := repo.check.stdout.ReadString('\n')
 	if err != nil {
 		return Oid{}, "missing", 0, err
 	}
@@ -191,8 +187,8 @@ func (repo *Repository) ReadHeader(spec string) (Oid, ObjectType, Count32, error
 }
 
 func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error) {
-	fmt.Fprintf(repo.batchStdin, "%s\n", spec)
-	header, err := repo.batchStdout.ReadString('\n')
+	fmt.Fprintf(repo.batch.stdin, "%s\n", spec)
+	header, err := repo.batch.stdout.ReadString('\n')
 	if err != nil {
 		return Oid{}, "missing", []byte{}, err
 	}
@@ -204,7 +200,7 @@ func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error)
 	data := make([]byte, size+1)
 	rest := data
 	for len(rest) > 0 {
-		n, err := repo.batchStdout.Read(rest)
+		n, err := repo.batch.stdout.Read(rest)
 		if err != nil {
 			return Oid{}, "missing", []byte{}, err
 		}

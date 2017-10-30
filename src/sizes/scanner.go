@@ -122,7 +122,7 @@ func (scanner *SizeScanner) TreeSize(oid Oid) (TreeSize, error) {
 		return s, nil
 	}
 
-	scanner.toDo.Push(&pendingTree{oid})
+	scanner.toDo.Push(&pendingTree{oid: oid})
 	err := scanner.fill()
 	if err != nil {
 		return TreeSize{}, err
@@ -142,7 +142,7 @@ func (scanner *SizeScanner) CommitSize(oid Oid) (CommitSize, error) {
 		return s, nil
 	}
 
-	scanner.toDo.Push(&pendingCommit{oid})
+	scanner.toDo.Push(&pendingCommit{oid: oid})
 	err := scanner.fill()
 	if err != nil {
 		return CommitSize{}, err
@@ -162,7 +162,7 @@ func (scanner *SizeScanner) TagSize(oid Oid) (TagSize, error) {
 		return s, nil
 	}
 
-	scanner.toDo.Push(&pendingTag{oid})
+	scanner.toDo.Push(&pendingTag{oid: oid})
 	err := scanner.fill()
 	if err != nil {
 		return TagSize{}, err
@@ -201,7 +201,8 @@ func (scanner *SizeScanner) recordTag(oid Oid, tagSize TagSize, size Count32) {
 }
 
 type pendingTree struct {
-	oid Oid
+	oid  Oid
+	tree *Tree
 }
 
 // Compute and return the size of the tree in `p` if we already know
@@ -213,10 +214,16 @@ type pendingTree struct {
 func (p *pendingTree) Queue(scanner *SizeScanner) (TreeSize, Count32, Count32, error) {
 	var err error
 	var subtasks ToDoList
+	var tree *Tree
 
-	tree, err := scanner.repo.ReadTree(p.oid)
-	if err != nil {
-		return TreeSize{}, 0, 0, err
+	if p.tree == nil {
+		tree, err = scanner.repo.ReadTree(p.oid)
+		if err != nil {
+			return TreeSize{}, 0, 0, err
+		}
+		p.tree = tree
+	} else {
+		tree = p.tree
 	}
 
 	ok := true
@@ -252,7 +259,7 @@ func (p *pendingTree) Queue(scanner *SizeScanner) (TreeSize, Count32, Count32, e
 			} else {
 				ok = false
 				// Schedule this one to be computed:
-				subtasks.Push(&pendingTree{entry.Oid})
+				subtasks.Push(&pendingTree{oid: entry.Oid})
 			}
 
 		case entry.Filemode&0170000 == 0160000:
@@ -317,7 +324,8 @@ func (p *pendingTree) Run(scanner *SizeScanner) error {
 }
 
 type pendingCommit struct {
-	oid Oid
+	oid    Oid
+	commit *Commit
 }
 
 // Compute and return the size of the commit in `p` if we already know
@@ -329,10 +337,16 @@ type pendingCommit struct {
 func (p *pendingCommit) Queue(scanner *SizeScanner) (CommitSize, Count32, Count32, error) {
 	var err error
 	var subtasks ToDoList
+	var commit *Commit
 
-	commit, err := scanner.repo.ReadCommit(p.oid)
-	if err != nil {
-		return CommitSize{}, 0, 0, err
+	if p.commit == nil {
+		commit, err = scanner.repo.ReadCommit(p.oid)
+		if err != nil {
+			return CommitSize{}, 0, 0, err
+		}
+		p.commit = commit
+	} else {
+		commit = p.commit
 	}
 
 	ok := true
@@ -349,7 +363,7 @@ func (p *pendingCommit) Queue(scanner *SizeScanner) (CommitSize, Count32, Count3
 		} else {
 			ok = false
 			// Schedule this one to be computed:
-			subtasks.Push(&pendingCommit{parent})
+			subtasks.Push(&pendingCommit{oid: parent})
 		}
 	}
 
@@ -361,7 +375,7 @@ func (p *pendingCommit) Queue(scanner *SizeScanner) (CommitSize, Count32, Count3
 		}
 	} else {
 		ok = false
-		subtasks.Push(&pendingTree{commit.Tree})
+		subtasks.Push(&pendingTree{oid: commit.Tree})
 	}
 
 	if !ok {
@@ -398,6 +412,7 @@ func (p *pendingCommit) Run(scanner *SizeScanner) error {
 
 type pendingTag struct {
 	oid Oid
+	tag *Tag
 }
 
 // Compute and return the size of the annotated tag in `p` if we
@@ -409,10 +424,16 @@ type pendingTag struct {
 func (p *pendingTag) Queue(scanner *SizeScanner) (TagSize, Count32, error) {
 	var err error
 	var subtasks ToDoList
+	var tag *Tag
 
-	tag, err := scanner.repo.ReadTag(p.oid)
-	if err != nil {
-		return TagSize{}, 0, err
+	if p.tag == nil {
+		tag, err = scanner.repo.ReadTag(p.oid)
+		if err != nil {
+			return TagSize{}, 0, err
+		}
+		p.tag = tag
+	} else {
+		tag = p.tag
 	}
 
 	size := TagSize{TagDepth: 1}
@@ -425,21 +446,21 @@ func (p *pendingTag) Queue(scanner *SizeScanner) (TagSize, Count32, error) {
 		} else {
 			ok = false
 			// Schedule this one to be computed:
-			subtasks.Push(&pendingTag{tag.Referent})
+			subtasks.Push(&pendingTag{oid: tag.Referent})
 		}
 	case "commit":
 		_, referentOK := scanner.commitSizes[tag.Referent]
 		if !referentOK {
 			ok = false
 			// Schedule this one to be computed:
-			subtasks.Push(&pendingCommit{tag.Referent})
+			subtasks.Push(&pendingCommit{oid: tag.Referent})
 		}
 	case "tree":
 		_, referentOK := scanner.treeSizes[tag.Referent]
 		if !referentOK {
 			ok = false
 			// Schedule this one to be computed:
-			subtasks.Push(&pendingTree{tag.Referent})
+			subtasks.Push(&pendingTree{oid: tag.Referent})
 		}
 	case "blob":
 		_, referentOK := scanner.commitSizes[tag.Referent]

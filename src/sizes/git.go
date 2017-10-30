@@ -214,6 +214,46 @@ func (repo *Repository) readObject(spec string) (Oid, Type, []byte, error) {
 	return oid, objectType, data[:len(data)-1], nil
 }
 
+type ObjectHeaderIter struct {
+	name string
+	data string
+}
+
+// Iterate over an object header. `data` should be the object's
+// contents, including the "\n\n" that separates the header from the
+// rest of the contents. `name` is used in error messages.
+func NewObjectHeaderIter(name string, data []byte) (ObjectHeaderIter, error) {
+	headerEnd := bytes.Index(data, []byte("\n\n"))
+	if headerEnd == -1 {
+		return ObjectHeaderIter{}, fmt.Errorf("%s has no header separator", name)
+	}
+	return ObjectHeaderIter{name, string(data[:headerEnd+1])}, nil
+}
+
+func (iter *ObjectHeaderIter) HasNext() bool {
+	return len(iter.data) > 0
+}
+
+func (iter *ObjectHeaderIter) Next() (string, string, error) {
+	if len(iter.data) == 0 {
+		return "", "", fmt.Errorf("header for %s read past end", iter.name)
+	}
+	header := iter.data
+	keyEnd := strings.IndexByte(header, ' ')
+	if keyEnd == -1 {
+		return "", "", fmt.Errorf("malformed header in %s", iter.name)
+	}
+	key := header[:keyEnd]
+	header = header[keyEnd+1:]
+	valueEnd := strings.IndexByte(header, '\n')
+	if valueEnd == -1 {
+		return "", "", fmt.Errorf("malformed header in %s", iter.name)
+	}
+	value := header[:valueEnd]
+	iter.data = header[valueEnd+1:]
+	return key, value, nil
+}
+
 type Commit struct {
 	Size    Count
 	Parents []Oid
@@ -228,27 +268,18 @@ func (repo *Repository) ReadCommit(oid Oid) (*Commit, error) {
 	if objectType != "commit" {
 		return nil, fmt.Errorf("expected commit; found %s for object %s", objectType, oid)
 	}
-	headerEnd := bytes.Index(data, []byte("\n\n"))
-	if headerEnd == -1 {
-		return nil, fmt.Errorf("commit %s has no header separator", oid)
-	}
-	header := string(data[:headerEnd+1])
 	var parents []Oid
 	var tree Oid
 	var treeFound bool
-	for len(header) != 0 {
-		keyEnd := strings.IndexByte(header, ' ')
-		if keyEnd == -1 {
-			return nil, fmt.Errorf("malformed header in commit %s", oid)
+	iter, err := NewObjectHeaderIter(oid.String(), data)
+	if err != nil {
+		return nil, err
+	}
+	for iter.HasNext() {
+		key, value, err := iter.Next()
+		if err != nil {
+			return nil, err
 		}
-		key := header[:keyEnd]
-		header = header[keyEnd+1:]
-		valueEnd := strings.IndexByte(header, '\n')
-		if valueEnd == -1 {
-			return nil, fmt.Errorf("malformed header in commit %s", oid)
-		}
-		value := header[:valueEnd]
-		header = header[valueEnd+1:]
 		switch key {
 		case "parent":
 			parent, err := NewOid(value)

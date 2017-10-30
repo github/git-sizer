@@ -3,7 +3,6 @@ package sizes
 import (
 	"errors"
 	"fmt"
-	"io"
 	"math"
 )
 
@@ -217,34 +216,6 @@ func (s CommitSize) String() string {
 		"max_ancestor_depth=%d",
 		s.MaxAncestorDepth,
 	)
-}
-
-type ToDoList struct {
-	list []Oid
-}
-
-func (t *ToDoList) Length() int {
-	return len(t.list)
-}
-
-func (t *ToDoList) Push(oid Oid) {
-	t.list = append(t.list, oid)
-}
-
-func (t *ToDoList) Peek() Oid {
-	return t.list[len(t.list)-1]
-}
-
-func (t *ToDoList) Drop() {
-	t.list = t.list[0 : len(t.list)-1]
-}
-
-func (t *ToDoList) Dump(w io.Writer) {
-	fmt.Fprintf(w, "todo list has %d items\n", t.Length())
-	for i, idString := range t.list {
-		fmt.Fprintf(w, "%8d %s\n", i, idString)
-	}
-	fmt.Fprintf(w, "\n")
 }
 
 var NotYetKnown = errors.New("the size of an object is not yet known")

@@ -57,7 +57,7 @@ func NewSizeScanner(repo *Repository) (*SizeScanner, error) {
 }
 
 func (scanner *SizeScanner) TypedObjectSize(
-	spec string, oid Oid, objectType Type, objectSize Count,
+	spec string, oid Oid, objectType Type, objectSize Count32,
 ) (Size, error) {
 	switch objectType {
 	case "blob":
@@ -187,17 +187,17 @@ func (scanner *SizeScanner) recordBlob(oid Oid, blobSize BlobSize) {
 	scanner.HistorySize.recordBlob(blobSize)
 }
 
-func (scanner *SizeScanner) recordTree(oid Oid, treeSize TreeSize, size Count, treeEntries Count) {
+func (scanner *SizeScanner) recordTree(oid Oid, treeSize TreeSize, size Count32, treeEntries Count32) {
 	scanner.treeSizes[oid] = treeSize
 	scanner.HistorySize.recordTree(treeSize, size, treeEntries)
 }
 
-func (scanner *SizeScanner) recordCommit(oid Oid, commitSize CommitSize, size Count, parentCount Count) {
+func (scanner *SizeScanner) recordCommit(oid Oid, commitSize CommitSize, size Count32, parentCount Count32) {
 	scanner.commitSizes[oid] = commitSize
 	scanner.HistorySize.recordCommit(commitSize, size, parentCount)
 }
 
-func (scanner *SizeScanner) recordTag(oid Oid, tagSize TagSize, size Count) {
+func (scanner *SizeScanner) recordTag(oid Oid, tagSize TagSize, size Count32) {
 	scanner.tagSizes[oid] = tagSize
 	scanner.HistorySize.recordTag(tagSize, size)
 }
@@ -295,7 +295,7 @@ func (scanner *SizeScanner) fill() error {
 // unknown constituents to `treesToDo` and return an `NotYetKnown`
 // error. If another error occurred while looking up an object, return
 // that error. `oid` is not already in the cache.
-func (scanner *SizeScanner) queueTree(oid Oid) (TreeSize, Count, Count, error) {
+func (scanner *SizeScanner) queueTree(oid Oid) (TreeSize, Count32, Count32, error) {
 	var err error
 
 	tree, err := scanner.repo.ReadTree(oid)
@@ -305,7 +305,7 @@ func (scanner *SizeScanner) queueTree(oid Oid) (TreeSize, Count, Count, error) {
 
 	ok := true
 
-	entryCount := Count(0)
+	var entryCount Count32
 
 	// First accumulate all of the sizes (including maximum depth) for
 	// all descendants:
@@ -325,7 +325,7 @@ func (scanner *SizeScanner) queueTree(oid Oid) (TreeSize, Count, Count, error) {
 		if !entryOk {
 			break
 		}
-		entryCount += 1
+		entryCount.Increment(1)
 
 		switch {
 		case entry.Filemode&0170000 == 0040000:
@@ -377,7 +377,7 @@ func (scanner *SizeScanner) queueTree(oid Oid) (TreeSize, Count, Count, error) {
 	// Now add one to the depth and to the tree count to account for
 	// this tree itself:
 	size.MaxPathDepth.Increment(1)
-	return size, Count(len(tree.data)), entryCount, nil
+	return size, NewCount32(uint64(len(tree.data))), entryCount, nil
 }
 
 // Compute and return the size of the commit with the specified `oid`
@@ -387,7 +387,7 @@ func (scanner *SizeScanner) queueTree(oid Oid) (TreeSize, Count, Count, error) {
 // `treesToDo` and return an `NotYetKnown` error. If another error
 // occurred while looking up an object, return that error. `oid` is
 // not already in the cache.
-func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count, Count, error) {
+func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count32, Count32, error) {
 	var err error
 
 	commit, err := scanner.repo.ReadCommit(oid)
@@ -431,7 +431,7 @@ func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count, Count, erro
 	// Now add one to the ancestor depth to account for this commit
 	// itself:
 	size.MaxAncestorDepth.Increment(1)
-	return size, commit.Size, Count(len(commit.Parents)), nil
+	return size, commit.Size, NewCount32(uint64(len(commit.Parents))), nil
 }
 
 // Compute and return the size of the annotated tag with the specified
@@ -440,7 +440,7 @@ func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count, Count, erro
 // it to the appropriate todo list and return an `NotYetKnown` error.
 // If another error occurred while looking up an object, return that
 // error. `oid` is not already in the cache.
-func (scanner *SizeScanner) queueTag(oid Oid) (TagSize, Count, error) {
+func (scanner *SizeScanner) queueTag(oid Oid) (TagSize, Count32, error) {
 	var err error
 
 	tag, err := scanner.repo.ReadTag(oid)

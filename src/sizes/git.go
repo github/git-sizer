@@ -95,7 +95,7 @@ func NewRepository(path string) (*Repository, error) {
 type Reference struct {
 	Refname    string
 	ObjectType Type
-	ObjectSize Count
+	ObjectSize Count32
 	Oid        Oid
 }
 
@@ -151,7 +151,7 @@ func (repo *Repository) ForEachRef(done <-chan interface{}) (<-chan ReferenceOrE
 				break
 			}
 			refname := words[3]
-			out <- ReferenceOrError{Reference{refname, objectType, Count(objectSize), oid}, nil}
+			out <- ReferenceOrError{Reference{refname, objectType, NewCount32(objectSize), oid}, nil}
 		}
 
 		out <- ReferenceOrError{Reference{}, errors.New("invalid for-each-ref output")}
@@ -162,7 +162,7 @@ func (repo *Repository) ForEachRef(done <-chan interface{}) (<-chan ReferenceOrE
 
 // Parse a `cat-file --batch[-check]` output header line (including
 // the trailing LF). `spec` is used in error messages.
-func (repo *Repository) parseBatchHeader(spec string, header string) (Oid, Type, Count, error) {
+func (repo *Repository) parseBatchHeader(spec string, header string) (Oid, Type, Count32, error) {
 	header = header[:len(header)-1]
 	words := strings.Split(header, " ")
 	if words[len(words)-1] == "missing" {
@@ -178,10 +178,10 @@ func (repo *Repository) parseBatchHeader(spec string, header string) (Oid, Type,
 	if err != nil {
 		return Oid{}, "missing", 0, err
 	}
-	return oid, Type(words[1]), Count(size), nil
+	return oid, Type(words[1]), NewCount32(size), nil
 }
 
-func (repo *Repository) ReadHeader(spec string) (Oid, Type, Count, error) {
+func (repo *Repository) ReadHeader(spec string) (Oid, Type, Count32, error) {
 	fmt.Fprintf(repo.checkStdin, "%s\n", spec)
 	header, err := repo.checkStdout.ReadString('\n')
 	if err != nil {
@@ -255,7 +255,7 @@ func (iter *ObjectHeaderIter) Next() (string, string, error) {
 }
 
 type Commit struct {
-	Size    Count
+	Size    Count32
 	Parents []Oid
 	Tree    Oid
 }
@@ -302,7 +302,7 @@ func (repo *Repository) ReadCommit(oid Oid) (*Commit, error) {
 		return nil, fmt.Errorf("no tree found in commit %s", oid)
 	}
 	return &Commit{
-		Size:    Count(len(data)),
+		Size:    NewCount32(uint64(len(data))),
 		Parents: parents,
 		Tree:    tree,
 	}, nil
@@ -376,7 +376,7 @@ func (iter *TreeIter) NextEntry(entry *TreeEntry) (bool, error) {
 }
 
 type Tag struct {
-	Size         Count
+	Size         Count32
 	Referent     Oid
 	ReferentType Type
 }
@@ -427,7 +427,7 @@ func (repo *Repository) ReadTag(oid Oid) (*Tag, error) {
 		return nil, fmt.Errorf("no type found in tag %s", oid)
 	}
 	return &Tag{
-		Size:         Count(len(data)),
+		Size:         NewCount32(uint64(len(data))),
 		Referent:     referent,
 		ReferentType: referentType,
 	}, nil

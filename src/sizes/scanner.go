@@ -28,14 +28,14 @@ type SizeScanner struct {
 	// there are no SHA-1 collisions, the sizes of these lists are
 	// bounded:
 	//
-	// * commitsToDo is at most the total number of direct parents
-	//   along a single ancestry path through history.
-	//
 	// * treesToDo is at most the total number of direct non-blob
 	//   referents in all unique objects along a single lineage of
 	//   descendants of the starting point.
-	commitsToDo ToDoList
+	//
+	// * commitsToDo is at most the total number of direct parents
+	//   along a single ancestry path through history.
 	treesToDo   ToDoList
+	commitsToDo ToDoList
 }
 
 func NewSizeScanner(repo *Repository) (*SizeScanner, error) {
@@ -145,9 +145,9 @@ func (scanner *SizeScanner) CommitSize(oid Oid) (CommitSize, error) {
 	panic("fill() didn't fill commit")
 }
 
-func (scanner *SizeScanner) recordCommit(oid Oid, commitSize CommitSize, size Count, parentCount Count) {
-	scanner.commitSizes[oid] = commitSize
-	scanner.HistorySize.recordCommit(commitSize, size, parentCount)
+func (scanner *SizeScanner) recordBlob(oid Oid, blobSize BlobSize) {
+	scanner.blobSizes[oid] = blobSize
+	scanner.HistorySize.recordBlob(blobSize)
 }
 
 func (scanner *SizeScanner) recordTree(oid Oid, treeSize TreeSize, size Count, treeEntries Count) {
@@ -155,9 +155,9 @@ func (scanner *SizeScanner) recordTree(oid Oid, treeSize TreeSize, size Count, t
 	scanner.HistorySize.recordTree(treeSize, size, treeEntries)
 }
 
-func (scanner *SizeScanner) recordBlob(oid Oid, blobSize BlobSize) {
-	scanner.blobSizes[oid] = blobSize
-	scanner.HistorySize.recordBlob(blobSize)
+func (scanner *SizeScanner) recordCommit(oid Oid, commitSize CommitSize, size Count, parentCount Count) {
+	scanner.commitSizes[oid] = commitSize
+	scanner.HistorySize.recordCommit(commitSize, size, parentCount)
 }
 
 // Compute the sizes of any trees listed in `scanner.commitsToDo` or
@@ -220,60 +220,6 @@ func (scanner *SizeScanner) fill() error {
 		// There is nothing left to do:
 		return nil
 	}
-}
-
-// Compute and return the size of the commit with the specified `oid`
-// if we already know the size of its constituents. If the
-// constituents' sizes are not yet known but believed to be
-// computable, add any unknown constituents to `commitsToDo` and
-// `treesToDo` and return an `NotYetKnown` error. If another error
-// occurred while looking up an object, return that error. `oid` is
-// not already in the cache.
-func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count, Count, error) {
-	var err error
-
-	commit, err := scanner.repo.ReadCommit(oid)
-	if err != nil {
-		return CommitSize{}, 0, 0, err
-	}
-
-	ok := true
-
-	size := CommitSize{}
-
-	// First accumulate all of the sizes for all parents:
-	for _, parent := range commit.Parents {
-		parentSize, parentOK := scanner.commitSizes[parent]
-		if parentOK {
-			if ok {
-				size.addParent(parentSize)
-			}
-		} else {
-			ok = false
-			// Schedule this one to be computed:
-			scanner.commitsToDo.Push(parent)
-		}
-	}
-
-	// Now gather information about the tree:
-	treeSize, treeOk := scanner.treeSizes[commit.Tree]
-	if treeOk {
-		if ok {
-			size.addTree(treeSize)
-		}
-	} else {
-		ok = false
-		scanner.treesToDo.Push(commit.Tree)
-	}
-
-	if !ok {
-		return CommitSize{}, 0, 0, NotYetKnown
-	}
-
-	// Now add one to the ancestor depth to account for this commit
-	// itself:
-	size.MaxAncestorDepth.Increment(1)
-	return size, commit.Size, Count(len(commit.Parents)), nil
 }
 
 // Compute and return the size of the tree with the specified `oid` if
@@ -365,4 +311,58 @@ func (scanner *SizeScanner) queueTree(oid Oid) (TreeSize, Count, Count, error) {
 	// this tree itself:
 	size.MaxPathDepth.Increment(1)
 	return size, Count(len(tree.data)), entryCount, nil
+}
+
+// Compute and return the size of the commit with the specified `oid`
+// if we already know the size of its constituents. If the
+// constituents' sizes are not yet known but believed to be
+// computable, add any unknown constituents to `commitsToDo` and
+// `treesToDo` and return an `NotYetKnown` error. If another error
+// occurred while looking up an object, return that error. `oid` is
+// not already in the cache.
+func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count, Count, error) {
+	var err error
+
+	commit, err := scanner.repo.ReadCommit(oid)
+	if err != nil {
+		return CommitSize{}, 0, 0, err
+	}
+
+	ok := true
+
+	size := CommitSize{}
+
+	// First accumulate all of the sizes for all parents:
+	for _, parent := range commit.Parents {
+		parentSize, parentOK := scanner.commitSizes[parent]
+		if parentOK {
+			if ok {
+				size.addParent(parentSize)
+			}
+		} else {
+			ok = false
+			// Schedule this one to be computed:
+			scanner.commitsToDo.Push(parent)
+		}
+	}
+
+	// Now gather information about the tree:
+	treeSize, treeOk := scanner.treeSizes[commit.Tree]
+	if treeOk {
+		if ok {
+			size.addTree(treeSize)
+		}
+	} else {
+		ok = false
+		scanner.treesToDo.Push(commit.Tree)
+	}
+
+	if !ok {
+		return CommitSize{}, 0, 0, NotYetKnown
+	}
+
+	// Now add one to the ancestor depth to account for this commit
+	// itself:
+	size.MaxAncestorDepth.Increment(1)
+	return size, commit.Size, Count(len(commit.Parents)), nil
 }

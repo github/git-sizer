@@ -13,7 +13,7 @@ import (
 )
 
 // The type of an object ("blob", "tree", "commit", "tag", "missing").
-type Type string
+type ObjectType string
 
 type Oid [20]byte
 
@@ -94,7 +94,7 @@ func NewRepository(path string) (*Repository, error) {
 
 type Reference struct {
 	Refname    string
-	ObjectType Type
+	ObjectType ObjectType
 	ObjectSize Count32
 	Oid        Oid
 }
@@ -145,7 +145,7 @@ func (repo *Repository) ForEachRef(done <-chan interface{}) (<-chan ReferenceOrE
 			if err != nil {
 				break
 			}
-			objectType := Type(words[1])
+			objectType := ObjectType(words[1])
 			objectSize, err := strconv.ParseUint(words[2], 10, 0)
 			if err != nil {
 				break
@@ -162,7 +162,7 @@ func (repo *Repository) ForEachRef(done <-chan interface{}) (<-chan ReferenceOrE
 
 // Parse a `cat-file --batch[-check]` output header line (including
 // the trailing LF). `spec` is used in error messages.
-func (repo *Repository) parseBatchHeader(spec string, header string) (Oid, Type, Count32, error) {
+func (repo *Repository) parseBatchHeader(spec string, header string) (Oid, ObjectType, Count32, error) {
 	header = header[:len(header)-1]
 	words := strings.Split(header, " ")
 	if words[len(words)-1] == "missing" {
@@ -178,10 +178,10 @@ func (repo *Repository) parseBatchHeader(spec string, header string) (Oid, Type,
 	if err != nil {
 		return Oid{}, "missing", 0, err
 	}
-	return oid, Type(words[1]), NewCount32(size), nil
+	return oid, ObjectType(words[1]), NewCount32(size), nil
 }
 
-func (repo *Repository) ReadHeader(spec string) (Oid, Type, Count32, error) {
+func (repo *Repository) ReadHeader(spec string) (Oid, ObjectType, Count32, error) {
 	fmt.Fprintf(repo.checkStdin, "%s\n", spec)
 	header, err := repo.checkStdout.ReadString('\n')
 	if err != nil {
@@ -190,7 +190,7 @@ func (repo *Repository) ReadHeader(spec string) (Oid, Type, Count32, error) {
 	return repo.parseBatchHeader(spec, header)
 }
 
-func (repo *Repository) readObject(spec string) (Oid, Type, []byte, error) {
+func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error) {
 	fmt.Fprintf(repo.batchStdin, "%s\n", spec)
 	header, err := repo.batchStdout.ReadString('\n')
 	if err != nil {
@@ -324,10 +324,10 @@ func (repo *Repository) ReadTree(oid Oid) (*Tree, error) {
 }
 
 type TreeEntry struct {
-	Name     string
-	Oid      Oid
-	Type     Type
-	Filemode uint
+	Name       string
+	Oid        Oid
+	ObjectType ObjectType
+	Filemode   uint
 }
 
 type TreeIter struct {
@@ -378,7 +378,7 @@ func (iter *TreeIter) NextEntry(entry *TreeEntry) (bool, error) {
 type Tag struct {
 	Size         Count32
 	Referent     Oid
-	ReferentType Type
+	ReferentType ObjectType
 }
 
 func (repo *Repository) ReadTag(oid Oid) (*Tag, error) {
@@ -391,7 +391,7 @@ func (repo *Repository) ReadTag(oid Oid) (*Tag, error) {
 	}
 	var referent Oid
 	var referentFound bool
-	var referentType Type
+	var referentType ObjectType
 	var referentTypeFound bool
 	iter, err := NewObjectHeaderIter(oid.String(), data)
 	if err != nil {
@@ -416,7 +416,7 @@ func (repo *Repository) ReadTag(oid Oid) (*Tag, error) {
 			if referentTypeFound {
 				return nil, fmt.Errorf("multiple types found in tag %s", oid)
 			}
-			referentType = Type(value)
+			referentType = ObjectType(value)
 			referentTypeFound = true
 		}
 	}

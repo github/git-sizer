@@ -57,7 +57,7 @@ func NewSizeScanner(repo *Repository) (*SizeScanner, error) {
 }
 
 func (scanner *SizeScanner) TypedObjectSize(
-	spec string, oid Oid, objectType Type, objectSize Count32,
+	spec string, oid Oid, objectType ObjectType, objectSize Count32,
 ) (Size, error) {
 	switch objectType {
 	case "blob":
@@ -78,7 +78,7 @@ func (scanner *SizeScanner) TypedObjectSize(
 	}
 }
 
-func (scanner *SizeScanner) ObjectSize(spec string) (Oid, Type, Size, error) {
+func (scanner *SizeScanner) ObjectSize(spec string) (Oid, ObjectType, Size, error) {
 	oid, objectType, objectSize, err := scanner.repo.ReadHeader(spec)
 	if err != nil {
 		return Oid{}, "missing", nil, err
@@ -97,7 +97,7 @@ func (scanner *SizeScanner) ReferenceSize(ref Reference) (Size, error) {
 	return size, err
 }
 
-func (scanner *SizeScanner) OidObjectSize(oid Oid) (Type, Size, error) {
+func (scanner *SizeScanner) OidObjectSize(oid Oid) (ObjectType, Size, error) {
 	_, objectType, size, error := scanner.ObjectSize(oid.String())
 	return objectType, size, error
 }

@@ -45,6 +45,87 @@ type TreeSize struct {
 	ExpandedSubmoduleCount Count `json:"expanded_submodule_count"`
 }
 
+func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
+	s.MaxPathDepth.AdjustMax(s2.MaxPathDepth)
+	if s2.MaxPathLength > 0 {
+		s.MaxPathLength.AdjustMax((Count(len(filename)) + 1).Plus(s2.MaxPathLength))
+	} else {
+		s.MaxPathLength.AdjustMax(Count(len(filename)))
+	}
+	s.ExpandedTreeCount.Increment(s2.ExpandedTreeCount)
+	s.MaxTreeEntries.AdjustMax(s2.MaxTreeEntries)
+	s.ExpandedBlobCount.Increment(s2.ExpandedBlobCount)
+	s.ExpandedBlobSize.Increment(s2.ExpandedBlobSize)
+	s.ExpandedLinkCount.Increment(s2.ExpandedLinkCount)
+	s.ExpandedSubmoduleCount.Increment(s2.ExpandedSubmoduleCount)
+}
+
+func (s *TreeSize) adjustMaxima(s2 TreeSize) {
+	s.MaxPathDepth.AdjustMax(s2.MaxPathDepth)
+	s.MaxPathLength.AdjustMax(s2.MaxPathLength)
+	s.ExpandedTreeCount.AdjustMax(s2.ExpandedTreeCount)
+	s.MaxTreeEntries.AdjustMax(s2.MaxTreeEntries)
+	s.ExpandedBlobCount.AdjustMax(s2.ExpandedBlobCount)
+	s.ExpandedBlobSize.AdjustMax(s2.ExpandedBlobSize)
+	s.ExpandedLinkCount.AdjustMax(s2.ExpandedLinkCount)
+	s.ExpandedSubmoduleCount.AdjustMax(s2.ExpandedSubmoduleCount)
+}
+
+// Record that the object has a blob of the specified `size` as a
+// direct descendant.
+func (s *TreeSize) addBlob(filename string, size BlobSize) {
+	s.MaxPathDepth.AdjustMax(1)
+	s.MaxPathLength.AdjustMax(Count(len(filename)))
+	s.ExpandedBlobSize.Increment(size.Size)
+	s.ExpandedBlobCount.Increment(1)
+}
+
+// Record that the object has a link as a direct descendant.
+func (s *TreeSize) addLink(filename string) {
+	s.MaxPathDepth.AdjustMax(1)
+	s.MaxPathLength.AdjustMax(Count(len(filename)))
+	s.ExpandedLinkCount.Increment(1)
+}
+
+// Record that the object has a submodule as a direct descendant.
+func (s *TreeSize) addSubmodule(filename string) {
+	s.MaxPathDepth.AdjustMax(1)
+	s.MaxPathLength.AdjustMax(Count(len(filename)))
+	s.ExpandedSubmoduleCount.Increment(1)
+}
+
+func (s TreeSize) String() string {
+	return fmt.Sprintf(
+		"max_path_depth=%d, max_path_length=%d, "+
+			"expanded_tree_count=%d, max_tree_entries=%d, "+
+			"expanded_blob_count=%d, expanded_blob_size=%d, "+
+			"expanded_link_count=%d, expanded_submodule_count=%d",
+		s.MaxPathDepth, s.MaxPathLength,
+		s.ExpandedTreeCount, s.MaxTreeEntries,
+		s.ExpandedBlobCount, s.ExpandedBlobSize,
+		s.ExpandedLinkCount, s.ExpandedSubmoduleCount,
+	)
+}
+
+type CommitSize struct {
+	// The height of the ancestor graph, including this commit.
+	MaxAncestorDepth Count `json:"max_ancestor_depth"`
+}
+
+func (s *CommitSize) addParent(s2 CommitSize) {
+	s.MaxAncestorDepth.AdjustMax(s2.MaxAncestorDepth)
+}
+
+func (s *CommitSize) addTree(s2 TreeSize) {
+}
+
+func (s CommitSize) String() string {
+	return fmt.Sprintf(
+		"max_ancestor_depth=%d",
+		s.MaxAncestorDepth,
+	)
+}
+
 type HistorySize struct {
 	// The total number of unique commits analyzed.
 	UniqueCommitCount Count `json:"unique_commit_count"`
@@ -114,81 +195,6 @@ func (s HistorySize) String() string {
 		s.MaxHistoryDepth, s.MaxParentCount,
 		s.UniqueTreeCount, s.UniqueTreeEntries, s.UniqueBlobCount,
 		s.UniqueBlobSize, s.UniqueTagCount, s.TreeSize,
-	)
-}
-
-func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
-	s.MaxPathDepth.AdjustMax(s2.MaxPathDepth)
-	if s2.MaxPathLength > 0 {
-		s.MaxPathLength.AdjustMax((Count(len(filename)) + 1).Plus(s2.MaxPathLength))
-	} else {
-		s.MaxPathLength.AdjustMax(Count(len(filename)))
-	}
-	s.ExpandedTreeCount.Increment(s2.ExpandedTreeCount)
-	s.MaxTreeEntries.AdjustMax(s2.MaxTreeEntries)
-	s.ExpandedBlobCount.Increment(s2.ExpandedBlobCount)
-	s.ExpandedBlobSize.Increment(s2.ExpandedBlobSize)
-	s.ExpandedLinkCount.Increment(s2.ExpandedLinkCount)
-	s.ExpandedSubmoduleCount.Increment(s2.ExpandedSubmoduleCount)
-}
-
-func (s *TreeSize) adjustMaxima(s2 TreeSize) {
-	s.MaxPathDepth.AdjustMax(s2.MaxPathDepth)
-	s.MaxPathLength.AdjustMax(s2.MaxPathLength)
-	s.ExpandedTreeCount.AdjustMax(s2.ExpandedTreeCount)
-	s.MaxTreeEntries.AdjustMax(s2.MaxTreeEntries)
-	s.ExpandedBlobCount.AdjustMax(s2.ExpandedBlobCount)
-	s.ExpandedBlobSize.AdjustMax(s2.ExpandedBlobSize)
-	s.ExpandedLinkCount.AdjustMax(s2.ExpandedLinkCount)
-	s.ExpandedSubmoduleCount.AdjustMax(s2.ExpandedSubmoduleCount)
-}
-
-// Record that the object has a blob of the specified `size` as a
-// direct descendant.
-func (s *TreeSize) addBlob(filename string, size BlobSize) {
-	s.MaxPathDepth.AdjustMax(1)
-	s.MaxPathLength.AdjustMax(Count(len(filename)))
-	s.ExpandedBlobSize.Increment(size.Size)
-	s.ExpandedBlobCount.Increment(1)
-}
-
-// Record that the object has a link as a direct descendant.
-func (s *TreeSize) addLink(filename string) {
-	s.MaxPathDepth.AdjustMax(1)
-	s.MaxPathLength.AdjustMax(Count(len(filename)))
-	s.ExpandedLinkCount.Increment(1)
-}
-
-// Record that the object has a submodule as a direct descendant.
-func (s *TreeSize) addSubmodule(filename string) {
-	s.MaxPathDepth.AdjustMax(1)
-	s.MaxPathLength.AdjustMax(Count(len(filename)))
-	s.ExpandedSubmoduleCount.Increment(1)
-}
-
-func (s TreeSize) String() string {
-	return fmt.Sprintf(
-		"max_path_depth=%d, max_path_length=%d, expanded_tree_count=%d, max_tree_entries=%d, expanded_blob_count=%d, expanded_blob_size=%d, expanded_link_count=%d, expanded_submodule_count=%d",
-		s.MaxPathDepth, s.MaxPathLength, s.ExpandedTreeCount, s.MaxTreeEntries, s.ExpandedBlobCount, s.ExpandedBlobSize, s.ExpandedLinkCount, s.ExpandedSubmoduleCount,
-	)
-}
-
-type CommitSize struct {
-	// The height of the ancestor graph, including this commit.
-	MaxAncestorDepth Count `json:"max_ancestor_depth"`
-}
-
-func (s *CommitSize) addParent(s2 CommitSize) {
-	s.MaxAncestorDepth.AdjustMax(s2.MaxAncestorDepth)
-}
-
-func (s *CommitSize) addTree(s2 TreeSize) {
-}
-
-func (s CommitSize) String() string {
-	return fmt.Sprintf(
-		"max_ancestor_depth=%d",
-		s.MaxAncestorDepth,
 	)
 }
 

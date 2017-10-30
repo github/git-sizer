@@ -173,6 +173,11 @@ type HistorySize struct {
 	// The maximum number of tags in a chain.
 	MaxTagDepth Count `json:"max_tag_depth"`
 
+	// The number of references analyzed. Note that we don't eliminate
+	// duplicates if the user passes the same reference more than
+	// once.
+	ReferenceCount Count `json:"reference_count"`
+
 	// The maximum TreeSize in the analyzed history (where each
 	// attribute is maximized separately).
 	TreeSize
@@ -205,6 +210,10 @@ func (s *HistorySize) recordTag(tagSize TagSize, size Count) {
 	s.MaxTagDepth.AdjustMax(tagSize.TagDepth)
 }
 
+func (s *HistorySize) recordReference(ref Reference) {
+	s.ReferenceCount.Increment(1)
+}
+
 func (s HistorySize) String() string {
 	return fmt.Sprintf(
 		"unique_commit_count=%d, unique_commit_count = %d, max_commit_size = %d, "+
@@ -212,12 +221,14 @@ func (s HistorySize) String() string {
 			"unique_tree_count=%d, unique_tree_entries=%d, max_tree_entries=%d, "+
 			"unique_blob_count=%d, unique_blob_size=%d, max_blob_size=%d, "+
 			"unique_tag_count=%d, "+
+			"reference_count=%d, "+
 			"%s",
 		s.UniqueCommitCount, s.UniqueCommitSize, s.MaxCommitSize,
 		s.MaxHistoryDepth, s.MaxParentCount,
 		s.UniqueTreeCount, s.UniqueTreeEntries, s.MaxTreeEntries,
 		s.UniqueBlobCount, s.UniqueBlobSize, s.MaxBlobSize,
 		s.UniqueTagCount,
+		s.ReferenceCount,
 		s.TreeSize,
 	)
 }

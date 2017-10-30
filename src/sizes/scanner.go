@@ -89,7 +89,12 @@ func (scanner *SizeScanner) ObjectSize(spec string) (Oid, Type, Size, error) {
 }
 
 func (scanner *SizeScanner) ReferenceSize(ref Reference) (Size, error) {
-	return scanner.TypedObjectSize(ref.Refname, ref.Oid, ref.ObjectType, ref.ObjectSize)
+	size, err := scanner.TypedObjectSize(ref.Refname, ref.Oid, ref.ObjectType, ref.ObjectSize)
+	if err != nil {
+		return nil, err
+	}
+	scanner.recordReference(ref)
+	return size, err
 }
 
 func (scanner *SizeScanner) OidObjectSize(oid Oid) (Type, Size, error) {
@@ -171,6 +176,10 @@ func (scanner *SizeScanner) TagSize(oid Oid) (TagSize, error) {
 		panic("fill() didn't fill tag")
 	}
 	return s, nil
+}
+
+func (scanner *SizeScanner) recordReference(ref Reference) {
+	scanner.HistorySize.recordReference(ref)
 }
 
 func (scanner *SizeScanner) recordBlob(oid Oid, blobSize BlobSize) {

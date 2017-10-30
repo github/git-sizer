@@ -20,6 +20,6 @@ func (t *ToDoList) Peek() pending {
 }
 
 func (t *ToDoList) Drop() {
-	t.list[len(t.list)-1] = pending{}
+	t.list[len(t.list)-1] = nil
 	t.list = t.list[0 : len(t.list)-1]
 }

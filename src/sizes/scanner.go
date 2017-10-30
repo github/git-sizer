@@ -204,14 +204,15 @@ type pendingTree struct {
 	oid Oid
 }
 
-// Compute and return the size of the tree with the specified `oid` if
-// we already know the size of its constituents. If the constituents'
-// sizes are not yet known but believed to be computable, add any
-// unknown constituents to `treesToDo` and return an `NotYetKnown`
-// error. If another error occurred while looking up an object, return
-// that error. `oid` is not already in the cache.
-func (p *pendingTree) Queue(scanner *SizeScanner, subtasks *ToDoList) (TreeSize, Count32, Count32, error) {
+// Compute and return the size of the tree in `p` if we already know
+// the size of its constituents. If the constituents' sizes are not
+// yet known but believed to be computable, add any unknown
+// constituents to `scanner.toDo` and return a `NotYetKnown` error. If
+// another error occurrs while looking up an object, return that
+// error. The tree in `p` is not already in the cache.
+func (p *pendingTree) Queue(scanner *SizeScanner) (TreeSize, Count32, Count32, error) {
 	var err error
+	var subtasks ToDoList
 
 	tree, err := scanner.repo.ReadTree(p.oid)
 	if err != nil {
@@ -284,6 +285,8 @@ func (p *pendingTree) Queue(scanner *SizeScanner, subtasks *ToDoList) (TreeSize,
 	}
 
 	if !ok {
+		scanner.toDo.Push(p)
+		scanner.toDo.PushAll(subtasks)
 		return TreeSize{}, 0, 0, NotYetKnown
 	}
 
@@ -302,17 +305,14 @@ func (p *pendingTree) Run(scanner *SizeScanner) error {
 		return nil
 	}
 
-	var subtasks ToDoList
-
-	treeSize, size, treeEntries, err := p.Queue(scanner, &subtasks)
-	if err == nil {
-		scanner.recordTree(p.oid, treeSize, size, treeEntries)
-	} else if err == NotYetKnown {
-		scanner.toDo.Push(p)
-		scanner.toDo.PushAll(subtasks)
-	} else {
-		return err
+	treeSize, size, treeEntries, err := p.Queue(scanner)
+	if err != nil {
+		if err != NotYetKnown {
+			return err
+		}
+		return nil
 	}
+	scanner.recordTree(p.oid, treeSize, size, treeEntries)
 	return nil
 }
 
@@ -320,15 +320,15 @@ type pendingCommit struct {
 	oid Oid
 }
 
-// Compute and return the size of the commit with the specified `oid`
-// if we already know the size of its constituents. If the
-// constituents' sizes are not yet known but believed to be
-// computable, add any unknown constituents to `commitsToDo` and
-// `treesToDo` and return an `NotYetKnown` error. If another error
-// occurred while looking up an object, return that error. `oid` is
-// not already in the cache.
-func (p *pendingCommit) Queue(scanner *SizeScanner, subtasks *ToDoList) (CommitSize, Count32, Count32, error) {
+// Compute and return the size of the commit in `p` if we already know
+// the size of its constituents. If the constituents' sizes are not
+// yet known but believed to be computable, add any unknown
+// constituents to `scanner.toDo` and return a `NotYetKnown` error. If
+// another error occurrs while looking up an object, return that
+// error. The commit in `p` is not already in the cache.
+func (p *pendingCommit) Queue(scanner *SizeScanner) (CommitSize, Count32, Count32, error) {
 	var err error
+	var subtasks ToDoList
 
 	commit, err := scanner.repo.ReadCommit(p.oid)
 	if err != nil {
@@ -365,6 +365,8 @@ func (p *pendingCommit) Queue(scanner *SizeScanner, subtasks *ToDoList) (CommitS
 	}
 
 	if !ok {
+		scanner.toDo.Push(p)
+		scanner.toDo.PushAll(subtasks)
 		return CommitSize{}, 0, 0, NotYetKnown
 	}
 
@@ -383,17 +385,14 @@ func (p *pendingCommit) Run(scanner *SizeScanner) error {
 		return nil
 	}
 
-	var subtasks ToDoList
-
-	commitSize, size, parentCount, err := p.Queue(scanner, &subtasks)
-	if err == nil {
-		scanner.recordCommit(p.oid, commitSize, size, parentCount)
-	} else if err == NotYetKnown {
-		scanner.toDo.Push(p)
-		scanner.toDo.PushAll(subtasks)
-	} else {
-		return err
+	commitSize, size, parentCount, err := p.Queue(scanner)
+	if err != nil {
+		if err != NotYetKnown {
+			return err
+		}
+		return nil
 	}
+	scanner.recordCommit(p.oid, commitSize, size, parentCount)
 	return nil
 }
 
@@ -401,14 +400,15 @@ type pendingTag struct {
 	oid Oid
 }
 
-// Compute and return the size of the annotated tag with the specified
-// `oid` if we already know the size of its referent. If the
-// referent's size is not yet known but believed to be computable, add
-// it to the appropriate todo list and return an `NotYetKnown` error.
-// If another error occurred while looking up an object, return that
-// error. `oid` is not already in the cache.
-func (p *pendingTag) Queue(scanner *SizeScanner, subtasks *ToDoList) (TagSize, Count32, error) {
+// Compute and return the size of the annotated tag in `p` if we
+// already know the size of its referent. If the referent's size is
+// not yet known but believed to be computable, add it to
+// `scanner.toDo` and return a `NotYetKnown` error. If another error
+// occurrs while looking up an object, return that error. The tag in
+// `p` is not already in the cache.
+func (p *pendingTag) Queue(scanner *SizeScanner) (TagSize, Count32, error) {
 	var err error
+	var subtasks ToDoList
 
 	tag, err := scanner.repo.ReadTag(p.oid)
 	if err != nil {
@@ -453,6 +453,8 @@ func (p *pendingTag) Queue(scanner *SizeScanner, subtasks *ToDoList) (TagSize, C
 	}
 
 	if !ok {
+		scanner.toDo.Push(p)
+		scanner.toDo.PushAll(subtasks)
 		return TagSize{}, 0, NotYetKnown
 	}
 
@@ -469,17 +471,14 @@ func (p *pendingTag) Run(scanner *SizeScanner) error {
 		return nil
 	}
 
-	var subtasks ToDoList
-
-	tagSize, size, err := p.Queue(scanner, &subtasks)
-	if err == nil {
-		scanner.recordTag(p.oid, tagSize, size)
-	} else if err == NotYetKnown {
-		scanner.toDo.Push(p)
-		scanner.toDo.PushAll(subtasks)
-	} else {
-		return err
+	tagSize, size, err := p.Queue(scanner)
+	if err != nil {
+		if err != NotYetKnown {
+			return err
+		}
+		return nil
 	}
+	scanner.recordTag(p.oid, tagSize, size)
 	return nil
 }
 

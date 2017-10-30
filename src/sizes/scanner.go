@@ -124,7 +124,7 @@ func (scanner *SizeScanner) TreeSize(oid Oid) (TreeSize, error) {
 		return s, nil
 	}
 
-	scanner.treesToDo.Push(oid)
+	scanner.treesToDo.Push(pending{oid})
 	err := scanner.fill()
 	if err != nil {
 		return TreeSize{}, err
@@ -144,7 +144,7 @@ func (scanner *SizeScanner) CommitSize(oid Oid) (CommitSize, error) {
 		return s, nil
 	}
 
-	scanner.commitsToDo.Push(oid)
+	scanner.commitsToDo.Push(pending{oid})
 	err := scanner.fill()
 	if err != nil {
 		return CommitSize{}, err
@@ -164,7 +164,7 @@ func (scanner *SizeScanner) TagSize(oid Oid) (TagSize, error) {
 		return s, nil
 	}
 
-	scanner.tagsToDo.Push(oid)
+	scanner.tagsToDo.Push(pending{oid})
 	err := scanner.fill()
 	if err != nil {
 		return TagSize{}, err
@@ -202,6 +202,10 @@ func (scanner *SizeScanner) recordTag(oid Oid, tagSize TagSize, size Count32) {
 	scanner.HistorySize.recordTag(tagSize, size)
 }
 
+type pending struct {
+	oid Oid
+}
+
 // Compute the sizes of any trees listed in `scanner.commitsToDo` or
 // `scanner.treesToDo`. This might involve computing the sizes of
 // referred-to objects. Do this without recursion to avoid unlimited
@@ -209,20 +213,20 @@ func (scanner *SizeScanner) recordTag(oid Oid, tagSize TagSize, size Count32) {
 func (scanner *SizeScanner) fill() error {
 	for {
 		if scanner.treesToDo.Length() != 0 {
-			oid := scanner.treesToDo.Peek()
+			p := scanner.treesToDo.Peek()
 
 			// See if the object's size has been computed since it was
 			// enqueued. This can happen if it is used in multiple places
 			// in the ancestry graph.
-			_, ok := scanner.treeSizes[oid]
+			_, ok := scanner.treeSizes[p.oid]
 			if ok {
 				scanner.treesToDo.Drop()
 				continue
 			}
 
-			treeSize, size, treeEntries, err := scanner.queueTree(oid)
+			treeSize, size, treeEntries, err := scanner.queueTree(p.oid)
 			if err == nil {
-				scanner.recordTree(oid, treeSize, size, treeEntries)
+				scanner.recordTree(p.oid, treeSize, size, treeEntries)
 				scanner.treesToDo.Drop()
 			} else if err == NotYetKnown {
 				// Let loop continue (the tree's constituents were added
@@ -234,20 +238,20 @@ func (scanner *SizeScanner) fill() error {
 		}
 
 		if scanner.commitsToDo.Length() != 0 {
-			oid := scanner.commitsToDo.Peek()
+			p := scanner.commitsToDo.Peek()
 
 			// See if the object's size has been computed since it was
 			// enqueued. This can happen if it is used in multiple places
 			// in the ancestry graph.
-			_, ok := scanner.commitSizes[oid]
+			_, ok := scanner.commitSizes[p.oid]
 			if ok {
 				scanner.commitsToDo.Drop()
 				continue
 			}
 
-			commitSize, size, parentCount, err := scanner.queueCommit(oid)
+			commitSize, size, parentCount, err := scanner.queueCommit(p.oid)
 			if err == nil {
-				scanner.recordCommit(oid, commitSize, size, parentCount)
+				scanner.recordCommit(p.oid, commitSize, size, parentCount)
 				scanner.commitsToDo.Drop()
 			} else if err == NotYetKnown {
 				// Let loop continue (the commits's constituents were
@@ -260,20 +264,20 @@ func (scanner *SizeScanner) fill() error {
 		}
 
 		if scanner.tagsToDo.Length() != 0 {
-			oid := scanner.tagsToDo.Peek()
+			p := scanner.tagsToDo.Peek()
 
 			// See if the object's size has been computed since it was
 			// enqueued. This can happen if it is used in multiple places
 			// in the ancestry graph.
-			_, ok := scanner.tagSizes[oid]
+			_, ok := scanner.tagSizes[p.oid]
 			if ok {
 				scanner.tagsToDo.Drop()
 				continue
 			}
 
-			tagSize, size, err := scanner.queueTag(oid)
+			tagSize, size, err := scanner.queueTag(p.oid)
 			if err == nil {
-				scanner.recordTag(oid, tagSize, size)
+				scanner.recordTag(p.oid, tagSize, size)
 				scanner.tagsToDo.Drop()
 			} else if err == NotYetKnown {
 				// Let loop continue (the tag's referent was added to
@@ -338,7 +342,7 @@ func (scanner *SizeScanner) queueTree(oid Oid) (TreeSize, Count32, Count32, erro
 			} else {
 				ok = false
 				// Schedule this one to be computed:
-				scanner.treesToDo.Push(entry.Oid)
+				scanner.treesToDo.Push(pending{entry.Oid})
 			}
 
 		case entry.Filemode&0170000 == 0160000:
@@ -409,7 +413,7 @@ func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count32, Count32, 
 		} else {
 			ok = false
 			// Schedule this one to be computed:
-			scanner.commitsToDo.Push(parent)
+			scanner.commitsToDo.Push(pending{parent})
 		}
 	}
 
@@ -421,7 +425,7 @@ func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count32, Count32, 
 		}
 	} else {
 		ok = false
-		scanner.treesToDo.Push(commit.Tree)
+		scanner.treesToDo.Push(pending{commit.Tree})
 	}
 
 	if !ok {
@@ -458,21 +462,21 @@ func (scanner *SizeScanner) queueTag(oid Oid) (TagSize, Count32, error) {
 		} else {
 			ok = false
 			// Schedule this one to be computed:
-			scanner.tagsToDo.Push(tag.Referent)
+			scanner.tagsToDo.Push(pending{tag.Referent})
 		}
 	case "commit":
 		_, referentOK := scanner.commitSizes[tag.Referent]
 		if !referentOK {
 			ok = false
 			// Schedule this one to be computed:
-			scanner.commitsToDo.Push(tag.Referent)
+			scanner.commitsToDo.Push(pending{tag.Referent})
 		}
 	case "tree":
 		_, referentOK := scanner.treeSizes[tag.Referent]
 		if !referentOK {
 			ok = false
 			// Schedule this one to be computed:
-			scanner.treesToDo.Push(tag.Referent)
+			scanner.treesToDo.Push(pending{tag.Referent})
 		}
 	case "blob":
 		_, referentOK := scanner.commitSizes[tag.Referent]

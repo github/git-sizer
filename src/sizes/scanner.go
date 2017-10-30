@@ -364,6 +364,5 @@ func (scanner *SizeScanner) queueTree(oid Oid) (TreeSize, Count, Count, error) {
 	// Now add one to the depth and to the tree count to account for
 	// this tree itself:
 	size.MaxPathDepth.Increment(1)
-	size.MaxTreeEntries.AdjustMax(entryCount)
 	return size, Count(len(tree.data)), entryCount, nil
 }

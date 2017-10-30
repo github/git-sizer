@@ -28,9 +28,6 @@ type TreeSize struct {
 	// The total number of trees, including duplicities.
 	ExpandedTreeCount Count `json:"expanded_tree_count"`
 
-	// The maximum number of entries an a tree.
-	MaxTreeEntries Count `json:"max_tree_entries"`
-
 	// The total number of blobs.
 	ExpandedBlobCount Count `json:"expanded_blob_count"`
 
@@ -52,7 +49,6 @@ func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
 		s.MaxPathLength.AdjustMax(Count(len(filename)))
 	}
 	s.ExpandedTreeCount.Increment(s2.ExpandedTreeCount)
-	s.MaxTreeEntries.AdjustMax(s2.MaxTreeEntries)
 	s.ExpandedBlobCount.Increment(s2.ExpandedBlobCount)
 	s.ExpandedBlobSize.Increment(s2.ExpandedBlobSize)
 	s.ExpandedLinkCount.Increment(s2.ExpandedLinkCount)
@@ -63,7 +59,6 @@ func (s *TreeSize) adjustMaxima(s2 TreeSize) {
 	s.MaxPathDepth.AdjustMax(s2.MaxPathDepth)
 	s.MaxPathLength.AdjustMax(s2.MaxPathLength)
 	s.ExpandedTreeCount.AdjustMax(s2.ExpandedTreeCount)
-	s.MaxTreeEntries.AdjustMax(s2.MaxTreeEntries)
 	s.ExpandedBlobCount.AdjustMax(s2.ExpandedBlobCount)
 	s.ExpandedBlobSize.AdjustMax(s2.ExpandedBlobSize)
 	s.ExpandedLinkCount.AdjustMax(s2.ExpandedLinkCount)
@@ -96,11 +91,11 @@ func (s *TreeSize) addSubmodule(filename string) {
 func (s TreeSize) String() string {
 	return fmt.Sprintf(
 		"max_path_depth=%d, max_path_length=%d, "+
-			"expanded_tree_count=%d, max_tree_entries=%d, "+
+			"expanded_tree_count=%d, "+
 			"expanded_blob_count=%d, expanded_blob_size=%d, "+
 			"expanded_link_count=%d, expanded_submodule_count=%d",
 		s.MaxPathDepth, s.MaxPathLength,
-		s.ExpandedTreeCount, s.MaxTreeEntries,
+		s.ExpandedTreeCount,
 		s.ExpandedBlobCount, s.ExpandedBlobSize,
 		s.ExpandedLinkCount, s.ExpandedSubmoduleCount,
 	)
@@ -150,6 +145,9 @@ type HistorySize struct {
 	// The total number of tree entries in all unique trees analyzed.
 	UniqueTreeEntries Count `json:"unique_tree_entries"`
 
+	// The maximum number of entries an a tree.
+	MaxTreeEntries Count `json:"max_tree_entries"`
+
 	// The total number of unique blobs analyzed.
 	UniqueBlobCount Count `json:"unique_blob_count"`
 
@@ -173,6 +171,7 @@ func (s *HistorySize) recordTree(treeSize TreeSize, size Count, treeEntries Coun
 	s.UniqueTreeCount.Increment(1)
 	s.UniqueTreeSize.Increment(size)
 	s.UniqueTreeEntries.Increment(treeEntries)
+	s.MaxTreeEntries.AdjustMax(treeEntries)
 	s.TreeSize.adjustMaxima(treeSize)
 }
 
@@ -188,11 +187,15 @@ func (s HistorySize) String() string {
 	return fmt.Sprintf(
 		"unique_commit_count=%d, unique_commit_count = %d, max_commit_size = %d, "+
 			"max_history_depth=%d, max_parent_count=%d, "+
-			"unique_tree_count=%d, unique_tree_entries=%d, unique_blob_count=%d, "+
-			"unique_blob_size=%d, unique_tag_count=%d, %s",
+			"unique_tree_count=%d, unique_tree_entries=%d, max_tree_entries=%d, "+
+			"unique_blob_count=%d, unique_blob_size=%d, "+
+			"unique_tag_count=%d, "+
+			"%s",
 		s.UniqueCommitCount, s.UniqueCommitSize, s.MaxCommitSize,
 		s.MaxHistoryDepth, s.MaxParentCount,
-		s.UniqueTreeCount, s.UniqueTreeEntries, s.UniqueBlobCount,
-		s.UniqueBlobSize, s.UniqueTagCount, s.TreeSize,
+		s.UniqueTreeCount, s.UniqueTreeEntries, s.MaxTreeEntries,
+		s.UniqueBlobCount, s.UniqueBlobSize,
+		s.UniqueTagCount,
+		s.TreeSize,
 	)
 }

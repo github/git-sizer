@@ -298,6 +298,9 @@ func (repo *Repository) ReadCommit(oid Oid) (*Commit, error) {
 			treeFound = true
 		}
 	}
+	if !treeFound {
+		return nil, fmt.Errorf("no tree found in commit %s", oid)
+	}
 	return &Commit{
 		Size:    Count(len(data)),
 		Parents: parents,

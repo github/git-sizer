@@ -4,9 +4,9 @@ set -e
 
 # This is a shim to sit in front of the binaries and load the
 # appropriate environment variables for the environment set in
-# GIT_SMELL_ENV.
+# GIT_SIZER_ENV.
 
-GIT_SMELL_ENV=${GIT_SMELL_ENV:-"production"}
+GIT_SIZER_ENV=${GIT_SIZER_ENV:-"production"}
 
 resolve_symlink() {
     local path="$1"
@@ -26,8 +26,8 @@ self="$(resolve_symlink "$0")"
 # The base directory, which includes bin/ and whatever else once deployed
 base=$(cd -P "$(dirname "$self")/.."; pwd)
 
-if [ -f "${base}/.app-config/${GIT_SMELL_ENV}.sh" ]; then
-   source "${base}/.app-config/${GIT_SMELL_ENV}.sh"
+if [ -f "${base}/.app-config/${GIT_SIZER_ENV}.sh" ]; then
+   source "${base}/.app-config/${GIT_SIZER_ENV}.sh"
 fi
 
 myname=$(basename "$self")

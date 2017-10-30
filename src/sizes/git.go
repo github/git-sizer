@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/github/git-sizer/pipe"
 )
 
 // The type of an object ("blob", "tree", "commit", "tag", "missing").
@@ -34,49 +36,20 @@ func (oid Oid) String() string {
 	return hex.EncodeToString(oid[:])
 }
 
-type commandPipe struct {
-	command      *exec.Cmd
-	stdin        io.WriteCloser
-	stdoutWriter io.ReadCloser
-	stdout       *bufio.Reader
-}
-
-func newCommandPipe(name string, arg ...string) (*commandPipe, error) {
-	command := exec.Command(name, arg...)
-	stdin, err := command.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-	stdout, err := command.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	err = command.Start()
-	if err != nil {
-		return nil, err
-	}
-	return &commandPipe{
-		command:      command,
-		stdin:        stdin,
-		stdoutWriter: stdout,
-		stdout:       bufio.NewReader(stdout),
-	}, nil
-}
-
 type Repository struct {
 	path string
 
-	batch *commandPipe
-	check *commandPipe
+	batch *pipe.CommandPipe
+	check *pipe.CommandPipe
 }
 
 func NewRepository(path string) (*Repository, error) {
-	batch, err := newCommandPipe("git", "-C", path, "cat-file", "--batch")
+	batch, err := pipe.NewCommandPipe("git", "-C", path, "cat-file", "--batch")
 	if err != nil {
 		return nil, err
 	}
 
-	check, err := newCommandPipe("git", "-C", path, "cat-file", "--batch-check")
+	check, err := pipe.NewCommandPipe("git", "-C", path, "cat-file", "--batch-check")
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +59,17 @@ func NewRepository(path string) (*Repository, error) {
 		batch: batch,
 		check: check,
 	}, nil
+}
+
+func (repo *Repository) Close() error {
+	err1 := repo.batch.Close()
+	err2 := repo.check.Close()
+
+	if err1 != nil {
+		return err1
+	} else {
+		return err2
+	}
 }
 
 type Reference struct {
@@ -178,8 +162,15 @@ func (repo *Repository) parseBatchHeader(spec string, header string) (Oid, Objec
 }
 
 func (repo *Repository) ReadHeader(spec string) (Oid, ObjectType, Count32, error) {
-	fmt.Fprintf(repo.check.stdin, "%s\n", spec)
-	header, err := repo.check.stdout.ReadString('\n')
+	var header string
+	var err error
+
+	repo.check.RunQuery(
+		spec+"\n",
+		func(f *bufio.Reader) {
+			header, err = f.ReadString('\n')
+		},
+	)
 	if err != nil {
 		return Oid{}, "missing", 0, err
 	}
@@ -187,25 +178,42 @@ func (repo *Repository) ReadHeader(spec string) (Oid, ObjectType, Count32, error
 }
 
 func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error) {
-	fmt.Fprintf(repo.batch.stdin, "%s\n", spec)
-	header, err := repo.batch.stdout.ReadString('\n')
+	var err error
+	var oid Oid
+	var objectType ObjectType
+	var data []byte
+
+	repo.batch.RunQuery(
+		spec+"\n",
+		func(f *bufio.Reader) {
+			var header string
+			header, err = f.ReadString('\n')
+			if err != nil {
+				return
+			}
+			var size Count32
+			oid, objectType, size, err = repo.parseBatchHeader(spec, header)
+			if err != nil {
+				return
+			}
+			// +1 for LF:
+			data = make([]byte, size+1)
+			rest := data
+			for len(rest) > 0 {
+				var n int
+				n, err = f.Read(rest)
+				if err != nil {
+					return
+				}
+				rest = rest[n:]
+			}
+		},
+	)
+
 	if err != nil {
 		return Oid{}, "missing", []byte{}, err
 	}
-	oid, objectType, size, err := repo.parseBatchHeader(spec, header)
-	if err != nil {
-		return Oid{}, "missing", []byte{}, err
-	}
-	// +1 for LF:
-	data := make([]byte, size+1)
-	rest := data
-	for len(rest) > 0 {
-		n, err := repo.batch.stdout.Read(rest)
-		if err != nil {
-			return Oid{}, "missing", []byte{}, err
-		}
-		rest = rest[n:]
-	}
+
 	// -1 to remove LF:
 	return oid, objectType, data[:len(data)-1], nil
 }

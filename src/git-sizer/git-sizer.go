@@ -50,10 +50,12 @@ func main() {
 	}
 	path := args[0]
 	specs := args[1:]
+
 	repo, err := sizes.NewRepository(path)
 	if err != nil {
 		log.Panicf("error: couldn't open %v", path)
 	}
+	defer repo.Close()
 
 	scanner, err := sizes.NewSizeScanner(repo)
 	if err != nil {

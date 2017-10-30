@@ -215,7 +215,7 @@ func (p *pendingTree) Run(scanner *SizeScanner) error {
 
 	var subtasks ToDoList
 
-	treeSize, size, treeEntries, err := scanner.queueTree(p.oid, &subtasks)
+	treeSize, size, treeEntries, err := scanner.queueTree(p, &subtasks)
 	if err == nil {
 		scanner.recordTree(p.oid, treeSize, size, treeEntries)
 	} else if err == NotYetKnown {
@@ -242,7 +242,7 @@ func (p *pendingCommit) Run(scanner *SizeScanner) error {
 
 	var subtasks ToDoList
 
-	commitSize, size, parentCount, err := scanner.queueCommit(p.oid, &subtasks)
+	commitSize, size, parentCount, err := scanner.queueCommit(p, &subtasks)
 	if err == nil {
 		scanner.recordCommit(p.oid, commitSize, size, parentCount)
 	} else if err == NotYetKnown {
@@ -269,7 +269,7 @@ func (p *pendingTag) Run(scanner *SizeScanner) error {
 
 	var subtasks ToDoList
 
-	tagSize, size, err := scanner.queueTag(p.oid, &subtasks)
+	tagSize, size, err := scanner.queueTag(p, &subtasks)
 	if err == nil {
 		scanner.recordTag(p.oid, tagSize, size)
 	} else if err == NotYetKnown {
@@ -295,10 +295,10 @@ func (scanner *SizeScanner) fill() error {
 // unknown constituents to `treesToDo` and return an `NotYetKnown`
 // error. If another error occurred while looking up an object, return
 // that error. `oid` is not already in the cache.
-func (scanner *SizeScanner) queueTree(oid Oid, subtasks *ToDoList) (TreeSize, Count32, Count32, error) {
+func (scanner *SizeScanner) queueTree(p *pendingTree, subtasks *ToDoList) (TreeSize, Count32, Count32, error) {
 	var err error
 
-	tree, err := scanner.repo.ReadTree(oid)
+	tree, err := scanner.repo.ReadTree(p.oid)
 	if err != nil {
 		return TreeSize{}, 0, 0, err
 	}
@@ -385,10 +385,10 @@ func (scanner *SizeScanner) queueTree(oid Oid, subtasks *ToDoList) (TreeSize, Co
 // `treesToDo` and return an `NotYetKnown` error. If another error
 // occurred while looking up an object, return that error. `oid` is
 // not already in the cache.
-func (scanner *SizeScanner) queueCommit(oid Oid, subtasks *ToDoList) (CommitSize, Count32, Count32, error) {
+func (scanner *SizeScanner) queueCommit(p *pendingCommit, subtasks *ToDoList) (CommitSize, Count32, Count32, error) {
 	var err error
 
-	commit, err := scanner.repo.ReadCommit(oid)
+	commit, err := scanner.repo.ReadCommit(p.oid)
 	if err != nil {
 		return CommitSize{}, 0, 0, err
 	}
@@ -438,10 +438,10 @@ func (scanner *SizeScanner) queueCommit(oid Oid, subtasks *ToDoList) (CommitSize
 // it to the appropriate todo list and return an `NotYetKnown` error.
 // If another error occurred while looking up an object, return that
 // error. `oid` is not already in the cache.
-func (scanner *SizeScanner) queueTag(oid Oid, subtasks *ToDoList) (TagSize, Count32, error) {
+func (scanner *SizeScanner) queueTag(p *pendingTag, subtasks *ToDoList) (TagSize, Count32, error) {
 	var err error
 
-	tag, err := scanner.repo.ReadTag(oid)
+	tag, err := scanner.repo.ReadTag(p.oid)
 	if err != nil {
 		return TagSize{}, 0, err
 	}

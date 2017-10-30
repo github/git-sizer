@@ -2,7 +2,11 @@ package sizes
 
 import ()
 
-// A LIFO stack of `Oid`s.
+type pending interface {
+	Run(*SizeScanner) error
+}
+
+// A LIFO stack of `pending`s.
 type ToDoList struct {
 	list []pending
 }
@@ -24,4 +28,17 @@ func (t *ToDoList) Pop() pending {
 	t.list[len(t.list)-1] = nil
 	t.list = t.list[0 : len(t.list)-1]
 	return ret
+}
+
+func (t *ToDoList) Run(scanner *SizeScanner) error {
+	for t.Length() != 0 {
+		p := t.Pop()
+
+		err := p.Run(scanner)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

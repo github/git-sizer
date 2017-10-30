@@ -200,15 +200,11 @@ func (scanner *SizeScanner) recordTag(oid Oid, tagSize TagSize, size Count32) {
 	scanner.HistorySize.recordTag(tagSize, size)
 }
 
-type pending interface {
-	run(*SizeScanner) error
-}
-
 type pendingTree struct {
 	oid Oid
 }
 
-func (p *pendingTree) run(scanner *SizeScanner) error {
+func (p *pendingTree) Run(scanner *SizeScanner) error {
 	// See if the object's size has been computed since it was
 	// enqueued. This can happen if it is used in multiple places in
 	// the ancestry graph.
@@ -235,7 +231,7 @@ type pendingCommit struct {
 	oid Oid
 }
 
-func (p *pendingCommit) run(scanner *SizeScanner) error {
+func (p *pendingCommit) Run(scanner *SizeScanner) error {
 	// See if the object's size has been computed since it was
 	// enqueued. This can happen if it is used in multiple places
 	// in the ancestry graph.
@@ -262,7 +258,7 @@ type pendingTag struct {
 	oid Oid
 }
 
-func (p *pendingTag) run(scanner *SizeScanner) error {
+func (p *pendingTag) Run(scanner *SizeScanner) error {
 	// See if the object's size has been computed since it was
 	// enqueued. This can happen if it is used in multiple places
 	// in the ancestry graph.
@@ -285,22 +281,12 @@ func (p *pendingTag) run(scanner *SizeScanner) error {
 	return nil
 }
 
-// Compute the sizes of any trees listed in `scanner.commitsToDo` or
+// Compute the sizes of any trees listed in `scanner.toDo` or
 // `scanner.treesToDo`. This might involve computing the sizes of
 // referred-to objects. Do this without recursion to avoid unlimited
 // stack growth.
 func (scanner *SizeScanner) fill() error {
-	for scanner.toDo.Length() != 0 {
-		p := scanner.toDo.Pop()
-
-		err := p.run(scanner)
-		if err != nil {
-			return err
-		}
-	}
-
-	// There is nothing left to do:
-	return nil
+	return scanner.toDo.Run(scanner)
 }
 
 // Compute and return the size of the tree with the specified `oid` if

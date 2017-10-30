@@ -119,10 +119,10 @@ func (scanner *SizeScanner) TreeSize(oid Oid) (TreeSize, error) {
 
 	// Now the size should be in the cache:
 	s, ok = scanner.treeSizes[oid]
-	if ok {
-		return s, nil
+	if !ok {
+		panic("queueTree() didn't fill tree")
 	}
-	panic("queueTree() didn't fill tree")
+	return s, nil
 }
 
 func (scanner *SizeScanner) CommitSize(oid Oid) (CommitSize, error) {
@@ -139,10 +139,10 @@ func (scanner *SizeScanner) CommitSize(oid Oid) (CommitSize, error) {
 
 	// Now the size should be in the cache:
 	s, ok = scanner.commitSizes[oid]
-	if ok {
-		return s, nil
+	if !ok {
+		panic("fill() didn't fill commit")
 	}
-	panic("fill() didn't fill commit")
+	return s, nil
 }
 
 func (scanner *SizeScanner) recordBlob(oid Oid, blobSize BlobSize) {

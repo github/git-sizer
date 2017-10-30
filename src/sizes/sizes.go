@@ -120,6 +120,16 @@ func (s CommitSize) String() string {
 	)
 }
 
+type TagSize struct {
+	// The number of tags that have to be traversed (including this
+	// one) to get to an object.
+	TagDepth Count
+}
+
+func (s TagSize) String() string {
+	return fmt.Sprintf("tag_depth=%d", s.TagDepth)
+}
+
 type HistorySize struct {
 	// The total number of unique commits analyzed.
 	UniqueCommitCount Count `json:"unique_commit_count"`
@@ -160,6 +170,9 @@ type HistorySize struct {
 	// The total number of unique tag objects analyzed.
 	UniqueTagCount Count `json:"unique_tag_count"`
 
+	// The maximum number of tags in a chain.
+	MaxTagDepth Count `json:"max_tag_depth"`
+
 	// The maximum TreeSize in the analyzed history (where each
 	// attribute is maximized separately).
 	TreeSize
@@ -185,6 +198,11 @@ func (s *HistorySize) recordCommit(commitSize CommitSize, size Count, parentCoun
 	s.MaxCommitSize.AdjustMax(size)
 	s.MaxHistoryDepth.AdjustMax(commitSize.MaxAncestorDepth)
 	s.MaxParentCount.AdjustMax(parentCount)
+}
+
+func (s *HistorySize) recordTag(tagSize TagSize, size Count) {
+	s.UniqueTagCount.Increment(1)
+	s.MaxTagDepth.AdjustMax(tagSize.TagDepth)
 }
 
 func (s HistorySize) String() string {

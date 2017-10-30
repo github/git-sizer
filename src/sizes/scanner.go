@@ -20,6 +20,9 @@ type SizeScanner struct {
 	// The size of commits whose sizes have been looked up so far.
 	commitSizes map[Oid]CommitSize
 
+	// The size of tags whose sizes have been looked up so far.
+	tagSizes map[Oid]TagSize
+
 	// Statistics about the overall history size:
 	HistorySize HistorySize
 
@@ -34,8 +37,12 @@ type SizeScanner struct {
 	//
 	// * commitsToDo is at most the total number of direct parents
 	//   along a single ancestry path through history.
+	//
+	// * tagsToDo is at most the total number of a tags that refer to
+	//   each other in a chain.
 	treesToDo   ToDoList
 	commitsToDo ToDoList
+	tagsToDo    ToDoList
 }
 
 func NewSizeScanner(repo *Repository) (*SizeScanner, error) {
@@ -44,6 +51,7 @@ func NewSizeScanner(repo *Repository) (*SizeScanner, error) {
 		treeSizes:   make(map[Oid]TreeSize),
 		blobSizes:   make(map[Oid]BlobSize),
 		commitSizes: make(map[Oid]CommitSize),
+		tagSizes:    make(map[Oid]TagSize),
 	}
 	return scanner, nil
 }
@@ -63,8 +71,8 @@ func (scanner *SizeScanner) TypedObjectSize(
 		commitSize, err := scanner.CommitSize(oid)
 		return commitSize, err
 	case "tag":
-		// FIXME
-		return nil, nil
+		tagSize, err := scanner.TagSize(oid)
+		return tagSize, err
 	default:
 		panic(fmt.Sprintf("object %v has unknown type", oid))
 	}
@@ -145,6 +153,26 @@ func (scanner *SizeScanner) CommitSize(oid Oid) (CommitSize, error) {
 	return s, nil
 }
 
+func (scanner *SizeScanner) TagSize(oid Oid) (TagSize, error) {
+	s, ok := scanner.tagSizes[oid]
+	if ok {
+		return s, nil
+	}
+
+	scanner.tagsToDo.Push(oid)
+	err := scanner.fill()
+	if err != nil {
+		return TagSize{}, err
+	}
+
+	// Now the size should be in the cache:
+	s, ok = scanner.tagSizes[oid]
+	if !ok {
+		panic("fill() didn't fill tag")
+	}
+	return s, nil
+}
+
 func (scanner *SizeScanner) recordBlob(oid Oid, blobSize BlobSize) {
 	scanner.blobSizes[oid] = blobSize
 	scanner.HistorySize.recordBlob(blobSize)
@@ -158,6 +186,11 @@ func (scanner *SizeScanner) recordTree(oid Oid, treeSize TreeSize, size Count, t
 func (scanner *SizeScanner) recordCommit(oid Oid, commitSize CommitSize, size Count, parentCount Count) {
 	scanner.commitSizes[oid] = commitSize
 	scanner.HistorySize.recordCommit(commitSize, size, parentCount)
+}
+
+func (scanner *SizeScanner) recordTag(oid Oid, tagSize TagSize, size Count) {
+	scanner.tagSizes[oid] = tagSize
+	scanner.HistorySize.recordTag(tagSize, size)
 }
 
 // Compute the sizes of any trees listed in `scanner.commitsToDo` or
@@ -211,6 +244,31 @@ func (scanner *SizeScanner) fill() error {
 				// Let loop continue (the commits's constituents were
 				// added to `commitsToDo` and `treesToDo` by
 				// `queueCommit()`).
+			} else {
+				return err
+			}
+			continue
+		}
+
+		if scanner.tagsToDo.Length() != 0 {
+			oid := scanner.tagsToDo.Peek()
+
+			// See if the object's size has been computed since it was
+			// enqueued. This can happen if it is used in multiple places
+			// in the ancestry graph.
+			_, ok := scanner.tagSizes[oid]
+			if ok {
+				scanner.tagsToDo.Drop()
+				continue
+			}
+
+			tagSize, size, err := scanner.queueTag(oid)
+			if err == nil {
+				scanner.recordTag(oid, tagSize, size)
+				scanner.tagsToDo.Drop()
+			} else if err == NotYetKnown {
+				// Let loop continue (the tag's referent was added to
+				// a todo list by `queueTag()`).
 			} else {
 				return err
 			}
@@ -365,4 +423,63 @@ func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count, Count, erro
 	// itself:
 	size.MaxAncestorDepth.Increment(1)
 	return size, commit.Size, Count(len(commit.Parents)), nil
+}
+
+// Compute and return the size of the annotated tag with the specified
+// `oid` if we already know the size of its referent. If the
+// referent's size is not yet known but believed to be computable, add
+// it to the appropriate todo list and return an `NotYetKnown` error.
+// If another error occurred while looking up an object, return that
+// error. `oid` is not already in the cache.
+func (scanner *SizeScanner) queueTag(oid Oid) (TagSize, Count, error) {
+	var err error
+
+	tag, err := scanner.repo.ReadTag(oid)
+	if err != nil {
+		return TagSize{}, 0, err
+	}
+
+	size := TagSize{TagDepth: 1}
+	ok := true
+	switch tag.ReferentType {
+	case "tag":
+		referentSize, referentOK := scanner.tagSizes[tag.Referent]
+		if referentOK {
+			size.TagDepth.Increment(referentSize.TagDepth)
+		} else {
+			ok = false
+			// Schedule this one to be computed:
+			scanner.tagsToDo.Push(tag.Referent)
+		}
+	case "commit":
+		_, referentOK := scanner.commitSizes[tag.Referent]
+		if !referentOK {
+			ok = false
+			// Schedule this one to be computed:
+			scanner.commitsToDo.Push(tag.Referent)
+		}
+	case "tree":
+		_, referentOK := scanner.treeSizes[tag.Referent]
+		if !referentOK {
+			ok = false
+			// Schedule this one to be computed:
+			scanner.treesToDo.Push(tag.Referent)
+		}
+	case "blob":
+		_, referentOK := scanner.commitSizes[tag.Referent]
+		if !referentOK {
+			_, err := scanner.BlobSize(tag.Referent)
+			if err != nil {
+				return TagSize{}, 0, err
+			}
+		}
+	default:
+	}
+
+	if !ok {
+		return TagSize{}, 0, NotYetKnown
+	}
+
+	// Now add one to the tag depth to account for this tag itself:
+	return size, tag.Size, nil
 }

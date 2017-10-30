@@ -374,3 +374,61 @@ func (iter *TreeIter) NextEntry(entry *TreeEntry) (bool, error) {
 
 	return true, nil
 }
+
+type Tag struct {
+	Size         Count
+	Referent     Oid
+	ReferentType Type
+}
+
+func (repo *Repository) ReadTag(oid Oid) (*Tag, error) {
+	oid, objectType, data, err := repo.readObject(oid.String())
+	if err != nil {
+		return nil, err
+	}
+	if objectType != "tag" {
+		return nil, fmt.Errorf("expected tag; found %s for object %s", objectType, oid)
+	}
+	var referent Oid
+	var referentFound bool
+	var referentType Type
+	var referentTypeFound bool
+	iter, err := NewObjectHeaderIter(oid.String(), data)
+	if err != nil {
+		return nil, err
+	}
+	for iter.HasNext() {
+		key, value, err := iter.Next()
+		if err != nil {
+			return nil, err
+		}
+		switch key {
+		case "object":
+			if referentFound {
+				return nil, fmt.Errorf("multiple referents found in tag %s", oid)
+			}
+			referent, err = NewOid(value)
+			if err != nil {
+				return nil, fmt.Errorf("malformed object header in tag %s", oid)
+			}
+			referentFound = true
+		case "type":
+			if referentTypeFound {
+				return nil, fmt.Errorf("multiple types found in tag %s", oid)
+			}
+			referentType = Type(value)
+			referentTypeFound = true
+		}
+	}
+	if !referentFound {
+		return nil, fmt.Errorf("no object found in tag %s", oid)
+	}
+	if !referentTypeFound {
+		return nil, fmt.Errorf("no type found in tag %s", oid)
+	}
+	return &Tag{
+		Size:         Count(len(data)),
+		Referent:     referent,
+		ReferentType: referentType,
+	}, nil
+}

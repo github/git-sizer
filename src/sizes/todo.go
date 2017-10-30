@@ -15,11 +15,13 @@ func (t *ToDoList) Push(pending pending) {
 	t.list = append(t.list, pending)
 }
 
-func (t *ToDoList) Peek() pending {
-	return t.list[len(t.list)-1]
+func (t *ToDoList) PushAll(subtasks ToDoList) {
+	t.list = append(t.list, subtasks.list...)
 }
 
-func (t *ToDoList) Drop() {
+func (t *ToDoList) Pop() pending {
+	ret := t.list[len(t.list)-1]
 	t.list[len(t.list)-1] = nil
 	t.list = t.list[0 : len(t.list)-1]
+	return ret
 }

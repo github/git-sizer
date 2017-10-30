@@ -214,17 +214,17 @@ func (p *pendingTree) run(scanner *SizeScanner) error {
 	// the ancestry graph.
 	_, ok := scanner.treeSizes[p.oid]
 	if ok {
-		scanner.toDo.Drop()
 		return nil
 	}
 
-	treeSize, size, treeEntries, err := scanner.queueTree(p.oid)
+	var subtasks ToDoList
+
+	treeSize, size, treeEntries, err := scanner.queueTree(p.oid, &subtasks)
 	if err == nil {
 		scanner.recordTree(p.oid, treeSize, size, treeEntries)
-		scanner.toDo.Drop()
 	} else if err == NotYetKnown {
-		// Let loop continue (the tree's constituents were added
-		// to `treesToDo` by `queueTree()`).
+		scanner.toDo.Push(p)
+		scanner.toDo.PushAll(subtasks)
 	} else {
 		return err
 	}
@@ -241,18 +241,17 @@ func (p *pendingCommit) run(scanner *SizeScanner) error {
 	// in the ancestry graph.
 	_, ok := scanner.commitSizes[p.oid]
 	if ok {
-		scanner.toDo.Drop()
 		return nil
 	}
 
-	commitSize, size, parentCount, err := scanner.queueCommit(p.oid)
+	var subtasks ToDoList
+
+	commitSize, size, parentCount, err := scanner.queueCommit(p.oid, &subtasks)
 	if err == nil {
 		scanner.recordCommit(p.oid, commitSize, size, parentCount)
-		scanner.toDo.Drop()
 	} else if err == NotYetKnown {
-		// Let loop continue (the commits's constituents were
-		// added to `commitsToDo` and `treesToDo` by
-		// `queueCommit()`).
+		scanner.toDo.Push(p)
+		scanner.toDo.PushAll(subtasks)
 	} else {
 		return err
 	}
@@ -269,17 +268,17 @@ func (p *pendingTag) run(scanner *SizeScanner) error {
 	// in the ancestry graph.
 	_, ok := scanner.tagSizes[p.oid]
 	if ok {
-		scanner.toDo.Drop()
 		return nil
 	}
 
-	tagSize, size, err := scanner.queueTag(p.oid)
+	var subtasks ToDoList
+
+	tagSize, size, err := scanner.queueTag(p.oid, &subtasks)
 	if err == nil {
 		scanner.recordTag(p.oid, tagSize, size)
-		scanner.toDo.Drop()
 	} else if err == NotYetKnown {
-		// Let loop continue (the tag's referent was added to
-		// a todo list by `queueTag()`).
+		scanner.toDo.Push(p)
+		scanner.toDo.PushAll(subtasks)
 	} else {
 		return err
 	}
@@ -292,7 +291,7 @@ func (p *pendingTag) run(scanner *SizeScanner) error {
 // stack growth.
 func (scanner *SizeScanner) fill() error {
 	for scanner.toDo.Length() != 0 {
-		p := scanner.toDo.Peek()
+		p := scanner.toDo.Pop()
 
 		err := p.run(scanner)
 		if err != nil {
@@ -310,7 +309,7 @@ func (scanner *SizeScanner) fill() error {
 // unknown constituents to `treesToDo` and return an `NotYetKnown`
 // error. If another error occurred while looking up an object, return
 // that error. `oid` is not already in the cache.
-func (scanner *SizeScanner) queueTree(oid Oid) (TreeSize, Count32, Count32, error) {
+func (scanner *SizeScanner) queueTree(oid Oid, subtasks *ToDoList) (TreeSize, Count32, Count32, error) {
 	var err error
 
 	tree, err := scanner.repo.ReadTree(oid)
@@ -353,7 +352,7 @@ func (scanner *SizeScanner) queueTree(oid Oid) (TreeSize, Count32, Count32, erro
 			} else {
 				ok = false
 				// Schedule this one to be computed:
-				scanner.toDo.Push(&pendingTree{entry.Oid})
+				subtasks.Push(&pendingTree{entry.Oid})
 			}
 
 		case entry.Filemode&0170000 == 0160000:
@@ -402,7 +401,7 @@ func (scanner *SizeScanner) queueTree(oid Oid) (TreeSize, Count32, Count32, erro
 // `treesToDo` and return an `NotYetKnown` error. If another error
 // occurred while looking up an object, return that error. `oid` is
 // not already in the cache.
-func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count32, Count32, error) {
+func (scanner *SizeScanner) queueCommit(oid Oid, subtasks *ToDoList) (CommitSize, Count32, Count32, error) {
 	var err error
 
 	commit, err := scanner.repo.ReadCommit(oid)
@@ -424,7 +423,7 @@ func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count32, Count32, 
 		} else {
 			ok = false
 			// Schedule this one to be computed:
-			scanner.toDo.Push(&pendingCommit{parent})
+			subtasks.Push(&pendingCommit{parent})
 		}
 	}
 
@@ -436,7 +435,7 @@ func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count32, Count32, 
 		}
 	} else {
 		ok = false
-		scanner.toDo.Push(&pendingTree{commit.Tree})
+		subtasks.Push(&pendingTree{commit.Tree})
 	}
 
 	if !ok {
@@ -455,7 +454,7 @@ func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count32, Count32, 
 // it to the appropriate todo list and return an `NotYetKnown` error.
 // If another error occurred while looking up an object, return that
 // error. `oid` is not already in the cache.
-func (scanner *SizeScanner) queueTag(oid Oid) (TagSize, Count32, error) {
+func (scanner *SizeScanner) queueTag(oid Oid, subtasks *ToDoList) (TagSize, Count32, error) {
 	var err error
 
 	tag, err := scanner.repo.ReadTag(oid)
@@ -473,21 +472,21 @@ func (scanner *SizeScanner) queueTag(oid Oid) (TagSize, Count32, error) {
 		} else {
 			ok = false
 			// Schedule this one to be computed:
-			scanner.toDo.Push(&pendingTag{tag.Referent})
+			subtasks.Push(&pendingTag{tag.Referent})
 		}
 	case "commit":
 		_, referentOK := scanner.commitSizes[tag.Referent]
 		if !referentOK {
 			ok = false
 			// Schedule this one to be computed:
-			scanner.toDo.Push(&pendingCommit{tag.Referent})
+			subtasks.Push(&pendingCommit{tag.Referent})
 		}
 	case "tree":
 		_, referentOK := scanner.treeSizes[tag.Referent]
 		if !referentOK {
 			ok = false
 			// Schedule this one to be computed:
-			scanner.toDo.Push(&pendingTree{tag.Referent})
+			subtasks.Push(&pendingTree{tag.Referent})
 		}
 	case "blob":
 		_, referentOK := scanner.commitSizes[tag.Referent]

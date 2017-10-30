@@ -154,6 +154,9 @@ type HistorySize struct {
 	// The total size of all of the unique blobs analyzed.
 	UniqueBlobSize Count `json:"unique_blob_size"`
 
+	// The maximum size of any analyzed blob.
+	MaxBlobSize Count `json:"max_blob_size"`
+
 	// The total number of unique tag objects analyzed.
 	UniqueTagCount Count `json:"unique_tag_count"`
 
@@ -165,6 +168,7 @@ type HistorySize struct {
 func (s *HistorySize) recordBlob(blobSize BlobSize) {
 	s.UniqueBlobCount.Increment(1)
 	s.UniqueBlobSize.Increment(blobSize.Size)
+	s.MaxBlobSize.AdjustMax(blobSize.Size)
 }
 
 func (s *HistorySize) recordTree(treeSize TreeSize, size Count, treeEntries Count) {
@@ -188,13 +192,13 @@ func (s HistorySize) String() string {
 		"unique_commit_count=%d, unique_commit_count = %d, max_commit_size = %d, "+
 			"max_history_depth=%d, max_parent_count=%d, "+
 			"unique_tree_count=%d, unique_tree_entries=%d, max_tree_entries=%d, "+
-			"unique_blob_count=%d, unique_blob_size=%d, "+
+			"unique_blob_count=%d, unique_blob_size=%d, max_blob_size=%d, "+
 			"unique_tag_count=%d, "+
 			"%s",
 		s.UniqueCommitCount, s.UniqueCommitSize, s.MaxCommitSize,
 		s.MaxHistoryDepth, s.MaxParentCount,
 		s.UniqueTreeCount, s.UniqueTreeEntries, s.MaxTreeEntries,
-		s.UniqueBlobCount, s.UniqueBlobSize,
+		s.UniqueBlobCount, s.UniqueBlobSize, s.MaxBlobSize,
 		s.UniqueTagCount,
 		s.TreeSize,
 	)

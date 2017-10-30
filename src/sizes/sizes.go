@@ -200,7 +200,7 @@ func (s HistorySize) String() string {
 
 var NotYetKnown = errors.New("the size of an object is not yet known")
 
-type SizeCache struct {
+type SizeScanner struct {
 	repo *Repository
 
 	// The (recursive) size of trees whose sizes have been computed so
@@ -231,29 +231,29 @@ type SizeCache struct {
 	treesToDo   ToDoList
 }
 
-func NewSizeCache(repo *Repository) (*SizeCache, error) {
-	cache := &SizeCache{
+func NewSizeScanner(repo *Repository) (*SizeScanner, error) {
+	scanner := &SizeScanner{
 		repo:        repo,
 		treeSizes:   make(map[Oid]TreeSize),
 		blobSizes:   make(map[Oid]BlobSize),
 		commitSizes: make(map[Oid]CommitSize),
 	}
-	return cache, nil
+	return scanner, nil
 }
 
-func (cache *SizeCache) TypedObjectSize(
+func (scanner *SizeScanner) TypedObjectSize(
 	spec string, oid Oid, objectType Type, objectSize Count,
 ) (Size, error) {
 	switch objectType {
 	case "blob":
 		blobSize := BlobSize{objectSize}
-		cache.recordBlob(oid, blobSize)
+		scanner.recordBlob(oid, blobSize)
 		return blobSize, nil
 	case "tree":
-		treeSize, err := cache.TreeSize(oid)
+		treeSize, err := scanner.TreeSize(oid)
 		return treeSize, err
 	case "commit":
-		commitSize, err := cache.CommitSize(oid)
+		commitSize, err := scanner.CommitSize(oid)
 		return commitSize, err
 	case "tag":
 		// FIXME
@@ -263,29 +263,29 @@ func (cache *SizeCache) TypedObjectSize(
 	}
 }
 
-func (cache *SizeCache) ObjectSize(spec string) (Oid, Type, Size, error) {
-	oid, objectType, objectSize, err := cache.repo.ReadHeader(spec)
+func (scanner *SizeScanner) ObjectSize(spec string) (Oid, Type, Size, error) {
+	oid, objectType, objectSize, err := scanner.repo.ReadHeader(spec)
 	if err != nil {
 		return Oid{}, "missing", nil, err
 	}
 
-	size, err := cache.TypedObjectSize(spec, oid, objectType, objectSize)
+	size, err := scanner.TypedObjectSize(spec, oid, objectType, objectSize)
 	return oid, objectType, size, err
 }
 
-func (cache *SizeCache) ReferenceSize(ref Reference) (Size, error) {
-	return cache.TypedObjectSize(ref.Refname, ref.Oid, ref.ObjectType, ref.ObjectSize)
+func (scanner *SizeScanner) ReferenceSize(ref Reference) (Size, error) {
+	return scanner.TypedObjectSize(ref.Refname, ref.Oid, ref.ObjectType, ref.ObjectSize)
 }
 
-func (cache *SizeCache) OidObjectSize(oid Oid) (Type, Size, error) {
-	_, objectType, size, error := cache.ObjectSize(oid.String())
+func (scanner *SizeScanner) OidObjectSize(oid Oid) (Type, Size, error) {
+	_, objectType, size, error := scanner.ObjectSize(oid.String())
 	return objectType, size, error
 }
 
-func (cache *SizeCache) BlobSize(oid Oid) (BlobSize, error) {
-	size, ok := cache.blobSizes[oid]
+func (scanner *SizeScanner) BlobSize(oid Oid) (BlobSize, error) {
+	size, ok := scanner.blobSizes[oid]
 	if !ok {
-		_, objectType, objectSize, err := cache.repo.ReadHeader(oid.String())
+		_, objectType, objectSize, err := scanner.repo.ReadHeader(oid.String())
 		if err != nil {
 			return BlobSize{}, err
 		}
@@ -293,88 +293,88 @@ func (cache *SizeCache) BlobSize(oid Oid) (BlobSize, error) {
 			return BlobSize{}, fmt.Errorf("object %s is a %s, not a blob", oid, objectType)
 		}
 		size = BlobSize{objectSize}
-		cache.recordBlob(oid, size)
+		scanner.recordBlob(oid, size)
 	}
 	return size, nil
 }
 
-func (cache *SizeCache) TreeSize(oid Oid) (TreeSize, error) {
-	s, ok := cache.treeSizes[oid]
+func (scanner *SizeScanner) TreeSize(oid Oid) (TreeSize, error) {
+	s, ok := scanner.treeSizes[oid]
 	if ok {
 		return s, nil
 	}
 
-	cache.treesToDo.Push(oid)
-	err := cache.fill()
+	scanner.treesToDo.Push(oid)
+	err := scanner.fill()
 	if err != nil {
 		return TreeSize{}, err
 	}
 
 	// Now the size should be in the cache:
-	s, ok = cache.treeSizes[oid]
+	s, ok = scanner.treeSizes[oid]
 	if ok {
 		return s, nil
 	}
 	panic("queueTree() didn't fill tree")
 }
 
-func (cache *SizeCache) CommitSize(oid Oid) (CommitSize, error) {
-	s, ok := cache.commitSizes[oid]
+func (scanner *SizeScanner) CommitSize(oid Oid) (CommitSize, error) {
+	s, ok := scanner.commitSizes[oid]
 	if ok {
 		return s, nil
 	}
 
-	cache.commitsToDo.Push(oid)
-	err := cache.fill()
+	scanner.commitsToDo.Push(oid)
+	err := scanner.fill()
 	if err != nil {
 		return CommitSize{}, err
 	}
 
 	// Now the size should be in the cache:
-	s, ok = cache.commitSizes[oid]
+	s, ok = scanner.commitSizes[oid]
 	if ok {
 		return s, nil
 	}
 	panic("fill() didn't fill commit")
 }
 
-func (cache *SizeCache) recordCommit(oid Oid, commitSize CommitSize, size Count, parentCount Count) {
-	cache.commitSizes[oid] = commitSize
-	cache.HistorySize.recordCommit(commitSize, size, parentCount)
+func (scanner *SizeScanner) recordCommit(oid Oid, commitSize CommitSize, size Count, parentCount Count) {
+	scanner.commitSizes[oid] = commitSize
+	scanner.HistorySize.recordCommit(commitSize, size, parentCount)
 }
 
-func (cache *SizeCache) recordTree(oid Oid, treeSize TreeSize, size Count, treeEntries Count) {
-	cache.treeSizes[oid] = treeSize
-	cache.HistorySize.recordTree(treeSize, size, treeEntries)
+func (scanner *SizeScanner) recordTree(oid Oid, treeSize TreeSize, size Count, treeEntries Count) {
+	scanner.treeSizes[oid] = treeSize
+	scanner.HistorySize.recordTree(treeSize, size, treeEntries)
 }
 
-func (cache *SizeCache) recordBlob(oid Oid, blobSize BlobSize) {
-	cache.blobSizes[oid] = blobSize
-	cache.HistorySize.recordBlob(blobSize)
+func (scanner *SizeScanner) recordBlob(oid Oid, blobSize BlobSize) {
+	scanner.blobSizes[oid] = blobSize
+	scanner.HistorySize.recordBlob(blobSize)
 }
 
-// Compute the sizes of any trees listed in `cache.commitsToDo` or
-// `cache.treesToDo`. This might involve computing the sizes of
+// Compute the sizes of any trees listed in `scanner.commitsToDo` or
+// `scanner.treesToDo`. This might involve computing the sizes of
 // referred-to objects. Do this without recursion to avoid unlimited
 // stack growth.
-func (cache *SizeCache) fill() error {
+func (scanner *SizeScanner) fill() error {
 	for {
-		if cache.treesToDo.Length() != 0 {
-			oid := cache.treesToDo.Peek()
+		if scanner.treesToDo.Length() != 0 {
+			oid := scanner.treesToDo.Peek()
 
 			// See if the object's size has been computed since it was
 			// enqueued. This can happen if it is used in multiple places
 			// in the ancestry graph.
-			_, ok := cache.treeSizes[oid]
+			_, ok := scanner.treeSizes[oid]
 			if ok {
-				cache.treesToDo.Drop()
+				scanner.treesToDo.Drop()
 				continue
 			}
 
-			treeSize, size, treeEntries, err := cache.queueTree(oid)
+			treeSize, size, treeEntries, err := scanner.queueTree(oid)
 			if err == nil {
-				cache.recordTree(oid, treeSize, size, treeEntries)
-				cache.treesToDo.Drop()
+				scanner.recordTree(oid, treeSize, size, treeEntries)
+				scanner.treesToDo.Drop()
 			} else if err == NotYetKnown {
 				// Let loop continue (the tree's constituents were added
 				// to `treesToDo` by `queueTree()`).
@@ -384,22 +384,22 @@ func (cache *SizeCache) fill() error {
 			continue
 		}
 
-		if cache.commitsToDo.Length() != 0 {
-			oid := cache.commitsToDo.Peek()
+		if scanner.commitsToDo.Length() != 0 {
+			oid := scanner.commitsToDo.Peek()
 
 			// See if the object's size has been computed since it was
 			// enqueued. This can happen if it is used in multiple places
 			// in the ancestry graph.
-			_, ok := cache.commitSizes[oid]
+			_, ok := scanner.commitSizes[oid]
 			if ok {
-				cache.commitsToDo.Drop()
+				scanner.commitsToDo.Drop()
 				continue
 			}
 
-			commitSize, size, parentCount, err := cache.queueCommit(oid)
+			commitSize, size, parentCount, err := scanner.queueCommit(oid)
 			if err == nil {
-				cache.recordCommit(oid, commitSize, size, parentCount)
-				cache.commitsToDo.Drop()
+				scanner.recordCommit(oid, commitSize, size, parentCount)
+				scanner.commitsToDo.Drop()
 			} else if err == NotYetKnown {
 				// Let loop continue (the commits's constituents were
 				// added to `commitsToDo` and `treesToDo` by
@@ -422,10 +422,10 @@ func (cache *SizeCache) fill() error {
 // `treesToDo` and return an `NotYetKnown` error. If another error
 // occurred while looking up an object, return that error. `oid` is
 // not already in the cache.
-func (cache *SizeCache) queueCommit(oid Oid) (CommitSize, Count, Count, error) {
+func (scanner *SizeScanner) queueCommit(oid Oid) (CommitSize, Count, Count, error) {
 	var err error
 
-	commit, err := cache.repo.ReadCommit(oid)
+	commit, err := scanner.repo.ReadCommit(oid)
 	if err != nil {
 		return CommitSize{}, 0, 0, err
 	}
@@ -436,7 +436,7 @@ func (cache *SizeCache) queueCommit(oid Oid) (CommitSize, Count, Count, error) {
 
 	// First accumulate all of the sizes for all parents:
 	for _, parent := range commit.Parents {
-		parentSize, parentOK := cache.commitSizes[parent]
+		parentSize, parentOK := scanner.commitSizes[parent]
 		if parentOK {
 			if ok {
 				size.addParent(parentSize)
@@ -444,19 +444,19 @@ func (cache *SizeCache) queueCommit(oid Oid) (CommitSize, Count, Count, error) {
 		} else {
 			ok = false
 			// Schedule this one to be computed:
-			cache.commitsToDo.Push(parent)
+			scanner.commitsToDo.Push(parent)
 		}
 	}
 
 	// Now gather information about the tree:
-	treeSize, treeOk := cache.treeSizes[commit.Tree]
+	treeSize, treeOk := scanner.treeSizes[commit.Tree]
 	if treeOk {
 		if ok {
 			size.addTree(treeSize)
 		}
 	} else {
 		ok = false
-		cache.treesToDo.Push(commit.Tree)
+		scanner.treesToDo.Push(commit.Tree)
 	}
 
 	if !ok {
@@ -475,10 +475,10 @@ func (cache *SizeCache) queueCommit(oid Oid) (CommitSize, Count, Count, error) {
 // unknown constituents to `treesToDo` and return an `NotYetKnown`
 // error. If another error occurred while looking up an object, return
 // that error. `oid` is not already in the cache.
-func (cache *SizeCache) queueTree(oid Oid) (TreeSize, Count, Count, error) {
+func (scanner *SizeScanner) queueTree(oid Oid) (TreeSize, Count, Count, error) {
 	var err error
 
-	tree, err := cache.repo.ReadTree(oid)
+	tree, err := scanner.repo.ReadTree(oid)
 	if err != nil {
 		return TreeSize{}, 0, 0, err
 	}
@@ -510,7 +510,7 @@ func (cache *SizeCache) queueTree(oid Oid) (TreeSize, Count, Count, error) {
 		switch {
 		case entry.Filemode&0170000 == 0040000:
 			// Tree
-			subsize, subok := cache.treeSizes[entry.Oid]
+			subsize, subok := scanner.treeSizes[entry.Oid]
 			if subok {
 				if ok {
 					size.addDescendent(entry.Name, subsize)
@@ -518,7 +518,7 @@ func (cache *SizeCache) queueTree(oid Oid) (TreeSize, Count, Count, error) {
 			} else {
 				ok = false
 				// Schedule this one to be computed:
-				cache.treesToDo.Push(entry.Oid)
+				scanner.treesToDo.Push(entry.Oid)
 			}
 
 		case entry.Filemode&0170000 == 0160000:
@@ -535,13 +535,13 @@ func (cache *SizeCache) queueTree(oid Oid) (TreeSize, Count, Count, error) {
 
 		default:
 			// Blob
-			blobSize, blobOk := cache.blobSizes[entry.Oid]
+			blobSize, blobOk := scanner.blobSizes[entry.Oid]
 			if blobOk {
 				if ok {
 					size.addBlob(entry.Name, blobSize)
 				}
 			} else {
-				blobSize, err := cache.BlobSize(entry.Oid)
+				blobSize, err := scanner.BlobSize(entry.Oid)
 				if err != nil {
 					return TreeSize{}, 0, 0, err
 				}

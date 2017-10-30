@@ -12,8 +12,8 @@ import (
 	"github.com/github/git-sizer/sizes"
 )
 
-func processObject(cache *sizes.SizeCache, spec string) {
-	_, _, _, err := cache.ObjectSize(spec)
+func processObject(scanner *sizes.SizeScanner, spec string) {
+	_, _, _, err := scanner.ObjectSize(spec)
 	if err != nil {
 		fmt.Fprintf(
 			os.Stderr, "error: could not compute object size for '%s': %v\n",
@@ -55,13 +55,13 @@ func main() {
 		log.Panicf("error: couldn't open %v", path)
 	}
 
-	cache, err := sizes.NewSizeCache(repo)
+	scanner, err := sizes.NewSizeScanner(repo)
 	if err != nil {
-		log.Panicf("error: couldn't create SizeCache for %v", path)
+		log.Panicf("error: couldn't create SizeScanner for %v", path)
 	}
 
 	for _, spec := range specs {
-		processObject(cache, spec)
+		processObject(scanner, spec)
 	}
 
 	if processAll {
@@ -76,7 +76,7 @@ func main() {
 				fmt.Fprintf(os.Stderr, "error reading references: %s", err)
 				return
 			}
-			_, err := cache.ReferenceSize(refOrError.Reference)
+			_, err := scanner.ReferenceSize(refOrError.Reference)
 			if err != nil {
 				fmt.Fprintf(
 					os.Stderr, "error: could not compute object size for '': %v\n",
@@ -88,18 +88,18 @@ func main() {
 	}
 
 	if stdin {
-		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
-			spec := scanner.Text()
-			processObject(cache, spec)
+		input := bufio.NewScanner(os.Stdin)
+		for input.Scan() {
+			spec := input.Text()
+			processObject(scanner, spec)
 		}
 	}
 
-	s, err := json.MarshalIndent(cache.HistorySize, "", "    ")
+	s, err := json.MarshalIndent(scanner.HistorySize, "", "    ")
 	if err != nil {
 		fmt.Fprintf(
 			os.Stderr, "error: could not convert %v to json: %v\n",
-			cache.HistorySize, err,
+			scanner.HistorySize, err,
 		)
 	}
 	fmt.Printf("%s\n", s)

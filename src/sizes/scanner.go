@@ -204,98 +204,13 @@ type pendingTree struct {
 	oid Oid
 }
 
-func (p *pendingTree) Run(scanner *SizeScanner) error {
-	// See if the object's size has been computed since it was
-	// enqueued. This can happen if it is used in multiple places in
-	// the ancestry graph.
-	_, ok := scanner.treeSizes[p.oid]
-	if ok {
-		return nil
-	}
-
-	var subtasks ToDoList
-
-	treeSize, size, treeEntries, err := scanner.queueTree(p, &subtasks)
-	if err == nil {
-		scanner.recordTree(p.oid, treeSize, size, treeEntries)
-	} else if err == NotYetKnown {
-		scanner.toDo.Push(p)
-		scanner.toDo.PushAll(subtasks)
-	} else {
-		return err
-	}
-	return nil
-}
-
-type pendingCommit struct {
-	oid Oid
-}
-
-func (p *pendingCommit) Run(scanner *SizeScanner) error {
-	// See if the object's size has been computed since it was
-	// enqueued. This can happen if it is used in multiple places
-	// in the ancestry graph.
-	_, ok := scanner.commitSizes[p.oid]
-	if ok {
-		return nil
-	}
-
-	var subtasks ToDoList
-
-	commitSize, size, parentCount, err := scanner.queueCommit(p, &subtasks)
-	if err == nil {
-		scanner.recordCommit(p.oid, commitSize, size, parentCount)
-	} else if err == NotYetKnown {
-		scanner.toDo.Push(p)
-		scanner.toDo.PushAll(subtasks)
-	} else {
-		return err
-	}
-	return nil
-}
-
-type pendingTag struct {
-	oid Oid
-}
-
-func (p *pendingTag) Run(scanner *SizeScanner) error {
-	// See if the object's size has been computed since it was
-	// enqueued. This can happen if it is used in multiple places
-	// in the ancestry graph.
-	_, ok := scanner.tagSizes[p.oid]
-	if ok {
-		return nil
-	}
-
-	var subtasks ToDoList
-
-	tagSize, size, err := scanner.queueTag(p, &subtasks)
-	if err == nil {
-		scanner.recordTag(p.oid, tagSize, size)
-	} else if err == NotYetKnown {
-		scanner.toDo.Push(p)
-		scanner.toDo.PushAll(subtasks)
-	} else {
-		return err
-	}
-	return nil
-}
-
-// Compute the sizes of any trees listed in `scanner.toDo` or
-// `scanner.treesToDo`. This might involve computing the sizes of
-// referred-to objects. Do this without recursion to avoid unlimited
-// stack growth.
-func (scanner *SizeScanner) fill() error {
-	return scanner.toDo.Run(scanner)
-}
-
 // Compute and return the size of the tree with the specified `oid` if
 // we already know the size of its constituents. If the constituents'
 // sizes are not yet known but believed to be computable, add any
 // unknown constituents to `treesToDo` and return an `NotYetKnown`
 // error. If another error occurred while looking up an object, return
 // that error. `oid` is not already in the cache.
-func (scanner *SizeScanner) queueTree(p *pendingTree, subtasks *ToDoList) (TreeSize, Count32, Count32, error) {
+func (p *pendingTree) Queue(scanner *SizeScanner, subtasks *ToDoList) (TreeSize, Count32, Count32, error) {
 	var err error
 
 	tree, err := scanner.repo.ReadTree(p.oid)
@@ -378,6 +293,33 @@ func (scanner *SizeScanner) queueTree(p *pendingTree, subtasks *ToDoList) (TreeS
 	return size, NewCount32(uint64(len(tree.data))), entryCount, nil
 }
 
+func (p *pendingTree) Run(scanner *SizeScanner) error {
+	// See if the object's size has been computed since it was
+	// enqueued. This can happen if it is used in multiple places in
+	// the ancestry graph.
+	_, ok := scanner.treeSizes[p.oid]
+	if ok {
+		return nil
+	}
+
+	var subtasks ToDoList
+
+	treeSize, size, treeEntries, err := p.Queue(scanner, &subtasks)
+	if err == nil {
+		scanner.recordTree(p.oid, treeSize, size, treeEntries)
+	} else if err == NotYetKnown {
+		scanner.toDo.Push(p)
+		scanner.toDo.PushAll(subtasks)
+	} else {
+		return err
+	}
+	return nil
+}
+
+type pendingCommit struct {
+	oid Oid
+}
+
 // Compute and return the size of the commit with the specified `oid`
 // if we already know the size of its constituents. If the
 // constituents' sizes are not yet known but believed to be
@@ -385,7 +327,7 @@ func (scanner *SizeScanner) queueTree(p *pendingTree, subtasks *ToDoList) (TreeS
 // `treesToDo` and return an `NotYetKnown` error. If another error
 // occurred while looking up an object, return that error. `oid` is
 // not already in the cache.
-func (scanner *SizeScanner) queueCommit(p *pendingCommit, subtasks *ToDoList) (CommitSize, Count32, Count32, error) {
+func (p *pendingCommit) Queue(scanner *SizeScanner, subtasks *ToDoList) (CommitSize, Count32, Count32, error) {
 	var err error
 
 	commit, err := scanner.repo.ReadCommit(p.oid)
@@ -432,13 +374,40 @@ func (scanner *SizeScanner) queueCommit(p *pendingCommit, subtasks *ToDoList) (C
 	return size, commit.Size, NewCount32(uint64(len(commit.Parents))), nil
 }
 
+func (p *pendingCommit) Run(scanner *SizeScanner) error {
+	// See if the object's size has been computed since it was
+	// enqueued. This can happen if it is used in multiple places
+	// in the ancestry graph.
+	_, ok := scanner.commitSizes[p.oid]
+	if ok {
+		return nil
+	}
+
+	var subtasks ToDoList
+
+	commitSize, size, parentCount, err := p.Queue(scanner, &subtasks)
+	if err == nil {
+		scanner.recordCommit(p.oid, commitSize, size, parentCount)
+	} else if err == NotYetKnown {
+		scanner.toDo.Push(p)
+		scanner.toDo.PushAll(subtasks)
+	} else {
+		return err
+	}
+	return nil
+}
+
+type pendingTag struct {
+	oid Oid
+}
+
 // Compute and return the size of the annotated tag with the specified
 // `oid` if we already know the size of its referent. If the
 // referent's size is not yet known but believed to be computable, add
 // it to the appropriate todo list and return an `NotYetKnown` error.
 // If another error occurred while looking up an object, return that
 // error. `oid` is not already in the cache.
-func (scanner *SizeScanner) queueTag(p *pendingTag, subtasks *ToDoList) (TagSize, Count32, error) {
+func (p *pendingTag) Queue(scanner *SizeScanner, subtasks *ToDoList) (TagSize, Count32, error) {
 	var err error
 
 	tag, err := scanner.repo.ReadTag(p.oid)
@@ -489,4 +458,35 @@ func (scanner *SizeScanner) queueTag(p *pendingTag, subtasks *ToDoList) (TagSize
 
 	// Now add one to the tag depth to account for this tag itself:
 	return size, tag.Size, nil
+}
+
+func (p *pendingTag) Run(scanner *SizeScanner) error {
+	// See if the object's size has been computed since it was
+	// enqueued. This can happen if it is used in multiple places
+	// in the ancestry graph.
+	_, ok := scanner.tagSizes[p.oid]
+	if ok {
+		return nil
+	}
+
+	var subtasks ToDoList
+
+	tagSize, size, err := p.Queue(scanner, &subtasks)
+	if err == nil {
+		scanner.recordTag(p.oid, tagSize, size)
+	} else if err == NotYetKnown {
+		scanner.toDo.Push(p)
+		scanner.toDo.PushAll(subtasks)
+	} else {
+		return err
+	}
+	return nil
+}
+
+// Compute the sizes of any trees listed in `scanner.toDo` or
+// `scanner.treesToDo`. This might involve computing the sizes of
+// referred-to objects. Do this without recursion to avoid unlimited
+// stack growth.
+func (scanner *SizeScanner) fill() error {
+	return scanner.toDo.Run(scanner)
 }

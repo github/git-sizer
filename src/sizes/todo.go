@@ -3,7 +3,7 @@ package sizes
 import ()
 
 type pending interface {
-	Run(*SizeScanner) error
+	Run(*SizeScanner, *ToDoList) error
 }
 
 // A LIFO stack of `pending`s.
@@ -29,13 +29,13 @@ func (t *ToDoList) Pop() (pending, bool) {
 	return ret, true
 }
 
-func (t *ToDoList) Run(scanner *SizeScanner) error {
+func (t *ToDoList) Run(scanner *SizeScanner, toDo *ToDoList) error {
 	for {
 		p, ok := t.Pop()
 		if !ok {
 			return nil
 		}
-		err := p.Run(scanner)
+		err := p.Run(scanner, toDo)
 		if err != nil {
 			return err
 		}

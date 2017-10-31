@@ -17,23 +17,29 @@ import (
 // The type of an object ("blob", "tree", "commit", "tag", "missing").
 type ObjectType string
 
-type Oid [20]byte
+type Oid struct {
+	v [20]byte
+}
+
+func OidFromBytes(oidBytes []byte) (Oid, error) {
+	var oid Oid
+	if len(oidBytes) != len(oid.v) {
+		return Oid{}, errors.New("bytes oid has the wrong length")
+	}
+	copy(oid.v[0:20], oidBytes)
+	return oid, nil
+}
 
 func NewOid(s string) (Oid, error) {
 	oidBytes, err := hex.DecodeString(s)
 	if err != nil {
 		return Oid{}, err
 	}
-	if len(oidBytes) != 20 {
-		return Oid{}, errors.New("hex oid has the wrong length")
-	}
-	var oid Oid
-	copy(oid[0:20], oidBytes)
-	return oid, nil
+	return OidFromBytes(oidBytes)
 }
 
 func (oid Oid) String() string {
-	return hex.EncodeToString(oid[:])
+	return hex.EncodeToString(oid.v[:])
 }
 
 type Repository struct {
@@ -373,7 +379,7 @@ func (iter *TreeIter) NextEntry(entry *TreeEntry) (bool, error) {
 		return false, errors.New("tree entry ends unexpectedly")
 	}
 
-	copy(entry.Oid[0:20], iter.data[0:20])
+	copy(entry.Oid.v[0:20], iter.data[0:20])
 	iter.data = iter.data[20:]
 
 	return true, nil

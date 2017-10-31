@@ -3,32 +3,35 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"runtime/pprof"
 
 	"github.com/github/git-sizer/sizes"
 )
 
-func processObject(scanner *sizes.SizeScanner, spec string) {
-	_, _, _, err := scanner.ObjectSize(spec)
+func main() {
+	err := mainImplementation()
 	if err != nil {
-		fmt.Fprintf(
-			os.Stderr, "error: could not compute object size for '%s': %v\n",
-			spec, err,
-		)
-		return
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+		os.Exit(1)
 	}
 }
 
-func main() {
+func mainImplementation() error {
 	var processAll bool
+	var processBranches bool
+	var processTags bool
+	var processRemotes bool
 	var processStdin bool
 	var cpuprofile string
 
 	flag.BoolVar(&processAll, "all", false, "process all references")
+	flag.BoolVar(&processBranches, "branches", false, "process all branches")
+	flag.BoolVar(&processTags, "tags", false, "process all tags")
+	flag.BoolVar(&processRemotes, "remotes", false, "process all remote-tracking branches")
 	flag.BoolVar(&processStdin, "stdin", false, "read objects from stdin, one per line")
 
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
@@ -38,7 +41,7 @@ func main() {
 	if cpuprofile != "" {
 		f, err := os.Create(cpuprofile)
 		if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("couldn't set up cpuprofile file: %s", err)
 		}
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
@@ -46,63 +49,84 @@ func main() {
 
 	args := flag.Args()
 	if len(args) == 0 {
-		log.Fatal("path argument(s) required")
+		return errors.New("path argument(s) required")
 	}
 	path := args[0]
 	specs := args[1:]
 
 	repo, err := sizes.NewRepository(path)
 	if err != nil {
-		log.Panicf("error: couldn't open %v", path)
+		return fmt.Errorf("couldn't open %v: %s", path, err)
 	}
 	defer repo.Close()
 
-	scanner, err := sizes.NewSizeScanner(repo)
-	if err != nil {
-		log.Panicf("error: couldn't create SizeScanner for %v", path)
-	}
+	var historySize sizes.HistorySize
 
-	for _, spec := range specs {
-		processObject(scanner, spec)
-	}
+	if processAll || processBranches || processTags || processRemotes {
+		if processStdin || len(specs) > 0 {
+			return errors.New("--all must not be used together with other specs")
+		}
 
-	if processAll {
-		done := make(chan interface{})
-		refOrErrors, err := repo.ForEachRef(done)
+		var filter sizes.ReferenceFilter
+		if processAll {
+			filter = sizes.AllReferencesFilter
+		} else {
+			var filters []sizes.ReferenceFilter
+			if processBranches {
+				filters = append(filters, sizes.BranchesFilter)
+			}
+			if processTags {
+				filters = append(filters, sizes.TagsFilter)
+			}
+			if processRemotes {
+				filters = append(filters, sizes.RemotesFilter)
+			}
+			filter = sizes.OrFilter(filters...)
+		}
+
+		historySize, err = sizes.ScanRepository(repo, filter)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %s", err)
-			return
+			return fmt.Errorf("error scanning repository: %s", err)
 		}
-		for refOrError := range refOrErrors {
-			if refOrError.Error != nil {
-				fmt.Fprintf(os.Stderr, "error reading references: %s", err)
-				return
-			}
-			_, err := scanner.ReferenceSize(refOrError.Reference)
+	} else {
+		scanner, err := sizes.NewSizeScanner(repo)
+		if err != nil {
+			return fmt.Errorf("couldn't create SizeScanner for %v: %s", path, err)
+		}
+
+		foundSpec := false
+
+		for _, spec := range specs {
+			_, _, _, err := scanner.ObjectSize(spec)
 			if err != nil {
-				fmt.Fprintf(
-					os.Stderr, "error: could not compute object size for '': %v\n",
-					refOrError.Reference.Refname, err,
-				)
-				return
+				return fmt.Errorf("error processing object %v: %s", spec, err)
+			}
+			foundSpec = true
+		}
+
+		if processStdin {
+			input := bufio.NewScanner(os.Stdin)
+			for input.Scan() {
+				spec := input.Text()
+				_, _, _, err := scanner.ObjectSize(spec)
+				if err != nil {
+					return fmt.Errorf("error processing object %v: %s", spec, err)
+				}
+				foundSpec = true
 			}
 		}
-	}
 
-	if processStdin {
-		input := bufio.NewScanner(os.Stdin)
-		for input.Scan() {
-			spec := input.Text()
-			processObject(scanner, spec)
+		if !foundSpec {
+			return errors.New("no objects specified")
 		}
+
+		historySize = scanner.HistorySize
 	}
 
-	s, err := json.MarshalIndent(scanner.HistorySize, "", "    ")
+	s, err := json.MarshalIndent(historySize, "", "    ")
 	if err != nil {
-		fmt.Fprintf(
-			os.Stderr, "error: could not convert %v to json: %v\n",
-			scanner.HistorySize, err,
-		)
+		return fmt.Errorf("could not convert %v to json: %s", historySize, err)
 	}
 	fmt.Printf("%s\n", s)
+	return nil
 }

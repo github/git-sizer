@@ -54,6 +54,31 @@ func NewSizeScanner(repo *Repository) (*SizeScanner, error) {
 	return scanner, nil
 }
 
+func ScanRepository(repo *Repository, filter ReferenceFilter) (HistorySize, error) {
+	scanner, err := NewSizeScanner(repo)
+	if err != nil {
+		return HistorySize{}, err
+	}
+
+	done := make(chan interface{})
+	defer close(done)
+
+	refOrErrors, err := repo.ForEachFilteredRef(done, filter)
+	if err != nil {
+		return HistorySize{}, err
+	}
+	for refOrError := range refOrErrors {
+		if refOrError.Error != nil {
+			return HistorySize{}, err
+		}
+		_, err := scanner.ReferenceSize(refOrError.Reference)
+		if err != nil {
+			return HistorySize{}, err
+		}
+	}
+	return scanner.HistorySize, nil
+}
+
 func (scanner *SizeScanner) TypedObjectSize(
 	spec string, oid Oid, objectType ObjectType, objectSize Count32,
 ) (Size, error) {

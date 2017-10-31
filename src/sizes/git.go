@@ -351,38 +351,40 @@ func (tree *Tree) Iter() *TreeIter {
 	}
 }
 
-func (iter *TreeIter) NextEntry(entry *TreeEntry) (bool, error) {
+func (iter *TreeIter) NextEntry() (TreeEntry, bool, error) {
+	var entry TreeEntry
+
 	if len(iter.data) == 0 {
-		return false, nil
+		return TreeEntry{}, false, nil
 	}
 
 	spAt := bytes.IndexByte(iter.data, ' ')
 	if spAt < 0 {
-		return false, errors.New("failed to find SP after mode")
+		return TreeEntry{}, false, errors.New("failed to find SP after mode")
 	}
 	mode, err := strconv.ParseUint(string(iter.data[:spAt]), 8, 32)
 	if err != nil {
-		return false, err
+		return TreeEntry{}, false, err
 	}
 	entry.Filemode = uint(mode)
 
 	iter.data = iter.data[spAt+1:]
 	nulAt := bytes.IndexByte(iter.data, 0)
 	if nulAt < 0 {
-		return false, errors.New("failed to find NUL after filename")
+		return TreeEntry{}, false, errors.New("failed to find NUL after filename")
 	}
 
 	entry.Name = string(iter.data[:nulAt])
 
 	iter.data = iter.data[nulAt+1:]
 	if len(iter.data) < 20 {
-		return false, errors.New("tree entry ends unexpectedly")
+		return TreeEntry{}, false, errors.New("tree entry ends unexpectedly")
 	}
 
 	copy(entry.Oid.v[0:20], iter.data[0:20])
 	iter.data = iter.data[20:]
 
-	return true, nil
+	return entry, true, nil
 }
 
 type Tag struct {

@@ -313,12 +313,10 @@ func (scanner *SizeScanner) queueTree(oid Oid, subtasks *ToDoList) (TreeSize, Co
 		ExpandedTreeCount: 1,
 	}
 
-	var entry TreeEntry
-
 	iter := tree.Iter()
 
 	for {
-		entryOk, err := iter.NextEntry(&entry)
+		entry, entryOk, err := iter.NextEntry()
 		if err != nil {
 			return TreeSize{}, 0, 0, err
 		}

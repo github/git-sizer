@@ -137,7 +137,10 @@ func (repo *Repository) ForEachRef(done <-chan interface{}) (<-chan ReferenceOrE
 				break
 			}
 			refname := words[3]
-			re := ReferenceOrError{Reference{refname, objectType, NewCount32(objectSize), oid}, nil}
+			re := ReferenceOrError{
+				Reference{refname, objectType, NewCount32(objectSize), oid},
+				nil,
+			}
 			select {
 			case out <- re:
 			case <-done:
@@ -147,6 +150,55 @@ func (repo *Repository) ForEachRef(done <-chan interface{}) (<-chan ReferenceOrE
 
 		out <- ReferenceOrError{Reference{}, errors.New("invalid for-each-ref output")}
 	}(done, out)
+
+	return out, nil
+}
+
+type ReferenceFilter func(Reference) bool
+
+func AllReferencesFilter(_ Reference) bool {
+	return true
+}
+
+func PrefixFilter(prefix string) ReferenceFilter {
+	return func(r Reference) bool {
+		return strings.HasPrefix(r.Refname, prefix)
+	}
+}
+
+var (
+	BranchesFilter ReferenceFilter
+	TagsFilter     ReferenceFilter
+)
+
+func init() {
+	BranchesFilter = PrefixFilter("refs/heads/")
+	TagsFilter = PrefixFilter("refs/tags/")
+}
+
+func (repo *Repository) ForEachFilteredRef(
+	done <-chan interface{}, filter ReferenceFilter,
+) (<-chan ReferenceOrError, error) {
+	refs, err := repo.ForEachRef(done)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make(chan ReferenceOrError)
+
+	go func() {
+		defer close(out)
+
+		for re := range refs {
+			if re.Error != nil || filter(re.Reference) {
+				select {
+				case out <- re:
+				case <-done:
+					return
+				}
+			}
+		}
+	}()
 
 	return out, nil
 }

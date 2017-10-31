@@ -204,15 +204,11 @@ func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error)
 			}
 			// +1 for LF:
 			data = make([]byte, size+1)
-			rest := data
-			for len(rest) > 0 {
-				var n int
-				n, err = f.Read(rest)
-				if err != nil {
-					return
-				}
-				rest = rest[n:]
+			_, err = io.ReadFull(f, data)
+			if err != nil {
+				return
 			}
+			data = data[:len(data)-1]
 		},
 	)
 
@@ -221,7 +217,7 @@ func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error)
 	}
 
 	// -1 to remove LF:
-	return oid, objectType, data[:len(data)-1], nil
+	return oid, objectType, data, nil
 }
 
 type ObjectHeaderIter struct {

@@ -137,7 +137,12 @@ func (repo *Repository) ForEachRef(done <-chan interface{}) (<-chan ReferenceOrE
 				break
 			}
 			refname := words[3]
-			out <- ReferenceOrError{Reference{refname, objectType, NewCount32(objectSize), oid}, nil}
+			re := ReferenceOrError{Reference{refname, objectType, NewCount32(objectSize), oid}, nil}
+			select {
+			case out <- re:
+			case <-done:
+				return
+			}
 		}
 
 		out <- ReferenceOrError{Reference{}, errors.New("invalid for-each-ref output")}

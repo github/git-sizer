@@ -25,11 +25,11 @@ func processObject(scanner *sizes.SizeScanner, spec string) {
 
 func main() {
 	var processAll bool
-	var stdin bool
+	var processStdin bool
 	var cpuprofile string
 
 	flag.BoolVar(&processAll, "all", false, "process all references")
-	flag.BoolVar(&stdin, "stdin", false, "read objects from stdin, one per line")
+	flag.BoolVar(&processStdin, "stdin", false, "read objects from stdin, one per line")
 
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 
@@ -89,7 +89,7 @@ func main() {
 		}
 	}
 
-	if stdin {
+	if processStdin {
 		input := bufio.NewScanner(os.Stdin)
 		for input.Scan() {
 			spec := input.Text()

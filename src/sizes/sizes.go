@@ -1,6 +1,7 @@
 package sizes
 
 import (
+	"bytes"
 	"fmt"
 )
 
@@ -231,4 +232,63 @@ func (s HistorySize) String() string {
 		s.ReferenceCount,
 		s.TreeSize,
 	)
+}
+
+type item struct {
+	Name     string
+	Value    Humaner
+	Prefixes []Prefix
+	Unit     string
+	Scale    float64
+}
+
+func (s HistorySize) TableString() string {
+	buf := &bytes.Buffer{}
+	fmt.Fprintln(buf, "| Name                      | Value     |")
+	fmt.Fprintln(buf, "| ------------------------- | --------- |")
+	stars := "******************************"
+	for _, i := range []item{
+		{"unique_commit_count", s.UniqueCommitCount, MetricPrefixes, " ", 500e3},
+		{"unique_commit_size", s.UniqueCommitSize, BinaryPrefixes, "B", 250e6},
+		{"max_commit_size", s.MaxCommitSize, BinaryPrefixes, "B", 50e3},
+		{"max_history_depth", s.MaxHistoryDepth, MetricPrefixes, " ", 500e3},
+		{"max_parent_count", s.MaxParentCount, MetricPrefixes, " ", 10},
+		{"unique_tree_count", s.UniqueTreeCount, MetricPrefixes, " ", 1.5e6},
+		{"unique_tree_size", s.UniqueTreeSize, BinaryPrefixes, "B", 0},
+		{"unique_tree_entries", s.UniqueTreeEntries, MetricPrefixes, " ", 0},
+		{"max_tree_entries", s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3},
+		{"unique_blob_count", s.UniqueBlobCount, MetricPrefixes, " ", 1.5e6},
+		{"unique_blob_size", s.UniqueBlobSize, BinaryPrefixes, "B", 10e9},
+		{"max_blob_size", s.MaxBlobSize, BinaryPrefixes, "B", 10e6},
+		{"unique_tag_count", s.UniqueTagCount, MetricPrefixes, " ", 25e3},
+		{"max_tag_depth", s.MaxTagDepth, MetricPrefixes, " ", 1},
+		{"reference_count", s.ReferenceCount, MetricPrefixes, " ", 25e3},
+		{"max_path_depth", s.MaxPathDepth, MetricPrefixes, " ", 10},
+		{"max_path_length", s.MaxPathLength, BinaryPrefixes, "B", 100},
+		{"expanded_tree_count", s.ExpandedTreeCount, MetricPrefixes, " ", 2000},
+		{"expanded_blob_count", s.ExpandedBlobCount, MetricPrefixes, " ", 50e3},
+		{"expanded_blob_size", s.ExpandedBlobSize, BinaryPrefixes, "B", 1e9},
+		{"expanded_link_count", s.ExpandedLinkCount, MetricPrefixes, " ", 0},
+		{"expanded_submodule_count", s.ExpandedSubmoduleCount, MetricPrefixes, " ", 100},
+	} {
+		valueString, unitString := i.Value.Human(i.Prefixes, i.Unit)
+		var warning string
+		if i.Scale == 0 {
+			warning = ""
+		} else {
+			alert := float64(i.Value.ToUint64()) / i.Scale
+			if alert > 30 {
+				warning = " !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+			} else {
+				alert := int(alert)
+				if alert == 0 {
+					warning = ""
+				} else {
+					warning = " " + stars[:alert]
+				}
+			}
+		}
+		fmt.Fprintf(buf, "| %-25s | %5s %-3s |%s\n", i.Name, valueString, unitString, warning)
+	}
+	return buf.String()
 }

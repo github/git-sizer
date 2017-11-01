@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"runtime/pprof"
 
@@ -27,12 +28,15 @@ func mainImplementation() error {
 	var processRemotes bool
 	var processStdin bool
 	var cpuprofile string
+	var jsonOutput bool
 
 	flag.BoolVar(&processAll, "all", false, "process all references")
 	flag.BoolVar(&processBranches, "branches", false, "process all branches")
 	flag.BoolVar(&processTags, "tags", false, "process all tags")
 	flag.BoolVar(&processRemotes, "remotes", false, "process all remote-tracking branches")
 	flag.BoolVar(&processStdin, "stdin", false, "read objects from stdin, one per line")
+	flag.BoolVar(&jsonOutput, "json", false, "output results in JSON format")
+	flag.BoolVar(&jsonOutput, "j", false, "output results in JSON format")
 
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 
@@ -123,10 +127,15 @@ func mainImplementation() error {
 		historySize = scanner.HistorySize
 	}
 
-	s, err := json.MarshalIndent(historySize, "", "    ")
-	if err != nil {
-		return fmt.Errorf("could not convert %v to json: %s", historySize, err)
+	if jsonOutput {
+		s, err := json.MarshalIndent(historySize, "", "    ")
+		if err != nil {
+			return fmt.Errorf("could not convert %v to json: %s", historySize, err)
+		}
+		fmt.Printf("%s\n", s)
+	} else {
+		io.WriteString(os.Stdout, historySize.TableString())
 	}
-	fmt.Printf("%s\n", s)
+
 	return nil
 }

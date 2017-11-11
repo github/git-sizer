@@ -244,8 +244,8 @@ type item struct {
 
 func (s HistorySize) TableString() string {
 	buf := &bytes.Buffer{}
-	fmt.Fprintln(buf, "| Name                      | Value     |")
-	fmt.Fprintln(buf, "| ------------------------- | --------- |")
+	fmt.Fprintln(buf, "| Name                      | Value     | Level of concern               |")
+	fmt.Fprintln(buf, "| ------------------------- | --------- | ------------------------------ |")
 	stars := "******************************"
 	for _, i := range []item{
 		{"unique_commit_count", s.UniqueCommitCount, MetricPrefixes, " ", 500e3},
@@ -278,17 +278,13 @@ func (s HistorySize) TableString() string {
 		} else {
 			alert := float64(i.Value.ToUint64()) / i.Scale
 			if alert > 30 {
-				warning = " !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+				warning = "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 			} else {
 				alert := int(alert)
-				if alert == 0 {
-					warning = ""
-				} else {
-					warning = " " + stars[:alert]
-				}
+				warning = stars[:alert]
 			}
 		}
-		fmt.Fprintf(buf, "| %-25s | %5s %-3s |%s\n", i.Name, valueString, unitString, warning)
+		fmt.Fprintf(buf, "| %-25s | %5s %-3s | %-30s |\n", i.Name, valueString, unitString, warning)
 	}
 	return buf.String()
 }

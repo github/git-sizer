@@ -1,13 +1,12 @@
+PACKAGE := github.com/github/git-sizer
 ROOTDIR := $(abspath $(CURDIR))
-export ROOTDIR
+GOPATH := $(ROOTDIR)/.gopath
+export GOPATH
 
 GO := $(CURDIR)/script/go
 GOFMT := $(CURDIR)/script/gofmt
 
-BIN := libexec
-
-GOBIN := $(abspath $(BIN))
-export GOBIN
+BIN := bin
 
 GOFLAGS := \
 	--tags "static" \
@@ -15,48 +14,23 @@ GOFLAGS := \
 GO_CMDS := \
 	$(BIN)/git-sizer
 GO_PKGS := $(shell cd .gopath/src; find github.com/github/git-sizer/ -type f -name '*.go' | xargs -n1 dirname | sort -u)
-SHELL_CMDS :=
-RUBY_CMDS :=
-DEPS := \
-	github.com/stretchr/testify
 GO_SRCS := $(shell find src -type f -name '*.go')
 
-TEST_SH_RUNNERS := 2
-
 .PHONY: all
-all: $(GO_CMDS) $(SHELL_CMDS) $(RUBY_CMDS)
+all: $(GO_CMDS)
 
-libexec/%: bin/% $(GO_SRCS)
-	$(GO) install $(GOFLAGS) github.com/github/git-sizer/$*
+$(BIN)/%: $(GO_SRCS) | $(BIN)
+	$(GO) build $(GOFLAGS) -o $@ $(PACKAGE)/$*
 
-.PRECIOUS: bin/%
-bin/%: src/shim.sh
-	mkdir -p bin
-	cp $< bin/$*
-	chmod +x bin/$*
-
-.PHONY: $(SHELL_CMDS)
-$(SHELL_CMDS): $(BIN)/%: bin/%.sh
-	cp $< $@
-
-.PHONY: $(RUBY_CMDS)
-$(RUBY_CMDS): $(BIN)/%: bin/%.rb
-	cp $< $@
-
-.PHONY: deps
-deps:
-	$(GO) get $(DEPS)
+$(BIN):
+	mkdir -p $(BIN)
 
 .PHONY: test
-test: gotest shtest
+test: gotest
 
 .PHONY: gotest
 gotest:
 	$(GO) test -timeout 60s $(GOFLAGS) $(GO_PKGS)
-
-.PHONY: shtest
-shtest: libexec/git-sizer
-	ls -1 test/test-*.sh | xargs -I % -P $(TEST_SH_RUNNERS) -n 1 $(SHELL) % --batch
 
 .PHONY: gofmt
 gofmt:
@@ -72,4 +46,4 @@ govet:
 
 .PHONY: clean
 clean:
-	rm -rf bin libexec
+	rm -rf bin

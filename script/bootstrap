@@ -4,13 +4,23 @@ set -e
 
 cd $(dirname "$0")/..
 
+export ROOTDIR="$(pwd)"
+export GOPATH="$ROOTDIR/.gopath"
+
 if [[ "$(uname -s)" = "Darwin" ]]; then
   brew bundle
 fi
 script/ensure-go-installed
 
-rm -f .gopath/src/github.com/github/git-sizer
-mkdir -p .gopath/src/github.com/github
-ln -s "$PWD/src" .gopath/src/github.com/github/git-sizer
+go get -u github.com/golang/dep/cmd/dep
 
-make deps
+BASE="$GOPATH/src/github.com/github/git-sizer"
+rm -f "$BASE"
+mkdir -p $(dirname "$BASE")
+ln -s "$(pwd)/src" "$BASE"
+
+(
+    cd $BASE
+    "$GOPATH/bin/dep" ensure
+    "$GOPATH/bin/dep" prune
+)

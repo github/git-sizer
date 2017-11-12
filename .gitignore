@@ -1,6 +1,3 @@
 /.gopath
 /bin
-/libexec
-/log
-/repositories
 /vendor

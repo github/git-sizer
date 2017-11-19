@@ -207,6 +207,10 @@ func (scanner *SizeScanner) BlobSize(oid Oid) (BlobSize, error) {
 	return size, nil
 }
 
+func (scanner *SizeScanner) pendingTree(oid Oid) (*pendingTree, error) {
+	return &pendingTree{oid: oid}, nil
+}
+
 func (scanner *SizeScanner) TreeSize(oid Oid) (TreeSize, error) {
 	s, ok := scanner.treeSizes[oid]
 	if ok {
@@ -214,8 +218,12 @@ func (scanner *SizeScanner) TreeSize(oid Oid) (TreeSize, error) {
 	}
 
 	var toDo ToDoList
-	toDo.Push(&pendingTree{oid: oid})
-	err := scanner.fill(&toDo)
+	p, err := scanner.pendingTree(oid)
+	if err != nil {
+		return TreeSize{}, err
+	}
+	toDo.Push(p)
+	err = scanner.fill(&toDo)
 	if err != nil {
 		return TreeSize{}, err
 	}
@@ -355,7 +363,11 @@ func (p *pendingTree) Queue(
 			} else {
 				ok = false
 				// Schedule this one to be computed:
-				subtasks.Push(&pendingTree{oid: entry.Oid})
+				p, err := scanner.pendingTree(entry.Oid)
+				if err != nil {
+					return TreeSize{}, 0, 0, err
+				}
+				subtasks.Push(p)
 			}
 
 		case entry.Filemode&0170000 == 0160000:
@@ -460,7 +472,12 @@ func (p *pendingCommit) Queue(
 		}
 	} else {
 		ok = false
-		subtasks.Push(&pendingTree{oid: commit.Tree})
+
+		p, err := scanner.pendingTree(commit.Tree)
+		if err != nil {
+			return CommitSize{}, 0, 0, err
+		}
+		subtasks.Push(p)
 	}
 
 	// Normally we know our parents. So if we don't know the tree,
@@ -569,7 +586,11 @@ func (p *pendingTag) Queue(
 		if !referentOK {
 			ok = false
 			// Schedule this one to be computed:
-			subtasks.Push(&pendingTree{oid: tag.Referent})
+			p, err := scanner.pendingTree(tag.Referent)
+			if err != nil {
+				return TagSize{}, 0, err
+			}
+			subtasks.Push(p)
 		}
 	case "blob":
 		_, referentOK := scanner.commitSizes[tag.Referent]

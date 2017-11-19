@@ -227,9 +227,10 @@ func (scanner *SizeScanner) pendingTree(oid Oid) (*pendingTree, error) {
 	}
 
 	return &pendingTree{
-		oid:        oid,
-		objectSize: NewCount32(uint64(len(tree.data))),
-		entries:    entries,
+		oid:              oid,
+		objectSize:       NewCount32(uint64(len(tree.data))),
+		treeSize:         TreeSize{ExpandedTreeCount: 1},
+		remainingEntries: entries,
 	}, nil
 }
 
@@ -325,9 +326,11 @@ func (scanner *SizeScanner) recordTag(oid Oid, tagSize TagSize, size Count32) {
 }
 
 type pendingTree struct {
-	oid        Oid
-	objectSize Count32
-	entries    []TreeEntry
+	oid              Oid
+	objectSize       Count32
+	entryCount       Count32
+	treeSize         TreeSize
+	remainingEntries []TreeEntry
 }
 
 // Compute and return the size of the tree in `p` if we already know
@@ -341,67 +344,59 @@ func (p *pendingTree) Queue(
 ) (TreeSize, Count32, Count32, error) {
 	var subtasks ToDoList
 
-	ok := true
-
-	var entryCount Count32
+	size := &p.treeSize
 
 	// First accumulate all of the sizes (including maximum depth) for
 	// all descendants:
-	size := TreeSize{
-		ExpandedTreeCount: 1,
-	}
-
-	for _, entry := range p.entries {
-		entryCount.Increment(1)
-
+	var dst int = 0
+	for src, entry := range p.remainingEntries {
 		switch {
 		case entry.Filemode&0170000 == 0040000:
 			// Tree
 			subsize, subok := scanner.treeSizes[entry.Oid]
 			if subok {
-				if ok {
-					size.addDescendent(entry.Name, subsize)
-				}
+				size.addDescendent(entry.Name, subsize)
+				p.entryCount.Increment(1)
 			} else {
-				ok = false
 				// Schedule this one to be computed:
-				p, err := scanner.pendingTree(entry.Oid)
+				p2, err := scanner.pendingTree(entry.Oid)
 				if err != nil {
 					return TreeSize{}, 0, 0, err
 				}
-				subtasks.Push(p)
+				subtasks.Push(p2)
+				if dst < src {
+					p.remainingEntries[dst] = p.remainingEntries[src]
+				}
+				dst++
 			}
 
 		case entry.Filemode&0170000 == 0160000:
 			// Commit
-			if ok {
-				size.addSubmodule(entry.Name)
-			}
+			size.addSubmodule(entry.Name)
+			p.entryCount.Increment(1)
 
 		case entry.Filemode&0170000 == 0120000:
 			// Symlink
-			if ok {
-				size.addLink(entry.Name)
-			}
+			size.addLink(entry.Name)
+			p.entryCount.Increment(1)
 
 		default:
 			// Blob
 			blobSize, blobOk := scanner.blobSizes[entry.Oid]
-			if blobOk {
-				if ok {
-					size.addBlob(entry.Name, blobSize)
-				}
-			} else {
-				blobSize, err := scanner.BlobSize(entry.Oid)
+			if !blobOk {
+				var err error
+				blobSize, err = scanner.BlobSize(entry.Oid)
 				if err != nil {
 					return TreeSize{}, 0, 0, err
 				}
-				size.addBlob(entry.Name, blobSize)
 			}
+			size.addBlob(entry.Name, blobSize)
+			p.entryCount.Increment(1)
 		}
 	}
 
-	if !ok {
+	if dst > 0 {
+		p.remainingEntries = p.remainingEntries[:dst]
 		toDo.Push(p)
 		toDo.PushAll(subtasks)
 		return TreeSize{}, 0, 0, NotYetKnown
@@ -410,7 +405,7 @@ func (p *pendingTree) Queue(
 	// Now add one to the depth and to the tree count to account for
 	// this tree itself:
 	size.MaxPathDepth.Increment(1)
-	return size, p.objectSize, entryCount, nil
+	return *size, p.objectSize, p.entryCount, nil
 }
 
 func (p *pendingTree) Run(scanner *SizeScanner, toDo *ToDoList) error {

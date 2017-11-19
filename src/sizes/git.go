@@ -258,11 +258,14 @@ func (repo *Repository) ForEachFilteredRef(
 }
 
 // Parse a `cat-file --batch[-check]` output header line (including
-// the trailing LF). `spec` is used in error messages.
-func (repo *Repository) parseBatchHeader(spec string, header string) (Oid, ObjectType, Count32, error) {
+// the trailing LF). `spec`, if not "", is used in error messages.
+func parseBatchHeader(spec string, header string) (Oid, ObjectType, Count32, error) {
 	header = header[:len(header)-1]
 	words := strings.Split(header, " ")
 	if words[len(words)-1] == "missing" {
+		if spec == "" {
+			spec = words[0]
+		}
 		return Oid{}, "missing", 0, errors.New(fmt.Sprintf("missing object %s", spec))
 	}
 
@@ -291,7 +294,7 @@ func (repo *Repository) ReadHeader(spec string) (Oid, ObjectType, Count32, error
 	if err != nil {
 		return Oid{}, "missing", 0, err
 	}
-	return repo.parseBatchHeader(spec, header)
+	return parseBatchHeader(spec, header)
 }
 
 func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error) {
@@ -309,7 +312,7 @@ func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error)
 				return
 			}
 			var size Count32
-			oid, objectType, size, err = repo.parseBatchHeader(spec, header)
+			oid, objectType, size, err = parseBatchHeader(spec, header)
 			if err != nil {
 				return
 			}
@@ -329,6 +332,51 @@ func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error)
 
 	// -1 to remove LF:
 	return oid, objectType, data, nil
+}
+
+type AllObjectIter struct {
+	command *exec.Cmd
+	stdout  io.ReadCloser
+	f       *bufio.Reader
+}
+
+// NewAllObjectIter returns an iterator that iterates over all of the
+// objects in `repo` (including unreachable objects).
+func (repo *Repository) NewAllObjectIter() (*AllObjectIter, error) {
+	command := exec.Command(
+		"git", "-C", repo.path,
+		"cat-file", "--batch-check", "--batch-all-objects", "--buffer",
+	)
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	err = command.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	return &AllObjectIter{
+		command: command,
+		stdout:  stdout,
+		f:       bufio.NewReader(stdout),
+	}, nil
+}
+
+// Next returns the next object, or EOF when done.
+func (l *AllObjectIter) Next() (Oid, ObjectType, Count32, error) {
+	line, err := l.f.ReadString('\n')
+	if err != nil {
+		return Oid{}, "", 0, err
+	}
+
+	return parseBatchHeader("", line)
+}
+
+func (l *AllObjectIter) Close() error {
+	l.stdout.Close()
+	return l.command.Wait()
 }
 
 type ObjectHeaderIter struct {

@@ -208,7 +208,14 @@ func (scanner *SizeScanner) BlobSize(oid Oid) (BlobSize, error) {
 }
 
 func (scanner *SizeScanner) pendingTree(oid Oid) (*pendingTree, error) {
-	return &pendingTree{oid: oid}, nil
+	tree, err := scanner.repo.ReadTree(oid)
+	if err != nil {
+		return nil, err
+	}
+	return &pendingTree{
+		oid:  oid,
+		tree: tree,
+	}, nil
 }
 
 func (scanner *SizeScanner) TreeSize(oid Oid) (TreeSize, error) {
@@ -316,20 +323,10 @@ type pendingTree struct {
 func (p *pendingTree) Queue(
 	scanner *SizeScanner, toDo *ToDoList,
 ) (TreeSize, Count32, Count32, error) {
-	var err error
 	var subtasks ToDoList
 	var tree *Tree
 
-	if p.tree == nil {
-		tree, err = scanner.repo.ReadTree(p.oid)
-		if err != nil {
-			return TreeSize{}, 0, 0, err
-		}
-		p.tree = tree
-	} else {
-		tree = p.tree
-	}
-
+	tree = p.tree
 	ok := true
 
 	var entryCount Count32

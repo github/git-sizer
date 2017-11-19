@@ -212,9 +212,24 @@ func (scanner *SizeScanner) pendingTree(oid Oid) (*pendingTree, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	var entries []TreeEntry
+	iter := tree.Iter()
+	for {
+		entry, entryOk, err := iter.NextEntry()
+		if err != nil {
+			return nil, err
+		}
+		if !entryOk {
+			break
+		}
+		entries = append(entries, entry)
+	}
+
 	return &pendingTree{
-		oid:  oid,
-		tree: tree,
+		oid:        oid,
+		objectSize: NewCount32(uint64(len(tree.data))),
+		entries:    entries,
 	}, nil
 }
 
@@ -310,8 +325,9 @@ func (scanner *SizeScanner) recordTag(oid Oid, tagSize TagSize, size Count32) {
 }
 
 type pendingTree struct {
-	oid  Oid
-	tree *Tree
+	oid        Oid
+	objectSize Count32
+	entries    []TreeEntry
 }
 
 // Compute and return the size of the tree in `p` if we already know
@@ -324,9 +340,7 @@ func (p *pendingTree) Queue(
 	scanner *SizeScanner, toDo *ToDoList,
 ) (TreeSize, Count32, Count32, error) {
 	var subtasks ToDoList
-	var tree *Tree
 
-	tree = p.tree
 	ok := true
 
 	var entryCount Count32
@@ -337,16 +351,7 @@ func (p *pendingTree) Queue(
 		ExpandedTreeCount: 1,
 	}
 
-	iter := tree.Iter()
-
-	for {
-		entry, entryOk, err := iter.NextEntry()
-		if err != nil {
-			return TreeSize{}, 0, 0, err
-		}
-		if !entryOk {
-			break
-		}
+	for _, entry := range p.entries {
 		entryCount.Increment(1)
 
 		switch {
@@ -405,7 +410,7 @@ func (p *pendingTree) Queue(
 	// Now add one to the depth and to the tree count to account for
 	// this tree itself:
 	size.MaxPathDepth.Increment(1)
-	return size, NewCount32(uint64(len(tree.data))), entryCount, nil
+	return size, p.objectSize, entryCount, nil
 }
 
 func (p *pendingTree) Run(scanner *SizeScanner, toDo *ToDoList) error {

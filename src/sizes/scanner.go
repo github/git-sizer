@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 )
 
 var NotYetKnown = errors.New("the size of an object is not yet known")
@@ -36,7 +37,7 @@ func NewSizeScanner(repo *Repository) (*SizeScanner, error) {
 		commitSizes: make(map[Oid]CommitSize),
 		tagSizes:    make(map[Oid]TagSize),
 	}
-	err := scanner.preloadBlobs()
+	err := scanner.preload()
 	if err != nil {
 		return nil, err
 	}
@@ -44,11 +45,15 @@ func NewSizeScanner(repo *Repository) (*SizeScanner, error) {
 }
 
 // Prime the blobs.
-func (scanner *SizeScanner) preloadBlobs() error {
+func (scanner *SizeScanner) preload() error {
 	iter, err := scanner.repo.NewAllObjectIter()
 	if err != nil {
 		return err
 	}
+	defer iter.Close()
+
+	commitObjectSizes := make(map[Oid]Count32)
+
 	for {
 		oid, objectType, objectSize, err := iter.Next()
 		if err != nil {
@@ -64,9 +69,50 @@ func (scanner *SizeScanner) preloadBlobs() error {
 			scanner.recordBlob(oid, blobSize)
 		case "tree":
 		case "commit":
+			commitObjectSizes[oid] = objectSize
 		case "tag":
 		default:
 			panic(fmt.Sprintf("object %v has unknown type", oid))
+		}
+	}
+
+	commitIter, err := scanner.repo.NewCommitIter("--reverse", "--topo-order", "--all")
+	if err != nil {
+		return err
+	}
+	defer commitIter.Close()
+
+	var toDo ToDoList
+	for {
+		oid, commit, err := commitIter.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		p := pendingCommit{
+			oid: oid,
+		}
+		objectSize, ok := commitObjectSizes[oid]
+		if ok {
+			commit.Size = objectSize
+			p.commit = &commit
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: size of commit %s not found in cache", oid)
+		}
+		commitSize, _, parentCount, err := p.Queue(scanner, &toDo)
+		if err != nil {
+			if err != NotYetKnown {
+				return err
+			}
+			err = scanner.fill(&toDo)
+			if err != nil {
+				return err
+			}
+		} else {
+			scanner.recordCommit(oid, commitSize, objectSize, parentCount)
 		}
 	}
 
@@ -392,6 +438,7 @@ func (p *pendingCommit) Queue(
 	var commit *Commit
 
 	if p.commit == nil {
+		fmt.Fprintf(os.Stderr, "warning: commit not preloaded: %s\n", p.oid)
 		commit, err = scanner.repo.ReadCommit(p.oid)
 		if err != nil {
 			return CommitSize{}, 0, 0, err

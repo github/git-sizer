@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -95,10 +96,14 @@ func (repo *Repository) ForEachRef(done <-chan interface{}) (<-chan ReferenceOrE
 		"git", "-C", repo.path,
 		"for-each-ref", "--format=%(objectname) %(objecttype) %(objectsize) %(refname)",
 	)
+
 	stdoutFile, err := command.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
+
+	command.Stderr = os.Stderr
+
 	err = command.Start()
 	if err != nil {
 		return nil, err
@@ -352,6 +357,8 @@ func (repo *Repository) NewAllObjectIter() (*AllObjectIter, error) {
 		return nil, err
 	}
 
+	command.Stderr = os.Stderr
+
 	err = command.Start()
 	if err != nil {
 		return nil, err
@@ -423,6 +430,86 @@ type Commit struct {
 	Size    Count32
 	Parents []Oid
 	Tree    Oid
+}
+
+type CommitIter struct {
+	command *exec.Cmd
+	stdout  io.Closer
+	f       *bufio.Reader
+}
+
+// NewCommitIter returns an iterator that iterates over all of the
+// reachable commits in `repo` (including unreachable objects). `args`
+// are selection arguments passed to `git log`. Note that the commit's
+// sizes are not filled in by the iterator!
+func (repo *Repository) NewCommitIter(args ...string) (*CommitIter, error) {
+	cmdArgs := []string{"-C", repo.path, "log", "--format=%H %T %P"}
+	cmdArgs = append(cmdArgs, args...)
+	command := exec.Command("git", cmdArgs...)
+
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	command.Stderr = os.Stderr
+
+	err = command.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	return &CommitIter{
+		command: command,
+		stdout:  stdout,
+		f:       bufio.NewReader(stdout),
+	}, nil
+}
+
+// Next returns the next object, or EOF when done. Note that the sizes
+// are not filled in by this function!
+func (l *CommitIter) Next() (Oid, Commit, error) {
+	line, err := l.f.ReadString('\n')
+	if err != nil {
+		return Oid{}, Commit{}, err
+	}
+	line = strings.TrimSpace(line)
+
+	words := strings.Split(line, " ")
+	if len(words) < 2 {
+		return Oid{}, Commit{}, fmt.Errorf("invalid rev-list output %v", line)
+	}
+
+	oid, err := NewOid(words[0])
+	if err != nil {
+		return Oid{}, Commit{}, fmt.Errorf("invalid oid in rev-list output %v", line)
+	}
+
+	treeOid, err := NewOid(words[1])
+	if err != nil {
+		return Oid{}, Commit{}, fmt.Errorf("invalid tree oid in rev-list output %v", line)
+	}
+
+	parentSha1s := words[2:]
+	parentOids := make([]Oid, len(parentSha1s))
+	for i, word := range parentSha1s {
+		parentOid, err := NewOid(word)
+		if err != nil {
+			return Oid{}, Commit{}, fmt.Errorf("invalid parent oid in rev-list output %v", line)
+		}
+		parentOids[i] = parentOid
+	}
+
+	return oid, Commit{
+		Size:    0, // Still needs to be filled in
+		Parents: parentOids,
+		Tree:    treeOid,
+	}, nil
+}
+
+func (l *CommitIter) Close() error {
+	l.stdout.Close()
+	return l.command.Wait()
 }
 
 func (repo *Repository) ReadCommit(oid Oid) (*Commit, error) {

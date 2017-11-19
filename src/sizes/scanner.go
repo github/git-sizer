@@ -452,7 +452,26 @@ func (p *pendingCommit) Queue(
 
 	size := CommitSize{}
 
-	// First accumulate all of the sizes for all parents:
+	// First gather information about the tree:
+	treeSize, treeOk := scanner.treeSizes[commit.Tree]
+	if treeOk {
+		if ok {
+			size.addTree(treeSize)
+		}
+	} else {
+		ok = false
+		subtasks.Push(&pendingTree{oid: commit.Tree})
+	}
+
+	// Normally we know our parents. So if we don't know the tree,
+	// don't even bother trying to look up the parents.
+	if !ok {
+		toDo.Push(p)
+		toDo.PushAll(subtasks)
+		return CommitSize{}, 0, 0, NotYetKnown
+	}
+
+	// Now accumulate all of the sizes for all parents:
 	for _, parent := range commit.Parents {
 		parentSize, parentOK := scanner.commitSizes[parent]
 		if parentOK {
@@ -464,17 +483,6 @@ func (p *pendingCommit) Queue(
 			// Schedule this one to be computed:
 			subtasks.Push(&pendingCommit{oid: parent})
 		}
-	}
-
-	// Now gather information about the tree:
-	treeSize, treeOk := scanner.treeSizes[commit.Tree]
-	if treeOk {
-		if ok {
-			size.addTree(treeSize)
-		}
-	} else {
-		ok = false
-		subtasks.Push(&pendingTree{oid: commit.Tree})
 	}
 
 	if !ok {

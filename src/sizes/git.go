@@ -576,10 +576,9 @@ func (repo *Repository) ReadTree(oid Oid) (*Tree, error) {
 }
 
 type TreeEntry struct {
-	Name       string
-	Oid        Oid
-	ObjectType ObjectType
-	Filemode   uint
+	Name     string
+	Oid      Oid
+	Filemode uint
 }
 
 type TreeIter struct {

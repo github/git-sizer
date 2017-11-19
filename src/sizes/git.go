@@ -561,7 +561,7 @@ func (repo *Repository) ReadCommit(oid Oid) (*Commit, error) {
 }
 
 type Tree struct {
-	data []byte
+	data string
 }
 
 func (repo *Repository) ReadTree(oid Oid) (*Tree, error) {
@@ -572,9 +572,12 @@ func (repo *Repository) ReadTree(oid Oid) (*Tree, error) {
 	if objectType != "tree" {
 		return nil, errors.New(fmt.Sprintf("expected tree; found %s for object %s", objectType, oid))
 	}
-	return &Tree{data}, nil
+	return &Tree{string(data)}, nil
 }
 
+// Note that Name shares memory with the tree data that were
+// originally read; i.e., retaining a pointer to Name keeps the tree
+// data reachable.
 type TreeEntry struct {
 	Name     string
 	Oid      Oid
@@ -583,7 +586,7 @@ type TreeEntry struct {
 
 type TreeIter struct {
 	// The as-yet-unread part of the tree's data.
-	data []byte
+	data string
 }
 
 func (tree *Tree) Iter() *TreeIter {
@@ -599,23 +602,23 @@ func (iter *TreeIter) NextEntry() (TreeEntry, bool, error) {
 		return TreeEntry{}, false, nil
 	}
 
-	spAt := bytes.IndexByte(iter.data, ' ')
+	spAt := strings.IndexByte(iter.data, ' ')
 	if spAt < 0 {
 		return TreeEntry{}, false, errors.New("failed to find SP after mode")
 	}
-	mode, err := strconv.ParseUint(string(iter.data[:spAt]), 8, 32)
+	mode, err := strconv.ParseUint(iter.data[:spAt], 8, 32)
 	if err != nil {
 		return TreeEntry{}, false, err
 	}
 	entry.Filemode = uint(mode)
 
 	iter.data = iter.data[spAt+1:]
-	nulAt := bytes.IndexByte(iter.data, 0)
+	nulAt := strings.IndexByte(iter.data, 0)
 	if nulAt < 0 {
 		return TreeEntry{}, false, errors.New("failed to find NUL after filename")
 	}
 
-	entry.Name = string(iter.data[:nulAt])
+	entry.Name = iter.data[:nulAt]
 
 	iter.data = iter.data[nulAt+1:]
 	if len(iter.data) < 20 {

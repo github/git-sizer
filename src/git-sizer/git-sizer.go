@@ -98,6 +98,11 @@ func mainImplementation() error {
 			return fmt.Errorf("couldn't create SizeScanner for %v: %s", path, err)
 		}
 
+		err = scanner.PreloadBlobs()
+		if err != nil {
+			return fmt.Errorf("couldn't preload blobs: %s", err)
+		}
+
 		foundSpec := false
 
 		for _, spec := range specs {

@@ -3,6 +3,7 @@ package sizes
 import (
 	"errors"
 	"fmt"
+	"io"
 )
 
 var NotYetKnown = errors.New("the size of an object is not yet known")
@@ -38,9 +39,44 @@ func NewSizeScanner(repo *Repository) (*SizeScanner, error) {
 	return scanner, nil
 }
 
+// Prime the blobs.
+func (scanner *SizeScanner) PreloadBlobs() error {
+	iter, err := scanner.repo.NewAllObjectIter()
+	if err != nil {
+		return err
+	}
+	for {
+		oid, objectType, objectSize, err := iter.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		switch objectType {
+		case "blob":
+			blobSize := BlobSize{objectSize}
+			scanner.recordBlob(oid, blobSize)
+		case "tree":
+		case "commit":
+		case "tag":
+		default:
+			panic(fmt.Sprintf("object %v has unknown type", oid))
+		}
+	}
+
+	return nil
+}
+
 // Scan all of the references in `repo` that match `filter`.
 func ScanRepository(repo *Repository, filter ReferenceFilter) (HistorySize, error) {
 	scanner, err := NewSizeScanner(repo)
+	if err != nil {
+		return HistorySize{}, err
+	}
+
+	err = scanner.PreloadBlobs()
 	if err != nil {
 		return HistorySize{}, err
 	}

@@ -46,7 +46,7 @@ func NewSizeScanner(repo *Repository) (*SizeScanner, error) {
 
 // Prime the blobs.
 func (scanner *SizeScanner) preload() error {
-	iter, err := scanner.repo.NewAllObjectIter()
+	iter, err := scanner.repo.NewReachableObjectIter()
 	if err != nil {
 		return err
 	}

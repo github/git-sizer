@@ -339,40 +339,98 @@ func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error)
 	return oid, objectType, data, nil
 }
 
-type AllObjectIter struct {
-	command *exec.Cmd
-	stdout  io.ReadCloser
-	f       *bufio.Reader
+type ReachableObjectIter struct {
+	command1 *exec.Cmd
+	command2 *exec.Cmd
+	out1     io.ReadCloser
+	out2     io.ReadCloser
+	f        *bufio.Reader
+	errChan  <-chan error
 }
 
-// NewAllObjectIter returns an iterator that iterates over all of the
-// objects in `repo` (including unreachable objects).
-func (repo *Repository) NewAllObjectIter() (*AllObjectIter, error) {
-	command := exec.Command(
+// NewReachableObjectIter returns an iterator that iterates over all
+// of the reachable objects in `repo`.
+func (repo *Repository) NewReachableObjectIter() (*ReachableObjectIter, error) {
+	command1 := exec.Command(
 		"git", "-C", repo.path,
-		"cat-file", "--batch-check", "--batch-all-objects", "--buffer",
+		"rev-list", "--all", "--objects", "--topo-order",
 	)
-	stdout, err := command.StdoutPipe()
+	out1, err := command1.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
 
-	command.Stderr = os.Stderr
+	command1.Stderr = os.Stderr
 
-	err = command.Start()
+	err = command1.Start()
 	if err != nil {
 		return nil, err
 	}
 
-	return &AllObjectIter{
-		command: command,
-		stdout:  stdout,
-		f:       bufio.NewReader(stdout),
+	command2 := exec.Command(
+		"git", "-C", repo.path,
+		"cat-file", "--batch-check", "--buffer",
+	)
+
+	in2, err := command2.StdinPipe()
+	if err != nil {
+		out1.Close()
+		command1.Wait()
+		return nil, err
+	}
+
+	out2, err := command2.StdoutPipe()
+	if err != nil {
+		in2.Close()
+		out1.Close()
+		command1.Wait()
+		return nil, err
+	}
+
+	command2.Stderr = os.Stderr
+
+	err = command2.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	errChan := make(chan error, 1)
+
+	go func() {
+		defer in2.Close()
+		f1 := bufio.NewReader(out1)
+		f2 := bufio.NewWriter(in2)
+		defer f2.Flush()
+		for {
+			line, err := f1.ReadString('\n')
+			if err != nil {
+				if err != io.EOF {
+					errChan <- err
+				} else {
+					errChan <- nil
+				}
+				return
+			}
+			if len(line) <= 40 {
+				errChan <- fmt.Errorf("line too short: %#v", line)
+			}
+			f2.WriteString(line[:40])
+			f2.WriteByte('\n')
+		}
+	}()
+
+	return &ReachableObjectIter{
+		command1: command1,
+		command2: command2,
+		out1:     out1,
+		out2:     out2,
+		f:        bufio.NewReader(out2),
+		errChan:  errChan,
 	}, nil
 }
 
 // Next returns the next object, or EOF when done.
-func (l *AllObjectIter) Next() (Oid, ObjectType, Count32, error) {
+func (l *ReachableObjectIter) Next() (Oid, ObjectType, Count32, error) {
 	line, err := l.f.ReadString('\n')
 	if err != nil {
 		return Oid{}, "", 0, err
@@ -381,9 +439,19 @@ func (l *AllObjectIter) Next() (Oid, ObjectType, Count32, error) {
 	return parseBatchHeader("", line)
 }
 
-func (l *AllObjectIter) Close() error {
-	l.stdout.Close()
-	return l.command.Wait()
+func (l *ReachableObjectIter) Close() error {
+	l.out1.Close()
+	err := <-l.errChan
+	l.out2.Close()
+	err2 := l.command1.Wait()
+	if err == nil {
+		err = err2
+	}
+	err2 = l.command2.Wait()
+	if err == nil {
+		err = err2
+	}
+	return err
 }
 
 type ObjectHeaderIter struct {

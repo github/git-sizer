@@ -136,43 +136,54 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 				return
 			}
 		}
+		errChan <- nil
 	}()
 
-	for _, obj := range trees {
-		obj2, ok, err := objectIter.Next()
+	for _ = range trees {
+		oid, objectType, _, data, err := objectIter.Next()
+		if err != nil {
+			if err != io.EOF {
+				return HistorySize{}, err
+			}
+			return HistorySize{}, errors.New("fewer trees read than expected")
+		}
+		if objectType != "tree" {
+			return HistorySize{}, fmt.Errorf("expected tree; read %#v", objectType)
+		}
+		tree, err := ParseTree(oid, data)
 		if err != nil {
 			return HistorySize{}, err
 		}
-		if !ok {
-			return HistorySize{}, errors.New("fewer trees read than expected")
-		}
-		tree, ok := obj2.(*Tree)
-		if !ok {
-			return HistorySize{}, errors.New("expected tree; other object read")
-		}
-		err = graph.RegisterTree(obj.oid, tree)
+		err = graph.RegisterTree(oid, tree)
 		if err != nil {
 			return HistorySize{}, err
 		}
 	}
 
-	for i := len(commits); i > 0; i-- {
-		obj := commits[i-1]
-		obj2, ok, err := objectIter.Next()
+	for range commits {
+		oid, objectType, _, data, err := objectIter.Next()
 		if err != nil {
-			return HistorySize{}, err
-		}
-		if !ok {
+			if err != io.EOF {
+				return HistorySize{}, err
+			}
 			return HistorySize{}, errors.New("fewer commits read than expected")
 		}
-		commit, ok := obj2.(*Commit)
-		if !ok {
-			return HistorySize{}, errors.New("expected commit; other object read")
+		if objectType != "commit" {
+			return HistorySize{}, fmt.Errorf("expected commit; read %#v", objectType)
 		}
-		err = graph.RegisterCommit(obj.oid, commit)
+		commit, err := ParseCommit(oid, data)
 		if err != nil {
 			return HistorySize{}, err
 		}
+		err = graph.RegisterCommit(oid, commit)
+		if err != nil {
+			return HistorySize{}, err
+		}
+	}
+
+	err = <-errChan
+	if err != nil {
+		return HistorySize{}, err
 	}
 
 	for _, obj := range tags {

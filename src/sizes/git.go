@@ -200,33 +200,23 @@ func (repo *Repository) NewBatchObjectIter() (*BatchObjectIter, io.WriteCloser, 
 	}, in, nil
 }
 
-func (iter *BatchObjectIter) Next() (interface{}, bool, error) {
+func (iter *BatchObjectIter) Next() (Oid, ObjectType, Count32, []byte, error) {
 	header, err := iter.f.ReadString('\n')
 	if err != nil {
-		return nil, false, err
+		return Oid{}, "", 0, nil, err
 	}
 	oid, objectType, objectSize, err := parseBatchHeader("", header)
 	if err != nil {
-		return nil, false, err
+		return Oid{}, "", 0, nil, err
 	}
 	// +1 for LF:
 	data := make([]byte, objectSize+1)
 	_, err = io.ReadFull(iter.f, data)
 	if err != nil {
-		return nil, false, err
+		return Oid{}, "", 0, nil, err
 	}
 	data = data[:len(data)-1]
-
-	switch objectType {
-	case "tree":
-		tree, err := parseTree(oid, data)
-		return tree, true, err
-	case "commit":
-		commit, err := parseCommit(oid, data)
-		return commit, true, err
-	default:
-		panic(fmt.Sprintf("BatchObjectIter doesn't know how to read %s", objectType))
-	}
+	return oid, objectType, objectSize, data, nil
 }
 
 func (l *BatchObjectIter) Close() error {
@@ -646,7 +636,7 @@ func (l *CommitIter) Close() error {
 	return l.command.Wait()
 }
 
-func parseCommit(oid Oid, data []byte) (*Commit, error) {
+func ParseCommit(oid Oid, data []byte) (*Commit, error) {
 	var parents []Oid
 	var tree Oid
 	var treeFound bool
@@ -695,14 +685,14 @@ func (repo *Repository) ReadCommit(oid Oid) (*Commit, error) {
 	if objectType != "commit" {
 		return nil, fmt.Errorf("expected commit; found %s for object %s", objectType, oid)
 	}
-	return parseCommit(oid, data)
+	return ParseCommit(oid, data)
 }
 
 type Tree struct {
 	data string
 }
 
-func parseTree(oid Oid, data []byte) (*Tree, error) {
+func ParseTree(oid Oid, data []byte) (*Tree, error) {
 	return &Tree{string(data)}, nil
 }
 
@@ -714,7 +704,7 @@ func (repo *Repository) ReadTree(oid Oid) (*Tree, error) {
 	if objectType != "tree" {
 		return nil, errors.New(fmt.Sprintf("expected tree; found %s for object %s", objectType, oid))
 	}
-	return parseTree(oid, data)
+	return ParseTree(oid, data)
 }
 
 // Note that Name shares memory with the tree data that were

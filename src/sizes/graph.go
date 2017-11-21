@@ -1,6 +1,7 @@
 package sizes
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"sync"
@@ -11,12 +12,52 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 
 	graph := NewGraph()
 
-	iter, in, err := repo.NewObjectIter("--all", "--topo-order")
+	refIter, err := repo.NewReferenceIter()
 	if err != nil {
 		return HistorySize{}, err
 	}
-	in.Close()
+	defer refIter.Close()
+
+	iter, in, err := repo.NewObjectIter("--stdin", "--topo-order")
+	if err != nil {
+		return HistorySize{}, err
+	}
 	defer iter.Close()
+
+	errChan := make(chan error, 1)
+	// Feed the references that we want into the stdin of the object
+	// iterator:
+	go func() {
+		defer in.Close()
+		bufin := bufio.NewWriter(in)
+		defer bufin.Flush()
+
+		for {
+			ref, ok, err := refIter.Next()
+			if err != nil {
+				errChan <- err
+				return
+			}
+			if !ok {
+				break
+			}
+			if !filter(ref) {
+				continue
+			}
+			graph.RegisterReference(ref)
+			_, err = bufin.WriteString(ref.Oid.String())
+			if err != nil {
+				errChan <- err
+				return
+			}
+			err = bufin.WriteByte('\n')
+			if err != nil {
+				errChan <- err
+				return
+			}
+		}
+		errChan <- nil
+	}()
 
 	for {
 		oid, objectType, objectSize, err := iter.Next()
@@ -53,6 +94,11 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 		if err != nil {
 			return HistorySize{}, err
 		}
+	}
+
+	err = <-errChan
+	if err != nil {
+		return HistorySize{}, err
 	}
 
 	return graph.HistorySize, nil
@@ -97,6 +143,12 @@ func NewGraph() *Graph {
 		tagRecords: make(map[Oid]*tagRecord),
 		tagSizes:   make(map[Oid]TagSize),
 	}
+}
+
+func (g *Graph) RegisterReference(ref Reference) {
+	g.historyLock.Lock()
+	g.HistorySize.recordReference(ref)
+	g.historyLock.Unlock()
 }
 
 // Record that the specified `oid` is a blob with the specified size.

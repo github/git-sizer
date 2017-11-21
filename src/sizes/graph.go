@@ -248,8 +248,28 @@ func (g *Graph) RegisterReference(ref Reference) {
 }
 
 func (g *Graph) HistorySize() HistorySize {
+	g.blobLock.Lock()
+	defer g.blobLock.Unlock()
+	g.treeLock.Lock()
+	defer g.treeLock.Unlock()
+	g.commitLock.Lock()
+	defer g.commitLock.Unlock()
+	g.tagLock.Lock()
+	defer g.tagLock.Unlock()
 	g.historyLock.Lock()
 	defer g.historyLock.Unlock()
+	if len(g.blobRecords) != 0 {
+		panic(fmt.Sprintf("%d blob records remain!", len(g.blobRecords)))
+	}
+	if len(g.treeRecords) != 0 {
+		panic(fmt.Sprintf("%d tree records remain!", len(g.treeRecords)))
+	}
+	if len(g.commitRecords) != 0 {
+		panic(fmt.Sprintf("%d commit records remain!", len(g.commitRecords)))
+	}
+	if len(g.tagRecords) != 0 {
+		panic(fmt.Sprintf("%d tag records remain!", len(g.tagRecords)))
+	}
 	return g.historySize
 }
 

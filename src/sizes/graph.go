@@ -133,6 +133,20 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 				return
 			}
 		}
+
+		for _, obj := range tags {
+			_, err := bufin.WriteString(obj.oid.String())
+			if err != nil {
+				errChan <- err
+				return
+			}
+			err = bufin.WriteByte('\n')
+			if err != nil {
+				errChan <- err
+				return
+			}
+		}
+
 		errChan <- nil
 	}()
 
@@ -175,18 +189,27 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 		graph.RegisterCommit(oid, commit)
 	}
 
-	err = <-errChan
-	if err != nil {
-		return HistorySize{}, err
-	}
-
-	for _, obj := range tags {
-		var tag *Tag
-		tag, err = repo.ReadTag(obj.oid)
+	for range tags {
+		oid, objectType, _, data, err := objectIter.Next()
+		if err != nil {
+			if err != io.EOF {
+				return HistorySize{}, err
+			}
+			return HistorySize{}, errors.New("fewer tags read than expected")
+		}
+		if objectType != "tag" {
+			return HistorySize{}, fmt.Errorf("expected tag; read %#v", objectType)
+		}
+		tag, err := ParseTag(oid, data)
 		if err != nil {
 			return HistorySize{}, err
 		}
-		graph.RegisterTag(obj.oid, tag)
+		graph.RegisterTag(oid, tag)
+	}
+
+	err = <-errChan
+	if err != nil {
+		return HistorySize{}, err
 	}
 
 	return graph.HistorySize(), nil

@@ -632,14 +632,7 @@ type Tag struct {
 	ReferentType ObjectType
 }
 
-func (repo *Repository) ReadTag(oid Oid) (*Tag, error) {
-	oid, objectType, data, err := repo.readObject(oid.String())
-	if err != nil {
-		return nil, err
-	}
-	if objectType != "tag" {
-		return nil, fmt.Errorf("expected tag; found %s for object %s", objectType, oid)
-	}
+func ParseTag(oid Oid, data []byte) (*Tag, error) {
 	var referent Oid
 	var referentFound bool
 	var referentType ObjectType
@@ -682,4 +675,15 @@ func (repo *Repository) ReadTag(oid Oid) (*Tag, error) {
 		Referent:     referent,
 		ReferentType: referentType,
 	}, nil
+}
+
+func (repo *Repository) ReadTag(oid Oid) (*Tag, error) {
+	oid, objectType, data, err := repo.readObject(oid.String())
+	if err != nil {
+		return nil, err
+	}
+	if objectType != "tag" {
+		return nil, fmt.Errorf("expected tag; found %s for object %s", objectType, oid)
+	}
+	return ParseTag(oid, data)
 }

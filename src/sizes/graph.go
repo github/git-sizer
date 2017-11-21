@@ -79,10 +79,7 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 		}
 		switch objectType {
 		case "blob":
-			err = graph.RegisterBlob(oid, objectSize)
-			if err != nil {
-				return HistorySize{}, err
-			}
+			graph.RegisterBlob(oid, objectSize)
 		case "tree":
 			trees = append(trees, ObjectHeader{oid, objectSize})
 		case "commit":
@@ -257,15 +254,18 @@ func (g *Graph) HistorySize() HistorySize {
 }
 
 // Record that the specified `oid` is a blob with the specified size.
-func (g *Graph) RegisterBlob(oid Oid, objectSize Count32) error {
-	g.blobLock.Lock()
-
+func (g *Graph) RegisterBlob(oid Oid, objectSize Count32) {
+	size := BlobSize{Size: objectSize}
 	// There are no listeners. Since this is a blob, we know all that
 	// we need to know about it. So skip the record and just fill in
 	// the size.
-	g.blobSizes[oid] = BlobSize{Size: objectSize}
+	g.blobLock.Lock()
+	g.blobSizes[oid] = size
 	g.blobLock.Unlock()
-	return nil
+
+	g.historyLock.Lock()
+	g.historySize.recordBlob(size)
+	g.historyLock.Unlock()
 }
 
 // The `Require*Size` functions behave as follows:

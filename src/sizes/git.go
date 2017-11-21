@@ -47,7 +47,6 @@ type Repository struct {
 	path string
 
 	batch *pipe.CommandPipe
-	check *pipe.CommandPipe
 }
 
 func NewRepository(path string) (*Repository, error) {
@@ -56,27 +55,14 @@ func NewRepository(path string) (*Repository, error) {
 		return nil, err
 	}
 
-	check, err := pipe.NewCommandPipe("git", "-C", path, "cat-file", "--batch-check")
-	if err != nil {
-		return nil, err
-	}
-
 	return &Repository{
 		path:  path,
 		batch: batch,
-		check: check,
 	}, nil
 }
 
 func (repo *Repository) Close() error {
-	err1 := repo.batch.Close()
-	err2 := repo.check.Close()
-
-	if err1 != nil {
-		return err1
-	} else {
-		return err2
-	}
+	return repo.batch.Close()
 }
 
 type Reference struct {
@@ -328,22 +314,6 @@ func parseBatchHeader(spec string, header string) (Oid, ObjectType, Count32, err
 	return oid, ObjectType(words[1]), NewCount32(size), nil
 }
 
-func (repo *Repository) ReadHeader(spec string) (Oid, ObjectType, Count32, error) {
-	var header string
-	var err error
-
-	repo.check.RunQuery(
-		spec+"\n",
-		func(f *bufio.Reader) {
-			header, err = f.ReadString('\n')
-		},
-	)
-	if err != nil {
-		return Oid{}, "missing", 0, err
-	}
-	return parseBatchHeader(spec, header)
-}
-
 func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error) {
 	var err error
 	var oid Oid
@@ -551,91 +521,6 @@ type Commit struct {
 	Tree    Oid
 }
 
-type CommitIter struct {
-	command *exec.Cmd
-	stdout  io.Closer
-	f       *bufio.Reader
-}
-
-// NewCommitIter returns an iterator that iterates over commits in
-// `repo`. `args` are selection arguments passed to `git log`. Note
-// that the commit's sizes are not filled in by the iterator! The
-// second return value is the stdin of the `git log` command. The
-// caller can feed values into it but must close it in any case.
-func (repo *Repository) NewCommitIter(args ...string) (*CommitIter, io.WriteCloser, error) {
-	cmdArgs := []string{"-C", repo.path, "log", "--format=%H %T %P"}
-	cmdArgs = append(cmdArgs, args...)
-	command := exec.Command("git", cmdArgs...)
-	in, err := command.StdinPipe()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	stdout, err := command.StdoutPipe()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	command.Stderr = os.Stderr
-
-	err = command.Start()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &CommitIter{
-		command: command,
-		stdout:  stdout,
-		f:       bufio.NewReader(stdout),
-	}, in, nil
-}
-
-// Next returns the next object, or EOF when done. Note that the sizes
-// are not filled in by this function!
-func (l *CommitIter) Next() (Oid, Commit, error) {
-	line, err := l.f.ReadString('\n')
-	if err != nil {
-		return Oid{}, Commit{}, err
-	}
-	line = strings.TrimSpace(line)
-
-	words := strings.Split(line, " ")
-	if len(words) < 2 {
-		return Oid{}, Commit{}, fmt.Errorf("invalid rev-list output %v", line)
-	}
-
-	oid, err := NewOid(words[0])
-	if err != nil {
-		return Oid{}, Commit{}, fmt.Errorf("invalid oid in rev-list output %v", line)
-	}
-
-	treeOid, err := NewOid(words[1])
-	if err != nil {
-		return Oid{}, Commit{}, fmt.Errorf("invalid tree oid in rev-list output %v", line)
-	}
-
-	parentSha1s := words[2:]
-	parentOids := make([]Oid, len(parentSha1s))
-	for i, word := range parentSha1s {
-		parentOid, err := NewOid(word)
-		if err != nil {
-			return Oid{}, Commit{}, fmt.Errorf("invalid parent oid in rev-list output %v", line)
-		}
-		parentOids[i] = parentOid
-	}
-
-	return oid, Commit{
-		Size:    0, // Still needs to be filled in
-		Parents: parentOids,
-		Tree:    treeOid,
-	}, nil
-}
-
-func (l *CommitIter) Close() error {
-	l.stdout.Close()
-	return l.command.Wait()
-}
-
 func ParseCommit(oid Oid, data []byte) (*Commit, error) {
 	var parents []Oid
 	var tree Oid
@@ -677,34 +562,12 @@ func ParseCommit(oid Oid, data []byte) (*Commit, error) {
 	}, nil
 }
 
-func (repo *Repository) ReadCommit(oid Oid) (*Commit, error) {
-	oid, objectType, data, err := repo.readObject(oid.String())
-	if err != nil {
-		return nil, err
-	}
-	if objectType != "commit" {
-		return nil, fmt.Errorf("expected commit; found %s for object %s", objectType, oid)
-	}
-	return ParseCommit(oid, data)
-}
-
 type Tree struct {
 	data string
 }
 
 func ParseTree(oid Oid, data []byte) (*Tree, error) {
 	return &Tree{string(data)}, nil
-}
-
-func (repo *Repository) ReadTree(oid Oid) (*Tree, error) {
-	oid, objectType, data, err := repo.readObject(oid.String())
-	if err != nil {
-		return nil, err
-	}
-	if objectType != "tree" {
-		return nil, errors.New(fmt.Sprintf("expected tree; found %s for object %s", objectType, oid))
-	}
-	return ParseTree(oid, data)
 }
 
 // Note that Name shares memory with the tree data that were

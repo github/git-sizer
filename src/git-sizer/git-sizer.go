@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -22,23 +21,17 @@ func main() {
 }
 
 func mainImplementation() error {
-	var processAll bool
 	var processBranches bool
 	var processTags bool
 	var processRemotes bool
-	var processStdin bool
 	var cpuprofile string
 	var jsonOutput bool
-	var useGraph bool
 
-	flag.BoolVar(&processAll, "all", false, "process all references")
 	flag.BoolVar(&processBranches, "branches", false, "process all branches")
 	flag.BoolVar(&processTags, "tags", false, "process all tags")
 	flag.BoolVar(&processRemotes, "remotes", false, "process all remote-tracking branches")
-	flag.BoolVar(&processStdin, "stdin", false, "read objects from stdin, one per line")
 	flag.BoolVar(&jsonOutput, "json", false, "output results in JSON format")
 	flag.BoolVar(&jsonOutput, "j", false, "output results in JSON format")
-	flag.BoolVar(&useGraph, "graph", false, "scan repository using Graph")
 
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 
@@ -58,7 +51,7 @@ func mainImplementation() error {
 		return errors.New("path argument(s) required")
 	}
 	path := args[0]
-	specs := args[1:]
+	args = args[1:]
 
 	repo, err := sizes.NewRepository(path)
 	if err != nil {
@@ -68,69 +61,30 @@ func mainImplementation() error {
 
 	var historySize sizes.HistorySize
 
-	if processAll || processBranches || processTags || processRemotes {
-		if processStdin || len(specs) > 0 {
-			return errors.New("--all must not be used together with other specs")
-		}
+	if len(args) > 0 {
+		return errors.New("excess arguments")
+	}
 
-		var filter sizes.ReferenceFilter
-		if processAll {
-			filter = sizes.AllReferencesFilter
-		} else {
-			var filters []sizes.ReferenceFilter
-			if processBranches {
-				filters = append(filters, sizes.BranchesFilter)
-			}
-			if processTags {
-				filters = append(filters, sizes.TagsFilter)
-			}
-			if processRemotes {
-				filters = append(filters, sizes.RemotesFilter)
-			}
-			filter = sizes.OrFilter(filters...)
+	var filter sizes.ReferenceFilter
+	if processBranches || processTags || processRemotes {
+		var filters []sizes.ReferenceFilter
+		if processBranches {
+			filters = append(filters, sizes.BranchesFilter)
 		}
-
-		if useGraph {
-			historySize, err = sizes.ScanRepositoryUsingGraph(repo, filter)
-		} else {
-			historySize, err = sizes.ScanRepositoryUsingScanner(repo, filter)
+		if processTags {
+			filters = append(filters, sizes.TagsFilter)
 		}
-		if err != nil {
-			return fmt.Errorf("error scanning repository: %s", err)
+		if processRemotes {
+			filters = append(filters, sizes.RemotesFilter)
 		}
+		filter = sizes.OrFilter(filters...)
 	} else {
-		scanner, err := sizes.NewSizeScanner(repo)
-		if err != nil {
-			return fmt.Errorf("couldn't create SizeScanner for %v: %s", path, err)
-		}
+		filter = sizes.AllReferencesFilter
+	}
 
-		foundSpec := false
-
-		for _, spec := range specs {
-			_, _, _, err := scanner.ObjectSize(spec)
-			if err != nil {
-				return fmt.Errorf("error processing object %v: %s", spec, err)
-			}
-			foundSpec = true
-		}
-
-		if processStdin {
-			input := bufio.NewScanner(os.Stdin)
-			for input.Scan() {
-				spec := input.Text()
-				_, _, _, err := scanner.ObjectSize(spec)
-				if err != nil {
-					return fmt.Errorf("error processing object %v: %s", spec, err)
-				}
-				foundSpec = true
-			}
-		}
-
-		if !foundSpec {
-			return errors.New("no objects specified")
-		}
-
-		historySize = scanner.HistorySize
+	historySize, err = sizes.ScanRepositoryUsingGraph(repo, filter)
+	if err != nil {
+		return fmt.Errorf("error scanning repository: %s", err)
 	}
 
 	if jsonOutput {

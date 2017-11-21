@@ -183,12 +183,10 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 	for _, obj := range tags {
 		var tag *Tag
 		tag, err = repo.ReadTag(obj.oid)
-		if err == nil {
-			err = graph.RegisterTag(obj.oid, tag)
-		}
 		if err != nil {
 			return HistorySize{}, err
 		}
+		graph.RegisterTag(obj.oid, tag)
 	}
 
 	return graph.HistorySize(), nil
@@ -536,7 +534,7 @@ func (g *Graph) RequireTagSize(oid Oid, listener func(TagSize)) (TagSize, bool) 
 }
 
 // Record that the specified `oid` is the specified `tag`.
-func (g *Graph) RegisterTag(oid Oid, tag *Tag) error {
+func (g *Graph) RegisterTag(oid Oid, tag *Tag) {
 	g.tagLock.Lock()
 
 	if _, ok := g.tagSizes[oid]; ok {
@@ -553,7 +551,7 @@ func (g *Graph) RegisterTag(oid Oid, tag *Tag) error {
 	g.tagLock.Unlock()
 
 	// Let the record take care of the rest:
-	return record.initialize(g, tag)
+	record.initialize(g, tag)
 }
 
 func (g *Graph) finalizeTagSize(oid Oid, size TagSize, objectSize Count32) {
@@ -594,7 +592,7 @@ func newTagRecord(oid Oid) *tagRecord {
 }
 
 // Initialize `r` (which is empty) based on `tag`.
-func (r *tagRecord) initialize(g *Graph, tag *Tag) error {
+func (r *tagRecord) initialize(g *Graph, tag *Tag) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -630,8 +628,6 @@ func (r *tagRecord) initialize(g *Graph, tag *Tag) error {
 	if r.pending == 0 {
 		g.finalizeTagSize(r.oid, r.size, r.objectSize)
 	}
-
-	return nil
 }
 
 func (r *tagRecord) maybeFinalize(g *Graph) {

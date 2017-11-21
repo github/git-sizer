@@ -204,9 +204,8 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 type Graph struct {
 	repo *Repository
 
-	blobLock    sync.Mutex
-	blobRecords map[Oid]*blobRecord
-	blobSizes   map[Oid]BlobSize
+	blobLock  sync.Mutex
+	blobSizes map[Oid]BlobSize
 
 	treeLock    sync.Mutex
 	treeRecords map[Oid]*treeRecord
@@ -227,8 +226,7 @@ type Graph struct {
 
 func NewGraph() *Graph {
 	return &Graph{
-		blobRecords: make(map[Oid]*blobRecord),
-		blobSizes:   make(map[Oid]BlobSize),
+		blobSizes: make(map[Oid]BlobSize),
 
 		treeRecords: make(map[Oid]*treeRecord),
 		treeSizes:   make(map[Oid]TreeSize),
@@ -248,8 +246,6 @@ func (g *Graph) RegisterReference(ref Reference) {
 }
 
 func (g *Graph) HistorySize() HistorySize {
-	g.blobLock.Lock()
-	defer g.blobLock.Unlock()
 	g.treeLock.Lock()
 	defer g.treeLock.Unlock()
 	g.commitLock.Lock()
@@ -258,9 +254,6 @@ func (g *Graph) HistorySize() HistorySize {
 	defer g.tagLock.Unlock()
 	g.historyLock.Lock()
 	defer g.historyLock.Unlock()
-	if len(g.blobRecords) != 0 {
-		panic(fmt.Sprintf("%d blob records remain!", len(g.blobRecords)))
-	}
 	if len(g.treeRecords) != 0 {
 		panic(fmt.Sprintf("%d tree records remain!", len(g.treeRecords)))
 	}
@@ -276,15 +269,6 @@ func (g *Graph) HistorySize() HistorySize {
 // Record that the specified `oid` is a blob with the specified size.
 func (g *Graph) RegisterBlob(oid Oid, objectSize Count32) error {
 	g.blobLock.Lock()
-
-	// It might be that we already have a record for this blob, in
-	// which case we tell it the size, and it does the rest:
-	record, ok := g.blobRecords[oid]
-	if ok {
-		g.blobLock.Unlock()
-		record.record(g, oid, objectSize)
-		return nil
-	}
 
 	// There are no listeners. Since this is a blob, we know all that
 	// we need to know about it. So skip the record and just fill in
@@ -303,82 +287,13 @@ func (g *Graph) RegisterBlob(oid Oid, objectSize Count32) error {
 //   listener to be informed some time in the future when the size is
 //   known. In this case, return false as the second value.
 
-func (g *Graph) RequireBlobSize(oid Oid, listener func(BlobSize)) (BlobSize, bool) {
-	g.blobLock.Lock()
-
+func (g *Graph) GetBlobSize(oid Oid) BlobSize {
 	// See if we already know the size:
 	size, ok := g.blobSizes[oid]
-	if ok {
-		g.blobLock.Unlock()
-		return size, true
-	}
-
-	// We don't. Maybe we already have a record?
-	record, ok := g.blobRecords[oid]
 	if !ok {
-		// We don't already have a record, so create and save an empty
-		// one:
-		record = &blobRecord{}
-		g.blobRecords[oid] = record
+		panic("blob size not known")
 	}
-
-	record.addListener(listener)
-
-	g.blobLock.Unlock()
-
-	return BlobSize{}, false
-}
-
-func (g *Graph) finalizeBlobSize(oid Oid, size BlobSize) {
-	g.blobLock.Lock()
-	g.blobSizes[oid] = size
-	delete(g.blobRecords, oid)
-	g.blobLock.Unlock()
-
-	g.historyLock.Lock()
-	g.historySize.recordBlob(size)
-	g.historyLock.Unlock()
-}
-
-type blobRecord struct {
-	// Limit to only one mutator at a time.
-	lock sync.Mutex
-
-	// Is the size known yet?
-	known bool
-
-	// The size, if known:
-	size BlobSize
-
-	// The listeners waiting to learn our size.
-	listeners []func(BlobSize)
-}
-
-func emptyBlobRecord() *blobRecord {
-	return &blobRecord{
-		known: false,
-	}
-}
-
-// Must be called either before `r` is published or while it is
-// locked.
-func (r *blobRecord) addListener(listener func(BlobSize)) {
-	r.listeners = append(r.listeners, listener)
-}
-
-func (r *blobRecord) record(g *Graph, oid Oid, objectSize Count32) {
-	r.lock.Lock()
-
-	r.size = BlobSize{Size: objectSize}
-	r.known = true
-
-	r.lock.Unlock()
-
-	g.finalizeBlobSize(oid, r.size)
-
-	for _, listener := range r.listeners {
-		listener(r.size)
-	}
+	return size
 }
 
 func (g *Graph) RequireTreeSize(oid Oid, listener func(TreeSize)) (TreeSize, bool) {
@@ -520,20 +435,8 @@ func (r *treeRecord) initialize(g *Graph, tree *Tree) error {
 
 		default:
 			// Blob
-			listener := func(size BlobSize) {
-				r.lock.Lock()
-				defer r.lock.Unlock()
-
-				r.size.addBlob(name, size)
-				r.pending--
-				r.maybeFinalize(g)
-			}
-			blobSize, ok := g.RequireBlobSize(entry.Oid, listener)
-			if ok {
-				r.size.addBlob(name, blobSize)
-			} else {
-				r.pending++
-			}
+			blobSize := g.GetBlobSize(entry.Oid)
+			r.size.addBlob(name, blobSize)
 			r.entryCount.Increment(1)
 		}
 	}

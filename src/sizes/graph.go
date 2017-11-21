@@ -101,7 +101,7 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 		return HistorySize{}, err
 	}
 
-	return graph.HistorySize, nil
+	return graph.HistorySize(), nil
 }
 
 // An object graph that is being built up.
@@ -126,7 +126,7 @@ type Graph struct {
 
 	// Statistics about the overall history size:
 	historyLock sync.Mutex
-	HistorySize HistorySize
+	historySize HistorySize
 }
 
 func NewGraph() *Graph {
@@ -147,8 +147,14 @@ func NewGraph() *Graph {
 
 func (g *Graph) RegisterReference(ref Reference) {
 	g.historyLock.Lock()
-	g.HistorySize.recordReference(ref)
+	g.historySize.recordReference(ref)
 	g.historyLock.Unlock()
+}
+
+func (g *Graph) HistorySize() HistorySize {
+	g.historyLock.Lock()
+	defer g.historyLock.Unlock()
+	return g.historySize
 }
 
 // Record that the specified `oid` is a blob with the specified size.
@@ -214,7 +220,7 @@ func (g *Graph) finalizeBlobSize(oid Oid, size BlobSize) {
 	g.blobLock.Unlock()
 
 	g.historyLock.Lock()
-	g.HistorySize.recordBlob(size)
+	g.historySize.recordBlob(size)
 	g.historyLock.Unlock()
 }
 
@@ -309,7 +315,7 @@ func (g *Graph) finalizeTreeSize(oid Oid, size TreeSize, objectSize Count32, tre
 	g.treeLock.Unlock()
 
 	g.historyLock.Lock()
-	g.HistorySize.recordTree(size, objectSize, treeEntries)
+	g.historySize.recordTree(size, objectSize, treeEntries)
 	g.historyLock.Unlock()
 }
 
@@ -486,7 +492,7 @@ func (g *Graph) finalizeCommitSize(oid Oid, size CommitSize, objectSize Count32,
 	g.commitLock.Unlock()
 
 	g.historyLock.Lock()
-	g.HistorySize.recordCommit(size, objectSize, parentCount)
+	g.historySize.recordCommit(size, objectSize, parentCount)
 	g.historyLock.Unlock()
 }
 
@@ -630,7 +636,7 @@ func (g *Graph) finalizeTagSize(oid Oid, size TagSize, objectSize Count32) {
 	g.tagLock.Unlock()
 
 	g.historyLock.Lock()
-	g.HistorySize.recordTag(size, objectSize)
+	g.historySize.recordTag(size, objectSize)
 	g.historyLock.Unlock()
 }
 

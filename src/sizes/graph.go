@@ -318,6 +318,17 @@ func (g *Graph) RequireTreeSize(oid Oid, listener func(TreeSize)) (TreeSize, boo
 	return TreeSize{}, false
 }
 
+func (g *Graph) GetTreeSize(oid Oid) TreeSize {
+	g.treeLock.Lock()
+
+	size, ok := g.treeSizes[oid]
+	if !ok {
+		panic("tree size not available!")
+	}
+	g.treeLock.Unlock()
+	return size
+}
+
 // Record that the specified `oid` is the specified `tree`.
 func (g *Graph) RegisterTree(oid Oid, tree *Tree) error {
 	g.treeLock.Lock()
@@ -553,20 +564,8 @@ func (r *commitRecord) initialize(g *Graph, commit *Commit) error {
 	r.pending = 0
 
 	// The tree:
-	listener := func(size TreeSize) {
-		r.lock.Lock()
-		defer r.lock.Unlock()
-
-		r.size.addTree(size)
-		r.pending--
-		r.maybeFinalize(g)
-	}
-	treeSize, ok := g.RequireTreeSize(commit.Tree, listener)
-	if ok {
-		r.size.addTree(treeSize)
-	} else {
-		r.pending++
-	}
+	treeSize := g.GetTreeSize(commit.Tree)
+	r.size.addTree(treeSize)
 
 	for _, parent := range commit.Parents {
 		listener := func(size CommitSize) {

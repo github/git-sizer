@@ -497,6 +497,9 @@ func (g *Graph) RegisterCommit(oid Oid, commit *Commit) {
 		size.addParent(parentSize)
 	}
 
+	// Add 1 for this commit itself:
+	size.MaxAncestorDepth.Increment(1)
+
 	g.commitLock.Lock()
 	g.commitSizes[oid] = size
 	g.commitLock.Unlock()

@@ -382,6 +382,7 @@ type treeRecord struct {
 func newTreeRecord(oid Oid) *treeRecord {
 	return &treeRecord{
 		oid:     oid,
+		size:    TreeSize{ExpandedTreeCount: 1},
 		pending: -1,
 	}
 }

@@ -472,26 +472,16 @@ func (r *treeRecord) addListener(listener func(TreeSize)) {
 	r.listeners = append(r.listeners, listener)
 }
 
-func (g *Graph) RequireCommitSize(oid Oid, listener func(CommitSize)) (CommitSize, bool) {
+func (g *Graph) GetCommitSize(oid Oid) CommitSize {
 	g.commitLock.Lock()
 
 	size, ok := g.commitSizes[oid]
-	if ok {
-		g.commitLock.Unlock()
-
-		return size, true
-	}
-
-	record, ok := g.commitRecords[oid]
 	if !ok {
-		record = newCommitRecord(oid)
-		g.commitRecords[oid] = record
+		panic("commit is not available")
 	}
-	record.addListener(listener)
-
 	g.commitLock.Unlock()
 
-	return CommitSize{}, false
+	return size
 }
 
 // Record that the specified `oid` is the specified `commit`.
@@ -568,20 +558,8 @@ func (r *commitRecord) initialize(g *Graph, commit *Commit) error {
 	r.size.addTree(treeSize)
 
 	for _, parent := range commit.Parents {
-		listener := func(size CommitSize) {
-			r.lock.Lock()
-			defer r.lock.Unlock()
-
-			r.size.addParent(size)
-			r.pending--
-			r.maybeFinalize(g)
-		}
-		parentSize, ok := g.RequireCommitSize(parent, listener)
-		if ok {
-			r.size.addParent(parentSize)
-		} else {
-			r.pending++
-		}
+		parentSize := g.GetCommitSize(parent)
+		r.size.addParent(parentSize)
 	}
 
 	r.maybeFinalize(g)

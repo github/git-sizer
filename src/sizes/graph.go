@@ -175,10 +175,7 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 		if err != nil {
 			return HistorySize{}, err
 		}
-		err = graph.RegisterCommit(oid, commit)
-		if err != nil {
-			return HistorySize{}, err
-		}
+		graph.RegisterCommit(oid, commit)
 	}
 
 	err = <-errChan
@@ -211,9 +208,8 @@ type Graph struct {
 	treeRecords map[Oid]*treeRecord
 	treeSizes   map[Oid]TreeSize
 
-	commitLock    sync.Mutex
-	commitRecords map[Oid]*commitRecord
-	commitSizes   map[Oid]CommitSize
+	commitLock  sync.Mutex
+	commitSizes map[Oid]CommitSize
 
 	tagLock    sync.Mutex
 	tagRecords map[Oid]*tagRecord
@@ -231,8 +227,7 @@ func NewGraph() *Graph {
 		treeRecords: make(map[Oid]*treeRecord),
 		treeSizes:   make(map[Oid]TreeSize),
 
-		commitRecords: make(map[Oid]*commitRecord),
-		commitSizes:   make(map[Oid]CommitSize),
+		commitSizes: make(map[Oid]CommitSize),
 
 		tagRecords: make(map[Oid]*tagRecord),
 		tagSizes:   make(map[Oid]TagSize),
@@ -248,17 +243,12 @@ func (g *Graph) RegisterReference(ref Reference) {
 func (g *Graph) HistorySize() HistorySize {
 	g.treeLock.Lock()
 	defer g.treeLock.Unlock()
-	g.commitLock.Lock()
-	defer g.commitLock.Unlock()
 	g.tagLock.Lock()
 	defer g.tagLock.Unlock()
 	g.historyLock.Lock()
 	defer g.historyLock.Unlock()
 	if len(g.treeRecords) != 0 {
 		panic(fmt.Sprintf("%d tree records remain!", len(g.treeRecords)))
-	}
-	if len(g.commitRecords) != 0 {
-		panic(fmt.Sprintf("%d commit records remain!", len(g.commitRecords)))
 	}
 	if len(g.tagRecords) != 0 {
 		panic(fmt.Sprintf("%d tag records remain!", len(g.tagRecords)))
@@ -485,101 +475,35 @@ func (g *Graph) GetCommitSize(oid Oid) CommitSize {
 }
 
 // Record that the specified `oid` is the specified `commit`.
-func (g *Graph) RegisterCommit(oid Oid, commit *Commit) error {
+func (g *Graph) RegisterCommit(oid Oid, commit *Commit) {
 	g.commitLock.Lock()
-
 	if _, ok := g.commitSizes[oid]; ok {
 		panic(fmt.Sprintf("commit %s registered twice!", oid))
 	}
-
-	// See if we already have a record for this commit:
-	record, ok := g.commitRecords[oid]
-	if !ok {
-		record = newCommitRecord(oid)
-		g.commitRecords[oid] = record
-	}
-
 	g.commitLock.Unlock()
-
-	// Let the record take care of the rest:
-	return record.initialize(g, commit)
-}
-
-func (g *Graph) finalizeCommitSize(oid Oid, size CommitSize, objectSize Count32, parentCount Count32) {
-	g.commitLock.Lock()
-	g.commitSizes[oid] = size
-	delete(g.commitRecords, oid)
-	g.commitLock.Unlock()
-
-	g.historyLock.Lock()
-	g.historySize.recordCommit(size, objectSize, parentCount)
-	g.historyLock.Unlock()
-}
-
-type commitRecord struct {
-	oid Oid
-
-	// Limit to only one mutator at a time.
-	lock sync.Mutex
-
-	// The size of this commit object in bytes.
-	objectSize Count32
 
 	// The number of direct parents of this commit.
-	parentCount Count32
+	parentCount := NewCount32(uint64(len(commit.Parents)))
 
 	// The size of the items we know so far:
-	size CommitSize
-
-	// See treeRecord.pending.
-	pending int
-
-	// See treeRecord.listeners.
-	listeners []func(CommitSize)
-}
-
-func newCommitRecord(oid Oid) *commitRecord {
-	return &commitRecord{
-		oid:     oid,
-		pending: -1,
-	}
-}
-
-// Initialize `r` (which is empty) based on `commit`.
-func (r *commitRecord) initialize(g *Graph, commit *Commit) error {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	r.objectSize = commit.Size
-	r.pending = 0
+	size := CommitSize{}
 
 	// The tree:
 	treeSize := g.GetTreeSize(commit.Tree)
-	r.size.addTree(treeSize)
+	size.addTree(treeSize)
 
 	for _, parent := range commit.Parents {
 		parentSize := g.GetCommitSize(parent)
-		r.size.addParent(parentSize)
+		size.addParent(parentSize)
 	}
 
-	r.maybeFinalize(g)
+	g.commitLock.Lock()
+	g.commitSizes[oid] = size
+	g.commitLock.Unlock()
 
-	return nil
-}
-
-func (r *commitRecord) maybeFinalize(g *Graph) {
-	if r.pending == 0 {
-		g.finalizeCommitSize(r.oid, r.size, r.objectSize, r.parentCount)
-		for _, listener := range r.listeners {
-			listener(r.size)
-		}
-	}
-}
-
-// Must be called either before `r` is published or while it is
-// locked.
-func (r *commitRecord) addListener(listener func(CommitSize)) {
-	r.listeners = append(r.listeners, listener)
+	g.historyLock.Lock()
+	g.historySize.recordCommit(size, commit.Size, parentCount)
+	g.historyLock.Unlock()
 }
 
 func (g *Graph) RequireTagSize(oid Oid, listener func(TagSize)) (TagSize, bool) {

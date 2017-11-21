@@ -449,6 +449,9 @@ func (r *treeRecord) initialize(g *Graph, tree *Tree) error {
 
 func (r *treeRecord) maybeFinalize(g *Graph) {
 	if r.pending == 0 {
+		// Add one for this tree itself:
+		r.size.MaxPathDepth.Increment(1)
+
 		g.finalizeTreeSize(r.oid, r.size, r.objectSize, r.entryCount)
 		for _, listener := range r.listeners {
 			listener(r.size)

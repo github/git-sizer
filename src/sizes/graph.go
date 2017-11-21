@@ -2,6 +2,7 @@ package sizes
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -98,23 +99,77 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 		return HistorySize{}, err
 	}
 
-	for _, obj := range trees {
-		var tree *Tree
-		tree, err = repo.ReadTree(obj.oid)
-		if err == nil {
-			err = graph.RegisterTree(obj.oid, tree)
+	objectIter, objectIn, err := repo.NewBatchObjectIter()
+	if err != nil {
+		return HistorySize{}, err
+	}
+	defer objectIter.Close()
+
+	go func() {
+		defer objectIn.Close()
+		bufin := bufio.NewWriter(objectIn)
+		defer bufin.Flush()
+
+		for _, obj := range trees {
+			_, err := bufin.WriteString(obj.oid.String())
+			if err != nil {
+				errChan <- err
+				return
+			}
+			err = bufin.WriteByte('\n')
+			if err != nil {
+				errChan <- err
+				return
+			}
 		}
+
+		for i := len(commits); i > 0; i-- {
+			obj := commits[i-1]
+			_, err := bufin.WriteString(obj.oid.String())
+			if err != nil {
+				errChan <- err
+				return
+			}
+			err = bufin.WriteByte('\n')
+			if err != nil {
+				errChan <- err
+				return
+			}
+		}
+	}()
+
+	for _, obj := range trees {
+		obj2, ok, err := objectIter.Next()
+		if err != nil {
+			return HistorySize{}, err
+		}
+		if !ok {
+			return HistorySize{}, errors.New("fewer trees read than expected")
+		}
+		tree, ok := obj2.(*Tree)
+		if !ok {
+			return HistorySize{}, errors.New("expected tree; other object read")
+		}
+		err = graph.RegisterTree(obj.oid, tree)
 		if err != nil {
 			return HistorySize{}, err
 		}
 	}
 
-	for _, obj := range commits {
-		var commit *Commit
-		commit, err = repo.ReadCommit(obj.oid)
-		if err == nil {
-			err = graph.RegisterCommit(obj.oid, commit)
+	for i := len(commits); i > 0; i-- {
+		obj := commits[i-1]
+		obj2, ok, err := objectIter.Next()
+		if err != nil {
+			return HistorySize{}, err
 		}
+		if !ok {
+			return HistorySize{}, errors.New("fewer commits read than expected")
+		}
+		commit, ok := obj2.(*Commit)
+		if !ok {
+			return HistorySize{}, errors.New("expected commit; other object read")
+		}
+		err = graph.RegisterCommit(obj.oid, commit)
 		if err != nil {
 			return HistorySize{}, err
 		}
@@ -125,6 +180,9 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 		tag, err = repo.ReadTag(obj.oid)
 		if err == nil {
 			err = graph.RegisterTag(obj.oid, tag)
+		}
+		if err != nil {
+			return HistorySize{}, err
 		}
 	}
 

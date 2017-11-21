@@ -161,6 +161,83 @@ func (l *ReferenceIter) Close() error {
 	return err
 }
 
+type BatchObjectIter struct {
+	command *exec.Cmd
+	out     io.ReadCloser
+	f       *bufio.Reader
+}
+
+// NewBatchObjectIter returns iterates over objects whose names are
+// fed into its stdin. The output is buffered, so it has to be closed
+// before you can be sure to read all of the objects.
+func (repo *Repository) NewBatchObjectIter() (*BatchObjectIter, io.WriteCloser, error) {
+	command := exec.Command(
+		"git", "-C", repo.path,
+		"cat-file", "--batch", "--buffer",
+	)
+
+	in, err := command.StdinPipe()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	out, err := command.StdoutPipe()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	command.Stderr = os.Stderr
+
+	err = command.Start()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &BatchObjectIter{
+		command: command,
+		out:     out,
+		f:       bufio.NewReader(out),
+	}, in, nil
+}
+
+func (iter *BatchObjectIter) Next() (interface{}, bool, error) {
+	header, err := iter.f.ReadString('\n')
+	if err != nil {
+		return nil, false, err
+	}
+	oid, objectType, objectSize, err := parseBatchHeader("", header)
+	if err != nil {
+		return nil, false, err
+	}
+	// +1 for LF:
+	data := make([]byte, objectSize+1)
+	_, err = io.ReadFull(iter.f, data)
+	if err != nil {
+		return nil, false, err
+	}
+	data = data[:len(data)-1]
+
+	switch objectType {
+	case "tree":
+		tree, err := parseTree(oid, data)
+		return tree, true, err
+	case "commit":
+		commit, err := parseCommit(oid, data)
+		return commit, true, err
+	default:
+		panic(fmt.Sprintf("BatchObjectIter doesn't know how to read %s", objectType))
+	}
+}
+
+func (l *BatchObjectIter) Close() error {
+	err := l.out.Close()
+	err2 := l.command.Wait()
+	if err == nil {
+		err = err2
+	}
+	return err
+}
+
 type ReferenceFilter func(Reference) bool
 
 func AllReferencesFilter(_ Reference) bool {
@@ -569,14 +646,7 @@ func (l *CommitIter) Close() error {
 	return l.command.Wait()
 }
 
-func (repo *Repository) ReadCommit(oid Oid) (*Commit, error) {
-	oid, objectType, data, err := repo.readObject(oid.String())
-	if err != nil {
-		return nil, err
-	}
-	if objectType != "commit" {
-		return nil, fmt.Errorf("expected commit; found %s for object %s", objectType, oid)
-	}
+func parseCommit(oid Oid, data []byte) (*Commit, error) {
 	var parents []Oid
 	var tree Oid
 	var treeFound bool
@@ -617,8 +687,23 @@ func (repo *Repository) ReadCommit(oid Oid) (*Commit, error) {
 	}, nil
 }
 
+func (repo *Repository) ReadCommit(oid Oid) (*Commit, error) {
+	oid, objectType, data, err := repo.readObject(oid.String())
+	if err != nil {
+		return nil, err
+	}
+	if objectType != "commit" {
+		return nil, fmt.Errorf("expected commit; found %s for object %s", objectType, oid)
+	}
+	return parseCommit(oid, data)
+}
+
 type Tree struct {
 	data string
+}
+
+func parseTree(oid Oid, data []byte) (*Tree, error) {
+	return &Tree{string(data)}, nil
 }
 
 func (repo *Repository) ReadTree(oid Oid) (*Tree, error) {
@@ -629,7 +714,7 @@ func (repo *Repository) ReadTree(oid Oid) (*Tree, error) {
 	if objectType != "tree" {
 		return nil, errors.New(fmt.Sprintf("expected tree; found %s for object %s", objectType, oid))
 	}
-	return &Tree{string(data)}, nil
+	return parseTree(oid, data)
 }
 
 // Note that Name shares memory with the tree data that were

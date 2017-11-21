@@ -59,6 +59,15 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 		errChan <- nil
 	}()
 
+	type ObjectHeader struct {
+		oid        Oid
+		objectSize Count32
+	}
+
+	// We process the blobs right away, but record these other types
+	// of objects for later processing:
+	var trees, commits, tags []ObjectHeader
+
 	for {
 		oid, objectType, objectSize, err := iter.Next()
 		if err != nil {
@@ -70,35 +79,53 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 		switch objectType {
 		case "blob":
 			err = graph.RegisterBlob(oid, objectSize)
+			if err != nil {
+				return HistorySize{}, err
+			}
 		case "tree":
-			var tree *Tree
-			tree, err = repo.ReadTree(oid)
-			if err == nil {
-				err = graph.RegisterTree(oid, tree)
-			}
+			trees = append(trees, ObjectHeader{oid, objectSize})
 		case "commit":
-			var commit *Commit
-			commit, err = repo.ReadCommit(oid)
-			if err == nil {
-				err = graph.RegisterCommit(oid, commit)
-			}
+			commits = append(commits, ObjectHeader{oid, objectSize})
 		case "tag":
-			var tag *Tag
-			tag, err = repo.ReadTag(oid)
-			if err == nil {
-				err = graph.RegisterTag(oid, tag)
-			}
+			tags = append(tags, ObjectHeader{oid, objectSize})
 		default:
 			err = fmt.Errorf("unexpected object type: %s", objectType)
-		}
-		if err != nil {
-			return HistorySize{}, err
 		}
 	}
 
 	err = <-errChan
 	if err != nil {
 		return HistorySize{}, err
+	}
+
+	for _, obj := range trees {
+		var tree *Tree
+		tree, err = repo.ReadTree(obj.oid)
+		if err == nil {
+			err = graph.RegisterTree(obj.oid, tree)
+		}
+		if err != nil {
+			return HistorySize{}, err
+		}
+	}
+
+	for _, obj := range commits {
+		var commit *Commit
+		commit, err = repo.ReadCommit(obj.oid)
+		if err == nil {
+			err = graph.RegisterCommit(obj.oid, commit)
+		}
+		if err != nil {
+			return HistorySize{}, err
+		}
+	}
+
+	for _, obj := range tags {
+		var tag *Tag
+		tag, err = repo.ReadTag(obj.oid)
+		if err == nil {
+			err = graph.RegisterTag(obj.oid, tag)
+		}
 	}
 
 	return graph.HistorySize(), nil

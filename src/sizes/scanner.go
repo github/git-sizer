@@ -77,10 +77,11 @@ func (scanner *SizeScanner) preload() error {
 		}
 	}
 
-	commitIter, err := scanner.repo.NewCommitIter("--reverse", "--topo-order", "--all")
+	commitIter, in, err := scanner.repo.NewCommitIter("--reverse", "--topo-order", "--all")
 	if err != nil {
 		return err
 	}
+	in.Close()
 	defer commitIter.Close()
 
 	var toDo ToDoList

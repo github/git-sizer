@@ -490,32 +490,37 @@ type CommitIter struct {
 	f       *bufio.Reader
 }
 
-// NewCommitIter returns an iterator that iterates over all of the
-// reachable commits in `repo` (including unreachable objects). `args`
-// are selection arguments passed to `git log`. Note that the commit's
-// sizes are not filled in by the iterator!
-func (repo *Repository) NewCommitIter(args ...string) (*CommitIter, error) {
+// NewCommitIter returns an iterator that iterates over commits in
+// `repo`. `args` are selection arguments passed to `git log`. Note
+// that the commit's sizes are not filled in by the iterator! The
+// second return value is the stdin of the `git log` command. The
+// caller can feed values into it but must close it in any case.
+func (repo *Repository) NewCommitIter(args ...string) (*CommitIter, io.WriteCloser, error) {
 	cmdArgs := []string{"-C", repo.path, "log", "--format=%H %T %P"}
 	cmdArgs = append(cmdArgs, args...)
 	command := exec.Command("git", cmdArgs...)
+	in, err := command.StdinPipe()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	stdout, err := command.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	command.Stderr = os.Stderr
 
 	err = command.Start()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	return &CommitIter{
 		command: command,
 		stdout:  stdout,
 		f:       bufio.NewReader(stdout),
-	}, nil
+	}, in, nil
 }
 
 // Next returns the next object, or EOF when done. Note that the sizes

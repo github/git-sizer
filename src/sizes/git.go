@@ -314,7 +314,7 @@ func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error)
 	return oid, objectType, data, nil
 }
 
-type ReachableObjectIter struct {
+type ObjectIter struct {
 	command1 *exec.Cmd
 	command2 *exec.Cmd
 	in1      io.Writer
@@ -324,12 +324,12 @@ type ReachableObjectIter struct {
 	errChan  <-chan error
 }
 
-// NewReachableObjectIter returns an iterator that iterates over all
-// of the reachable objects in `repo`. The second return value is the
-// stdin of the `rev-list` command. The caller can feed values into it
-// but must close it in any case.
+// NewObjectIter returns an iterator that iterates over objects in
+// `repo`. The second return value is the stdin of the `rev-list`
+// command. The caller can feed values into it but must close it in
+// any case.
 func (repo *Repository) NewObjectIter(args ...string) (
-	*ReachableObjectIter, io.WriteCloser, error,
+	*ObjectIter, io.WriteCloser, error,
 ) {
 	cmdArgs := []string{"-C", repo.path, "rev-list", "--objects"}
 	cmdArgs = append(cmdArgs, args...)
@@ -403,7 +403,7 @@ func (repo *Repository) NewObjectIter(args ...string) (
 		}
 	}()
 
-	return &ReachableObjectIter{
+	return &ObjectIter{
 		command1: command1,
 		command2: command2,
 		out1:     out1,
@@ -414,7 +414,7 @@ func (repo *Repository) NewObjectIter(args ...string) (
 }
 
 // Next returns the next object, or EOF when done.
-func (l *ReachableObjectIter) Next() (Oid, ObjectType, Count32, error) {
+func (l *ObjectIter) Next() (Oid, ObjectType, Count32, error) {
 	line, err := l.f.ReadString('\n')
 	if err != nil {
 		return Oid{}, "", 0, err
@@ -423,7 +423,7 @@ func (l *ReachableObjectIter) Next() (Oid, ObjectType, Count32, error) {
 	return parseBatchHeader("", line)
 }
 
-func (l *ReachableObjectIter) Close() error {
+func (l *ObjectIter) Close() error {
 	l.out1.Close()
 	err := <-l.errChan
 	l.out2.Close()

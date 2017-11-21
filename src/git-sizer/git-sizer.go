@@ -29,6 +29,7 @@ func mainImplementation() error {
 	var processStdin bool
 	var cpuprofile string
 	var jsonOutput bool
+	var useGraph bool
 
 	flag.BoolVar(&processAll, "all", false, "process all references")
 	flag.BoolVar(&processBranches, "branches", false, "process all branches")
@@ -37,6 +38,7 @@ func mainImplementation() error {
 	flag.BoolVar(&processStdin, "stdin", false, "read objects from stdin, one per line")
 	flag.BoolVar(&jsonOutput, "json", false, "output results in JSON format")
 	flag.BoolVar(&jsonOutput, "j", false, "output results in JSON format")
+	flag.BoolVar(&useGraph, "graph", false, "scan repository using Graph")
 
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 
@@ -88,7 +90,11 @@ func mainImplementation() error {
 			filter = sizes.OrFilter(filters...)
 		}
 
-		historySize, err = sizes.ScanRepository(repo, filter)
+		if useGraph {
+			historySize, err = sizes.ScanRepositoryUsingGraph(repo, filter)
+		} else {
+			historySize, err = sizes.ScanRepositoryUsingScanner(repo, filter)
+		}
 		if err != nil {
 			return fmt.Errorf("error scanning repository: %s", err)
 		}

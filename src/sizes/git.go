@@ -86,18 +86,22 @@ type Reference struct {
 	Oid        Oid
 }
 
-type ReferenceOrError struct {
-	Reference Reference
-	Error     error
+type ReferenceIter struct {
+	command *exec.Cmd
+	out     io.ReadCloser
+	f       *bufio.Reader
+	errChan <-chan error
 }
 
-func (repo *Repository) ForEachRef(done <-chan interface{}) (<-chan ReferenceOrError, error) {
+// NewReferenceIter returns an iterator that iterates over all of the
+// references in `repo`.
+func (repo *Repository) NewReferenceIter() (*ReferenceIter, error) {
 	command := exec.Command(
 		"git", "-C", repo.path,
 		"for-each-ref", "--format=%(objectname) %(objecttype) %(objectsize) %(refname)",
 	)
 
-	stdoutFile, err := command.StdoutPipe()
+	out, err := command.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
@@ -108,55 +112,53 @@ func (repo *Repository) ForEachRef(done <-chan interface{}) (<-chan ReferenceOrE
 	if err != nil {
 		return nil, err
 	}
-	stdout := bufio.NewReader(stdoutFile)
 
-	out := make(chan ReferenceOrError)
+	return &ReferenceIter{
+		command: command,
+		out:     out,
+		f:       bufio.NewReader(out),
+		errChan: make(chan error, 1),
+	}, nil
+}
 
-	go func(done <-chan interface{}, out chan<- ReferenceOrError) {
-		defer func() {
-			close(out)
-			stdoutFile.Close()
-			command.Wait()
-		}()
-
-		for {
-			line, err := stdout.ReadString('\n')
-			if err != nil {
-				if err != io.EOF {
-					out <- ReferenceOrError{Reference{}, err}
-				}
-				return
-			}
-			line = line[:len(line)-1]
-			words := strings.Split(line, " ")
-			if len(words) != 4 {
-				break
-			}
-			oid, err := NewOid(words[0])
-			if err != nil {
-				break
-			}
-			objectType := ObjectType(words[1])
-			objectSize, err := strconv.ParseUint(words[2], 10, 0)
-			if err != nil {
-				break
-			}
-			refname := words[3]
-			re := ReferenceOrError{
-				Reference{refname, objectType, NewCount32(objectSize), oid},
-				nil,
-			}
-			select {
-			case out <- re:
-			case <-done:
-				return
-			}
+func (iter *ReferenceIter) Next() (Reference, bool, error) {
+	line, err := iter.f.ReadString('\n')
+	if err != nil {
+		if err != io.EOF {
+			return Reference{}, false, err
 		}
+		return Reference{}, false, nil
+	}
+	line = line[:len(line)-1]
+	words := strings.Split(line, " ")
+	if len(words) != 4 {
+		return Reference{}, false, fmt.Errorf("line improperly formatted: %#v", line)
+	}
+	oid, err := NewOid(words[0])
+	if err != nil {
+		return Reference{}, false, fmt.Errorf("SHA-1 improperly formatted: %#v", words[0])
+	}
+	objectType := ObjectType(words[1])
+	objectSize, err := strconv.ParseUint(words[2], 10, 32)
+	if err != nil {
+		return Reference{}, false, fmt.Errorf("object size improperly formatted: %#v", words[2])
+	}
+	refname := words[3]
+	return Reference{
+		Refname:    refname,
+		ObjectType: objectType,
+		ObjectSize: Count32(objectSize),
+		Oid:        oid,
+	}, true, nil
+}
 
-		out <- ReferenceOrError{Reference{}, errors.New("invalid for-each-ref output")}
-	}(done, out)
-
-	return out, nil
+func (l *ReferenceIter) Close() error {
+	err := l.out.Close()
+	err2 := l.command.Wait()
+	if err == nil {
+		err = err2
+	}
+	return err
 }
 
 type ReferenceFilter func(Reference) bool
@@ -233,33 +235,6 @@ func NotFilter(filter ReferenceFilter) ReferenceFilter {
 	return func(r Reference) bool {
 		return !filter(r)
 	}
-}
-
-func (repo *Repository) ForEachFilteredRef(
-	done <-chan interface{}, filter ReferenceFilter,
-) (<-chan ReferenceOrError, error) {
-	refs, err := repo.ForEachRef(done)
-	if err != nil {
-		return nil, err
-	}
-
-	out := make(chan ReferenceOrError)
-
-	go func() {
-		defer close(out)
-
-		for re := range refs {
-			if re.Error != nil || filter(re.Reference) {
-				select {
-				case out <- re:
-				case <-done:
-					return
-				}
-			}
-		}
-	}()
-
-	return out, nil
 }
 
 // Parse a `cat-file --batch[-check]` output header line (including

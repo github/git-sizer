@@ -120,7 +120,7 @@ func (scanner *SizeScanner) preload() error {
 }
 
 // Scan all of the references in `repo` that match `filter`.
-func ScanRepository(repo *Repository, filter ReferenceFilter) (HistorySize, error) {
+func ScanRepositoryUsingScanner(repo *Repository, filter ReferenceFilter) (HistorySize, error) {
 	scanner, err := NewSizeScanner(repo)
 	if err != nil {
 		return HistorySize{}, err
@@ -129,19 +129,28 @@ func ScanRepository(repo *Repository, filter ReferenceFilter) (HistorySize, erro
 	done := make(chan interface{})
 	defer close(done)
 
-	refOrErrors, err := repo.ForEachFilteredRef(done, filter)
+	iter, err := repo.NewReferenceIter()
 	if err != nil {
 		return HistorySize{}, err
 	}
-	for refOrError := range refOrErrors {
-		if refOrError.Error != nil {
+
+	for {
+		ref, ok, err := iter.Next()
+		if err != nil {
 			return HistorySize{}, err
 		}
-		_, err := scanner.ReferenceSize(refOrError.Reference)
+		if !ok {
+			break
+		}
+		if !filter(ref) {
+			continue
+		}
+		_, err = scanner.ReferenceSize(ref)
 		if err != nil {
 			return HistorySize{}, err
 		}
 	}
+
 	return scanner.HistorySize, nil
 }
 

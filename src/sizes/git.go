@@ -317,6 +317,7 @@ func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error)
 type ReachableObjectIter struct {
 	command1 *exec.Cmd
 	command2 *exec.Cmd
+	in1      io.Writer
 	out1     io.ReadCloser
 	out2     io.ReadCloser
 	f        *bufio.Reader
@@ -324,22 +325,30 @@ type ReachableObjectIter struct {
 }
 
 // NewReachableObjectIter returns an iterator that iterates over all
-// of the reachable objects in `repo`.
-func (repo *Repository) NewReachableObjectIter() (*ReachableObjectIter, error) {
-	command1 := exec.Command(
-		"git", "-C", repo.path,
-		"rev-list", "--all", "--objects", "--topo-order",
-	)
+// of the reachable objects in `repo`. The second return value is the
+// stdin of the `rev-list` command. The caller can feed values into it
+// but must close it in any case.
+func (repo *Repository) NewObjectIter(args ...string) (
+	*ReachableObjectIter, io.WriteCloser, error,
+) {
+	cmdArgs := []string{"-C", repo.path, "rev-list", "--objects"}
+	cmdArgs = append(cmdArgs, args...)
+	command1 := exec.Command("git", cmdArgs...)
+	in1, err := command1.StdinPipe()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	out1, err := command1.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	command1.Stderr = os.Stderr
 
 	err = command1.Start()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	command2 := exec.Command(
@@ -351,7 +360,7 @@ func (repo *Repository) NewReachableObjectIter() (*ReachableObjectIter, error) {
 	if err != nil {
 		out1.Close()
 		command1.Wait()
-		return nil, err
+		return nil, nil, err
 	}
 
 	out2, err := command2.StdoutPipe()
@@ -359,14 +368,14 @@ func (repo *Repository) NewReachableObjectIter() (*ReachableObjectIter, error) {
 		in2.Close()
 		out1.Close()
 		command1.Wait()
-		return nil, err
+		return nil, nil, err
 	}
 
 	command2.Stderr = os.Stderr
 
 	err = command2.Start()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	errChan := make(chan error, 1)
@@ -401,7 +410,7 @@ func (repo *Repository) NewReachableObjectIter() (*ReachableObjectIter, error) {
 		out2:     out2,
 		f:        bufio.NewReader(out2),
 		errChan:  errChan,
-	}, nil
+	}, in1, nil
 }
 
 // Next returns the next object, or EOF when done.

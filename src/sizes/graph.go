@@ -11,10 +11,12 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 
 	graph := NewGraph()
 
-	iter, err := repo.NewReachableObjectIter()
+	iter, in, err := repo.NewObjectIter("--all", "--topo-order")
 	if err != nil {
 		return HistorySize{}, err
 	}
+	in.Close()
+	defer iter.Close()
 
 	for {
 		oid, objectType, objectSize, err := iter.Next()

@@ -11,8 +11,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-
-	"github.com/github/git-sizer/pipe"
 )
 
 // The type of an object ("blob", "tree", "commit", "tag", "missing").
@@ -45,24 +43,16 @@ func (oid Oid) String() string {
 
 type Repository struct {
 	path string
-
-	batch *pipe.CommandPipe
 }
 
 func NewRepository(path string) (*Repository, error) {
-	batch, err := pipe.NewCommandPipe("git", "-C", path, "cat-file", "--batch")
-	if err != nil {
-		return nil, err
-	}
-
 	return &Repository{
-		path:  path,
-		batch: batch,
+		path: path,
 	}, nil
 }
 
 func (repo *Repository) Close() error {
-	return repo.batch.Close()
+	return nil
 }
 
 type Reference struct {
@@ -312,43 +302,6 @@ func parseBatchHeader(spec string, header string) (Oid, ObjectType, Count32, err
 		return Oid{}, "missing", 0, err
 	}
 	return oid, ObjectType(words[1]), NewCount32(size), nil
-}
-
-func (repo *Repository) readObject(spec string) (Oid, ObjectType, []byte, error) {
-	var err error
-	var oid Oid
-	var objectType ObjectType
-	var data []byte
-
-	repo.batch.RunQuery(
-		spec+"\n",
-		func(f *bufio.Reader) {
-			var header string
-			header, err = f.ReadString('\n')
-			if err != nil {
-				return
-			}
-			var size Count32
-			oid, objectType, size, err = parseBatchHeader(spec, header)
-			if err != nil {
-				return
-			}
-			// +1 for LF:
-			data = make([]byte, size+1)
-			_, err = io.ReadFull(f, data)
-			if err != nil {
-				return
-			}
-			data = data[:len(data)-1]
-		},
-	)
-
-	if err != nil {
-		return Oid{}, "missing", []byte{}, err
-	}
-
-	// -1 to remove LF:
-	return oid, objectType, data, nil
 }
 
 type ObjectIter struct {
@@ -675,15 +628,4 @@ func ParseTag(oid Oid, data []byte) (*Tag, error) {
 		Referent:     referent,
 		ReferentType: referentType,
 	}, nil
-}
-
-func (repo *Repository) ReadTag(oid Oid) (*Tag, error) {
-	oid, objectType, data, err := repo.readObject(oid.String())
-	if err != nil {
-		return nil, err
-	}
-	if objectType != "tag" {
-		return nil, fmt.Errorf("expected tag; found %s for object %s", objectType, oid)
-	}
-	return ParseTag(oid, data)
 }

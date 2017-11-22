@@ -9,8 +9,6 @@ import (
 )
 
 func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (HistorySize, error) {
-	// FIXME: Process references and use reference filter.
-
 	graph := NewGraph()
 
 	refIter, err := repo.NewReferenceIter()

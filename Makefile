@@ -11,9 +11,8 @@ BIN := bin
 GOFLAGS := \
 	--tags "static" \
 	-ldflags "-X main.BuildVersion=$(shell git rev-parse HEAD) -X main.BuildDescribe=$(shell git describe --tags --always --dirty)"
-GO_CMDS := \
-	$(BIN)/git-sizer
-GO_PKGS := $(shell cd .gopath/src; find github.com/github/git-sizer/ -type f -name '*.go' | xargs -n1 dirname | sort -u)
+GO_CMDS := $(BIN)/git-sizer
+GO_PKGS := $(shell cd .gopath/src && find github.com/github/git-sizer/ -type f -name '*.go' | xargs -n1 dirname | grep -v '^github.com/github/git-sizer/vendor/' | sort -u)
 GO_SRCS := $(shell find src -type f -name '*.go')
 
 .PHONY: all
@@ -26,7 +25,7 @@ $(BIN):
 	mkdir -p $(BIN)
 
 .PHONY: test
-test: gotest
+test: $(GO_CMDS) gotest
 
 .PHONY: gotest
 gotest:

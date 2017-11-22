@@ -1,6 +1,6 @@
 #!/bin/bash
 
-GO_VERSION=go1.8.1
+GO_VERSION=go1.9.2
 
 if [ $(uname -s) = "Darwin" ]; then
   GO_PKG=${GO_VERSION}.darwin-amd64.tar.gz

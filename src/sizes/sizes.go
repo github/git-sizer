@@ -254,8 +254,8 @@ func (s HistorySize) TableString() string {
 		{"max_history_depth", s.MaxHistoryDepth, MetricPrefixes, " ", 500e3},
 		{"max_parent_count", s.MaxParentCount, MetricPrefixes, " ", 10},
 		{"unique_tree_count", s.UniqueTreeCount, MetricPrefixes, " ", 1.5e6},
-		{"unique_tree_size", s.UniqueTreeSize, BinaryPrefixes, "B", 0},
-		{"unique_tree_entries", s.UniqueTreeEntries, MetricPrefixes, " ", 0},
+		{"unique_tree_size", s.UniqueTreeSize, BinaryPrefixes, "B", 2e9},
+		{"unique_tree_entries", s.UniqueTreeEntries, MetricPrefixes, " ", 50e6},
 		{"max_tree_entries", s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3},
 		{"unique_blob_count", s.UniqueBlobCount, MetricPrefixes, " ", 1.5e6},
 		{"unique_blob_size", s.UniqueBlobSize, BinaryPrefixes, "B", 10e9},
@@ -268,7 +268,7 @@ func (s HistorySize) TableString() string {
 		{"expanded_tree_count", s.ExpandedTreeCount, MetricPrefixes, " ", 2000},
 		{"expanded_blob_count", s.ExpandedBlobCount, MetricPrefixes, " ", 50e3},
 		{"expanded_blob_size", s.ExpandedBlobSize, BinaryPrefixes, "B", 1e9},
-		{"expanded_link_count", s.ExpandedLinkCount, MetricPrefixes, " ", 0},
+		{"expanded_link_count", s.ExpandedLinkCount, MetricPrefixes, " ", 25e3},
 		{"expanded_submodule_count", s.ExpandedSubmoduleCount, MetricPrefixes, " ", 100},
 	} {
 		valueString, unitString := i.Value.Human(i.Prefixes, i.Unit)

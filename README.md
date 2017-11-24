@@ -43,3 +43,81 @@ Is your Git repository busting at the seams?
     To get a summary of the current repository, all you need is
 
         bin/git-sizer
+
+    You can also use the `--json` option to get output in JSON format, including the raw numbers. Note that if a value overflows its counter (which should only happen for malicious repositories), the corresponding value is truncated to 2³²-1 or 2⁶⁴-1, depending on the size of the counter.
+
+
+## Example output
+
+Here is the output for `torvalds/linux` as of this writing:
+
+```
+$ git-sizer linux
+| Name                      | Value     | Level of concern               |
+| ------------------------- | --------- | ------------------------------ |
+| unique_commit_count       |   708 k   | *                              |
+| unique_commit_size        |   513 MiB | **                             |
+| max_commit_size           |  72.7 KiB | *                              |
+| max_history_depth         |   134 k   |                                |
+| max_parent_count          |    66     | ******                         |
+| unique_tree_count         |  3.31 M   | **                             |
+| unique_tree_size          |  8.78 GiB | ****                           |
+| unique_tree_entries       |   257 M   | *****                          |
+| max_tree_entries          |  1.63 k   |                                |
+| unique_blob_count         |  1.60 M   | *                              |
+| unique_blob_size          |  54.4 GiB | *****                          |
+| max_blob_size             |  13.5 MiB | *                              |
+| unique_tag_count          |   530     |                                |
+| max_tag_depth             |     1     | *                              |
+| reference_count           |   535     |                                |
+| max_path_depth            |    14     | *                              |
+| max_path_length           |   134 B   | *                              |
+| expanded_tree_count       |  4.32 k   | **                             |
+| expanded_blob_count       |  61.4 k   | *                              |
+| expanded_blob_size        |   744 MiB |                                |
+| expanded_link_count       |    40     |                                |
+| expanded_submodule_count  |     0     |                                |
+```
+
+The `unique_*` numbers are counts of distinct objects, not including repetition. `unique_*_size` are the sums of the sizes of the corresponding objects in their uncompressed form, measured in bytes. (`unique_tag_count` refers to annotated tag objects, not tag references.)
+
+The `max_*` numbers are the maximum values seen anywhere in the repository. `max_path_depth` is the largest number of path components seen, and `max_path_length` is the longest path in terms of bytes.
+
+The `expanded_*` numbers are the largest numbers that would be seen for any single checkout of the repository.
+
+The asterisks indicate values that seem unusually high. The more asterisks, the more trouble this value is expected to cause. Exclamation points indicate values that are extremely high (i.e., equivalent to more than 30 asterisks).
+
+The Linux repository is large by most standards, and as you can see, it is pushing some of Git's limits. And indeed, some Git operations on the Linux repository (e.g., `git fsck`, `git gc`) take a while. But due to its mostly sane structure, none of its dimensions are wildly out of proportion to the size of the code base, so it can be managed successfully using Git.
+
+Here is the output for one of the famous ["git bomb"](https://kate.io/blog/git-bomb/) repositories:
+
+```
+$ git-sizer --all test/data/git-bomb.git
+
+| Name                      | Value     | Level of concern               |
+| ------------------------- | --------- | ------------------------------ |
+| unique_commit_count       |     3     |                                |
+| unique_commit_size        |   606 B   |                                |
+| max_commit_size           |   218 B   |                                |
+| max_history_depth         |     3     |                                |
+| max_parent_count          |     1     |                                |
+| unique_tree_count         |    12     |                                |
+| unique_tree_size          |  3.48 KiB |                                |
+| unique_tree_entries       |   122     |                                |
+| max_tree_entries          |    11     |                                |
+| unique_blob_count         |     3     |                                |
+| unique_blob_size          |  3.65 KiB |                                |
+| max_blob_size             |  1.82 KiB |                                |
+| unique_tag_count          |     0     |                                |
+| max_tag_depth             |     0     |                                |
+| reference_count           |     1     |                                |
+| max_path_depth            |    11     | *                              |
+| max_path_length           |    29 B   |                                |
+| expanded_tree_count       |  1.11 G   | !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! |
+| expanded_blob_count       |     ∞     | !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! |
+| expanded_blob_size        |  83.8 GiB | !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! |
+| expanded_link_count       |     0     |                                |
+| expanded_submodule_count  |     0     |                                |
+```
+
+This repository is mischievously constructed to have a pathological tree structure, with the same directories repeated over and over again. As a result, even though the entire repository is less than 20 kb in size, when checked out it would explode into over a billion directories containing over ten billion files. (`git-sizer` prints `∞` for the blob count because the true number has overflowed its 32-bit counter for that field.)

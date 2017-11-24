@@ -2,7 +2,7 @@
 
 set -e
 
-cd $(dirname "$0")/..
+cd "$(dirname "$0")/.."
 
 export ROOTDIR="$(pwd)"
 export GOPATH="$ROOTDIR/.gopath"

@@ -47,11 +47,16 @@ func mainImplementation() error {
 	}
 
 	args := flag.Args()
-	if len(args) == 0 {
-		return errors.New("path argument(s) required")
+
+	var path string
+	switch len(args) {
+	case 0:
+		path = "."
+	case 1:
+		path = args[0]
+	default:
+		return errors.New("excess arguments")
 	}
-	path := args[0]
-	args = args[1:]
 
 	repo, err := sizes.NewRepository(path)
 	if err != nil {
@@ -60,10 +65,6 @@ func mainImplementation() error {
 	defer repo.Close()
 
 	var historySize sizes.HistorySize
-
-	if len(args) > 0 {
-		return errors.New("excess arguments")
-	}
 
 	var filter sizes.ReferenceFilter
 	if processBranches || processTags || processRemotes {

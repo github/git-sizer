@@ -36,10 +36,10 @@ Is your Git repository busting at the seams?
 
 2. Run:
 
-        bin/git-sizer [<opt>...] <path-to-git-repository> [<object>...]
+        bin/git-sizer [<opt>...] [<path-to-git-repository>]
 
         bin/git-sizer --help
 
-    For example, to get a summary of a whole repository,
+    To get a summary of the current repository, all you need is
 
-        bin/git-sizer --all <path-to-git-repository>
+        bin/git-sizer

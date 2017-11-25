@@ -39,10 +39,13 @@ fi
 if ! archiveok; then
     echo "Downloading $DOWNLOAD_URL"
     mkdir -p "$VENDORDIR"
-    curl -L -o "$ARCHIVE" $DOWNLOAD_URL
+    if ! curl -L -o "$ARCHIVE" $DOWNLOAD_URL; then
+        rm -f "$ARCHIVE"
+        echo 1>&2 "download failed"
+    fi
     if ! archiveok; then
         archivesum 1>&2
-        echo expected checksum $GO_PKG_SHA 1>&2
+        echo 1>&2 "expected checksum $GO_PKG_SHA"
         exit 1
     fi
 fi

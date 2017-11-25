@@ -1,6 +1,8 @@
-# This file is meant to be sourced.
+# This file is meant to be sourced with ROOTDIR set.
 
-ROOTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+if [ -z "$ROOTDIR" ]; then
+    echo 1>&2 'ensure-go-installed.sh invoked without ROOTDIR set!'
+fi
 
 # Is go installed, and at least 1.7?
 go_ok() {

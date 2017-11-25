@@ -8,7 +8,7 @@ export ROOTDIR="$(pwd)"
 export GOPATH="$ROOTDIR/.gopath"
 
 if [[ "$(uname -s)" = "Darwin" ]]; then
-  brew bundle
+    brew bundle
 fi
 script/ensure-go-installed
 

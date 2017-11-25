@@ -1,4 +1,4 @@
-#!/bin/bash
+# This file is meant to be sourced.
 
 ROOTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 

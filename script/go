@@ -3,7 +3,7 @@
 set -e
 
 export ROOTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
-. $ROOTDIR/script/ensure-go-installed
+. $ROOTDIR/script/ensure-go-installed.sh
 export GOPATH=$ROOTDIR/.gopath
 
 exec "$(basename $0)" "$@"

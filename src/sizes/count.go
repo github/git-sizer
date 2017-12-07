@@ -101,10 +101,14 @@ func (n1 *Count32) Increment(n2 Count32) {
 	*n1 = n1.Plus(n2)
 }
 
-// Adjust `*n1` to be `max(*n1, n2)`.
-func (n1 *Count32) AdjustMax(n2 Count32) {
+// Adjust `*n1` to be `max(*n1, n2)` and return true iff n2 was
+// bigger.
+func (n1 *Count32) AdjustMax(n2 Count32) bool {
 	if n2 > *n1 {
 		*n1 = n2
+		return true
+	} else {
+		return false
 	}
 }
 
@@ -143,9 +147,12 @@ func (n1 *Count64) Increment(n2 Count64) {
 }
 
 // Adjust `*n1` to be `max(*n1, n2)`.
-func (n1 *Count64) AdjustMax(n2 Count64) {
+func (n1 *Count64) AdjustMax(n2 Count64) bool {
 	if n2 > *n1 {
 		*n1 = n2
+		return true
+	} else {
+		return false
 	}
 }
 

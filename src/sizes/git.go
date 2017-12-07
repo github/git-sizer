@@ -20,6 +20,8 @@ type Oid struct {
 	v [20]byte
 }
 
+var NullOid Oid
+
 func OidFromBytes(oidBytes []byte) (Oid, error) {
 	var oid Oid
 	if len(oidBytes) != len(oid.v) {
@@ -39,6 +41,15 @@ func NewOid(s string) (Oid, error) {
 
 func (oid Oid) String() string {
 	return hex.EncodeToString(oid.v[:])
+}
+
+func (oid Oid) MarshalJSON() ([]byte, error) {
+	src := oid.v[:]
+	dst := make([]byte, hex.EncodedLen(len(src))+2)
+	dst[0] = '"'
+	dst[len(dst)-1] = '"'
+	hex.Encode(dst[1:len(dst)-1], src)
+	return dst, nil
 }
 
 type Repository struct {

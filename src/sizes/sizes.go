@@ -131,6 +131,9 @@ type HistorySize struct {
 	// The maximum size of any analyzed commit.
 	MaxCommitSize Count32 `json:"max_commit_size"`
 
+	// The commit with the maximum size.
+	MaxCommitSizeCommit Oid `json:"max_commit,omitempty"`
+
 	// The maximum ancestor depth of any analyzed commit.
 	MaxHistoryDepth Count32 `json:"max_history_depth"`
 
@@ -149,6 +152,9 @@ type HistorySize struct {
 	// The maximum number of entries an a tree.
 	MaxTreeEntries Count32 `json:"max_tree_entries"`
 
+	// The tree with the maximum number of entries.
+	MaxTreeEntriesTree Oid `json:"max_tree_entries_tree,omitempty"`
+
 	// The total number of unique blobs analyzed.
 	UniqueBlobCount Count32 `json:"unique_blob_count"`
 
@@ -158,11 +164,17 @@ type HistorySize struct {
 	// The maximum size of any analyzed blob.
 	MaxBlobSize Count32 `json:"max_blob_size"`
 
+	// The biggest blob found.
+	MaxBlobSizeBlob Oid `json:"max_blob_size_blob,omitempty"`
+
 	// The total number of unique tag objects analyzed.
 	UniqueTagCount Count32 `json:"unique_tag_count"`
 
 	// The maximum number of tags in a chain.
 	MaxTagDepth Count32 `json:"max_tag_depth"`
+
+	// The tag with the maximum tag depth.
+	MaxTagDepthTag Oid `json:"max_tag_depth_tag,omitempty"`
 
 	// The number of references analyzed. Note that we don't eliminate
 	// duplicates if the user passes the same reference more than
@@ -176,58 +188,101 @@ type HistorySize struct {
 	// (including this object).
 	MaxPathDepth Count32 `json:"max_path_depth"`
 
+	// The tree with the maximum path depth.
+	MaxPathDepthTree Oid `json:"max_path_depth_tree,omitempty"`
+
 	// The maximum length of any path relative to this object, in
 	// characters.
 	MaxPathLength Count32 `json:"max_path_length"`
 
+	// The tree with the maximum path length.
+	MaxPathLengthTree Oid `json:"max_path_length_tree,omitempty"`
+
 	// The total number of trees, including duplicates.
 	MaxExpandedTreeCount Count32 `json:"max_expanded_tree_count"`
+
+	// The tree with the maximum expanded tree count.
+	MaxExpandedTreeCountTree Oid `json:"max_expanded_tree_count_tree,omitempty"`
 
 	// The total number of blobs, including duplicates.
 	MaxExpandedBlobCount Count32 `json:"max_expanded_blob_count"`
 
+	// The tree with the maximum expanded blob count.
+	MaxExpandedBlobCountTree Oid `json:"max_expanded_blob_count_tree,omitempty"`
+
 	// The total size of all blobs, including duplicates.
 	MaxExpandedBlobSize Count64 `json:"max_expanded_blob_size"`
+
+	// The tree with the maximum expanded blob size.
+	MaxExpandedBlobSizeTree Oid `json:"max_expanded_blob_size_tree,omitempty"`
 
 	// The total number of symbolic links, including duplicates.
 	MaxExpandedLinkCount Count32 `json:"max_expanded_link_count"`
 
+	// The tree with the maximum expanded link count.
+	MaxExpandedLinkCountTree Oid `json:"max_expanded_link_count_tree,omitempty"`
+
 	// The total number of submodules referenced, including duplicates.
 	MaxExpandedSubmoduleCount Count32 `json:"max_expanded_submodule_count"`
+
+	// The tree with the maximum expanded submodule count.
+	MaxExpandedSubmoduleCountTree Oid `json:"max_expanded_submodule_count_tree,omitempty"`
 }
 
-func (s *HistorySize) recordBlob(blobSize BlobSize) {
+func (s *HistorySize) recordBlob(oid Oid, blobSize BlobSize) {
 	s.UniqueBlobCount.Increment(1)
 	s.UniqueBlobSize.Increment(Count64(blobSize.Size))
-	s.MaxBlobSize.AdjustMax(blobSize.Size)
+	if s.MaxBlobSize.AdjustMax(blobSize.Size) {
+		s.MaxBlobSizeBlob = oid
+	}
 }
 
-func (s *HistorySize) recordTree(treeSize TreeSize, size Count32, treeEntries Count32) {
+func (s *HistorySize) recordTree(oid Oid, treeSize TreeSize, size Count32, treeEntries Count32) {
 	s.UniqueTreeCount.Increment(1)
 	s.UniqueTreeSize.Increment(Count64(size))
 	s.UniqueTreeEntries.Increment(Count64(treeEntries))
-	s.MaxTreeEntries.AdjustMax(treeEntries)
+	if s.MaxTreeEntries.AdjustMax(treeEntries) {
+		s.MaxTreeEntriesTree = oid
+	}
 
-	s.MaxPathDepth.AdjustMax(treeSize.MaxPathDepth)
-	s.MaxPathLength.AdjustMax(treeSize.MaxPathLength)
-	s.MaxExpandedTreeCount.AdjustMax(treeSize.ExpandedTreeCount)
-	s.MaxExpandedBlobCount.AdjustMax(treeSize.ExpandedBlobCount)
-	s.MaxExpandedBlobSize.AdjustMax(treeSize.ExpandedBlobSize)
-	s.MaxExpandedLinkCount.AdjustMax(treeSize.ExpandedLinkCount)
-	s.MaxExpandedSubmoduleCount.AdjustMax(treeSize.ExpandedSubmoduleCount)
+	if s.MaxPathDepth.AdjustMax(treeSize.MaxPathDepth) {
+		s.MaxPathDepthTree = oid
+	}
+	if s.MaxPathLength.AdjustMax(treeSize.MaxPathLength) {
+		s.MaxPathLengthTree = oid
+	}
+	if s.MaxExpandedTreeCount.AdjustMax(treeSize.ExpandedTreeCount) {
+		s.MaxExpandedTreeCountTree = oid
+	}
+	if s.MaxExpandedBlobCount.AdjustMax(treeSize.ExpandedBlobCount) {
+		s.MaxExpandedBlobCountTree = oid
+	}
+	if s.MaxExpandedBlobSize.AdjustMax(treeSize.ExpandedBlobSize) {
+		s.MaxExpandedBlobSizeTree = oid
+	}
+	if s.MaxExpandedLinkCount.AdjustMax(treeSize.ExpandedLinkCount) {
+		s.MaxExpandedLinkCountTree = oid
+	}
+	if s.MaxExpandedSubmoduleCount.AdjustMax(treeSize.ExpandedSubmoduleCount) {
+		s.MaxExpandedSubmoduleCountTree = oid
+	}
 }
 
-func (s *HistorySize) recordCommit(commitSize CommitSize, size Count32, parentCount Count32) {
+func (s *HistorySize) recordCommit(oid Oid, commitSize CommitSize, size Count32, parentCount Count32) {
 	s.UniqueCommitCount.Increment(1)
 	s.UniqueCommitSize.Increment(Count64(size))
-	s.MaxCommitSize.AdjustMax(size)
+	if s.MaxCommitSize.AdjustMax(size) {
+		s.MaxCommitSizeCommit = oid
+	}
 	s.MaxHistoryDepth.AdjustMax(commitSize.MaxAncestorDepth)
 	s.MaxParentCount.AdjustMax(parentCount)
 }
 
-func (s *HistorySize) recordTag(tagSize TagSize, size Count32) {
+func (s *HistorySize) recordTag(oid Oid, tagSize TagSize, size Count32) {
 	s.UniqueTagCount.Increment(1)
-	s.MaxTagDepth.AdjustMax(tagSize.TagDepth)
+	if s.MaxTagDepth.AdjustMax(tagSize.TagDepth) {
+		s.MaxTagDepthTag = oid
+	}
 }
 
 func (s *HistorySize) recordReference(ref Reference) {

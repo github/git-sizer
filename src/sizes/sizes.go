@@ -181,19 +181,19 @@ type HistorySize struct {
 	MaxPathLength Count32 `json:"max_path_length"`
 
 	// The total number of trees, including duplicates.
-	ExpandedTreeCount Count32 `json:"expanded_tree_count"`
+	MaxExpandedTreeCount Count32 `json:"max_expanded_tree_count"`
 
 	// The total number of blobs, including duplicates.
-	ExpandedBlobCount Count32 `json:"expanded_blob_count"`
+	MaxExpandedBlobCount Count32 `json:"max_expanded_blob_count"`
 
 	// The total size of all blobs, including duplicates.
-	ExpandedBlobSize Count64 `json:"expanded_blob_size"`
+	MaxExpandedBlobSize Count64 `json:"max_expanded_blob_size"`
 
 	// The total number of symbolic links, including duplicates.
-	ExpandedLinkCount Count32 `json:"expanded_link_count"`
+	MaxExpandedLinkCount Count32 `json:"max_expanded_link_count"`
 
 	// The total number of submodules referenced, including duplicates.
-	ExpandedSubmoduleCount Count32 `json:"expanded_submodule_count"`
+	MaxExpandedSubmoduleCount Count32 `json:"max_expanded_submodule_count"`
 }
 
 func (s *HistorySize) recordBlob(blobSize BlobSize) {
@@ -210,11 +210,11 @@ func (s *HistorySize) recordTree(treeSize TreeSize, size Count32, treeEntries Co
 
 	s.MaxPathDepth.AdjustMax(treeSize.MaxPathDepth)
 	s.MaxPathLength.AdjustMax(treeSize.MaxPathLength)
-	s.ExpandedTreeCount.AdjustMax(treeSize.ExpandedTreeCount)
-	s.ExpandedBlobCount.AdjustMax(treeSize.ExpandedBlobCount)
-	s.ExpandedBlobSize.AdjustMax(treeSize.ExpandedBlobSize)
-	s.ExpandedLinkCount.AdjustMax(treeSize.ExpandedLinkCount)
-	s.ExpandedSubmoduleCount.AdjustMax(treeSize.ExpandedSubmoduleCount)
+	s.MaxExpandedTreeCount.AdjustMax(treeSize.ExpandedTreeCount)
+	s.MaxExpandedBlobCount.AdjustMax(treeSize.ExpandedBlobCount)
+	s.MaxExpandedBlobSize.AdjustMax(treeSize.ExpandedBlobSize)
+	s.MaxExpandedLinkCount.AdjustMax(treeSize.ExpandedLinkCount)
+	s.MaxExpandedSubmoduleCount.AdjustMax(treeSize.ExpandedSubmoduleCount)
 }
 
 func (s *HistorySize) recordCommit(commitSize CommitSize, size Count32, parentCount Count32) {
@@ -243,9 +243,9 @@ func (s HistorySize) String() string {
 			"unique_tag_count=%d, "+
 			"reference_count=%d, "+
 			"max_path_depth=%d, max_path_length=%d, "+
-			"expanded_tree_count=%d, "+
-			"expanded_blob_count=%d, expanded_blob_size=%d, "+
-			"expanded_link_count=%d, expanded_submodule_count=%d",
+			"max_expanded_tree_count=%d, "+
+			"max_expanded_blob_count=%d, max_expanded_blob_size=%d, "+
+			"max_expanded_link_count=%d, max_expanded_submodule_count=%d",
 		s.UniqueCommitCount, s.UniqueCommitSize, s.MaxCommitSize,
 		s.MaxHistoryDepth, s.MaxParentCount,
 		s.UniqueTreeCount, s.UniqueTreeEntries, s.MaxTreeEntries,
@@ -253,9 +253,9 @@ func (s HistorySize) String() string {
 		s.UniqueTagCount,
 		s.ReferenceCount,
 		s.MaxPathDepth, s.MaxPathLength,
-		s.ExpandedTreeCount, s.ExpandedBlobCount,
-		s.ExpandedBlobSize, s.ExpandedLinkCount,
-		s.ExpandedSubmoduleCount,
+		s.MaxExpandedTreeCount, s.MaxExpandedBlobCount,
+		s.MaxExpandedBlobSize, s.MaxExpandedLinkCount,
+		s.MaxExpandedSubmoduleCount,
 	)
 }
 
@@ -269,8 +269,8 @@ type item struct {
 
 func (s HistorySize) TableString() string {
 	buf := &bytes.Buffer{}
-	fmt.Fprintln(buf, "| Name                      | Value     | Level of concern               |")
-	fmt.Fprintln(buf, "| ------------------------- | --------- | ------------------------------ |")
+	fmt.Fprintln(buf, "| Name                         | Value     | Level of concern               |")
+	fmt.Fprintln(buf, "| ---------------------------- | --------- | ------------------------------ |")
 	stars := "******************************"
 	for _, i := range []item{
 		{"unique_commit_count", s.UniqueCommitCount, MetricPrefixes, " ", 500e3},
@@ -290,11 +290,11 @@ func (s HistorySize) TableString() string {
 		{"reference_count", s.ReferenceCount, MetricPrefixes, " ", 25e3},
 		{"max_path_depth", s.MaxPathDepth, MetricPrefixes, " ", 10},
 		{"max_path_length", s.MaxPathLength, BinaryPrefixes, "B", 100},
-		{"expanded_tree_count", s.ExpandedTreeCount, MetricPrefixes, " ", 2000},
-		{"expanded_blob_count", s.ExpandedBlobCount, MetricPrefixes, " ", 50e3},
-		{"expanded_blob_size", s.ExpandedBlobSize, BinaryPrefixes, "B", 1e9},
-		{"expanded_link_count", s.ExpandedLinkCount, MetricPrefixes, " ", 25e3},
-		{"expanded_submodule_count", s.ExpandedSubmoduleCount, MetricPrefixes, " ", 100},
+		{"max_expanded_tree_count", s.MaxExpandedTreeCount, MetricPrefixes, " ", 2000},
+		{"max_expanded_blob_count", s.MaxExpandedBlobCount, MetricPrefixes, " ", 50e3},
+		{"max_expanded_blob_size", s.MaxExpandedBlobSize, BinaryPrefixes, "B", 1e9},
+		{"max_expanded_link_count", s.MaxExpandedLinkCount, MetricPrefixes, " ", 25e3},
+		{"max_expanded_submodule_count", s.MaxExpandedSubmoduleCount, MetricPrefixes, " ", 100},
 	} {
 		valueString, unitString := i.Value.Human(i.Prefixes, i.Unit)
 		var warning string
@@ -309,7 +309,7 @@ func (s HistorySize) TableString() string {
 				warning = stars[:alert]
 			}
 		}
-		fmt.Fprintf(buf, "| %-25s | %5s %-3s | %-30s |\n", i.Name, valueString, unitString, warning)
+		fmt.Fprintf(buf, "| %-28s | %5s %-3s | %-30s |\n", i.Name, valueString, unitString, warning)
 	}
 	return buf.String()
 }

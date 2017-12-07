@@ -56,16 +56,6 @@ func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
 	s.ExpandedSubmoduleCount.Increment(s2.ExpandedSubmoduleCount)
 }
 
-func (s *TreeSize) adjustMaxima(s2 TreeSize) {
-	s.MaxPathDepth.AdjustMax(s2.MaxPathDepth)
-	s.MaxPathLength.AdjustMax(s2.MaxPathLength)
-	s.ExpandedTreeCount.AdjustMax(s2.ExpandedTreeCount)
-	s.ExpandedBlobCount.AdjustMax(s2.ExpandedBlobCount)
-	s.ExpandedBlobSize.AdjustMax(s2.ExpandedBlobSize)
-	s.ExpandedLinkCount.AdjustMax(s2.ExpandedLinkCount)
-	s.ExpandedSubmoduleCount.AdjustMax(s2.ExpandedSubmoduleCount)
-}
-
 // Record that the object has a blob of the specified `size` as a
 // direct descendant.
 func (s *TreeSize) addBlob(filename string, size BlobSize) {
@@ -181,7 +171,29 @@ type HistorySize struct {
 
 	// The maximum TreeSize in the analyzed history (where each
 	// attribute is maximized separately).
-	TreeSize
+
+	// The maximum depth of trees and blobs starting at this object
+	// (including this object).
+	MaxPathDepth Count32 `json:"max_path_depth"`
+
+	// The maximum length of any path relative to this object, in
+	// characters.
+	MaxPathLength Count32 `json:"max_path_length"`
+
+	// The total number of trees, including duplicates.
+	ExpandedTreeCount Count32 `json:"expanded_tree_count"`
+
+	// The total number of blobs, including duplicates.
+	ExpandedBlobCount Count32 `json:"expanded_blob_count"`
+
+	// The total size of all blobs, including duplicates.
+	ExpandedBlobSize Count64 `json:"expanded_blob_size"`
+
+	// The total number of symbolic links, including duplicates.
+	ExpandedLinkCount Count32 `json:"expanded_link_count"`
+
+	// The total number of submodules referenced, including duplicates.
+	ExpandedSubmoduleCount Count32 `json:"expanded_submodule_count"`
 }
 
 func (s *HistorySize) recordBlob(blobSize BlobSize) {
@@ -195,7 +207,14 @@ func (s *HistorySize) recordTree(treeSize TreeSize, size Count32, treeEntries Co
 	s.UniqueTreeSize.Increment(Count64(size))
 	s.UniqueTreeEntries.Increment(Count64(treeEntries))
 	s.MaxTreeEntries.AdjustMax(treeEntries)
-	s.TreeSize.adjustMaxima(treeSize)
+
+	s.MaxPathDepth.AdjustMax(treeSize.MaxPathDepth)
+	s.MaxPathLength.AdjustMax(treeSize.MaxPathLength)
+	s.ExpandedTreeCount.AdjustMax(treeSize.ExpandedTreeCount)
+	s.ExpandedBlobCount.AdjustMax(treeSize.ExpandedBlobCount)
+	s.ExpandedBlobSize.AdjustMax(treeSize.ExpandedBlobSize)
+	s.ExpandedLinkCount.AdjustMax(treeSize.ExpandedLinkCount)
+	s.ExpandedSubmoduleCount.AdjustMax(treeSize.ExpandedSubmoduleCount)
 }
 
 func (s *HistorySize) recordCommit(commitSize CommitSize, size Count32, parentCount Count32) {
@@ -223,14 +242,20 @@ func (s HistorySize) String() string {
 			"unique_blob_count=%d, unique_blob_size=%d, max_blob_size=%d, "+
 			"unique_tag_count=%d, "+
 			"reference_count=%d, "+
-			"%s",
+			"max_path_depth=%d, max_path_length=%d, "+
+			"expanded_tree_count=%d, "+
+			"expanded_blob_count=%d, expanded_blob_size=%d, "+
+			"expanded_link_count=%d, expanded_submodule_count=%d",
 		s.UniqueCommitCount, s.UniqueCommitSize, s.MaxCommitSize,
 		s.MaxHistoryDepth, s.MaxParentCount,
 		s.UniqueTreeCount, s.UniqueTreeEntries, s.MaxTreeEntries,
 		s.UniqueBlobCount, s.UniqueBlobSize, s.MaxBlobSize,
 		s.UniqueTagCount,
 		s.ReferenceCount,
-		s.TreeSize,
+		s.MaxPathDepth, s.MaxPathLength,
+		s.ExpandedTreeCount, s.ExpandedBlobCount,
+		s.ExpandedBlobSize, s.ExpandedLinkCount,
+		s.ExpandedSubmoduleCount,
 	)
 }
 

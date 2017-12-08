@@ -142,19 +142,46 @@ func (n Count64) Human(prefixes []Prefix, unit string) (string, string) {
 	}
 }
 
+const (
+	stars = "******************************"
+)
+
 type item struct {
-	Name     string
-	Value    Humaner
-	Prefixes []Prefix
-	Unit     string
-	Scale    float64
+	name     string
+	value    Humaner
+	prefixes []Prefix
+	unit     string
+	scale    float64
+}
+
+func (i *item) Name() string {
+	return i.name
+}
+
+func (i *item) Value() (string, string) {
+	return i.value.Human(i.prefixes, i.unit)
+}
+
+func (i *item) LevelOfConcern() string {
+	var warning string
+	if i.scale == 0 {
+		warning = ""
+	} else {
+		alert := float64(i.value.ToUint64()) / i.scale
+		if alert > 30 {
+			warning = "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		} else {
+			alert := int(alert)
+			warning = stars[:alert]
+		}
+	}
+	return warning
 }
 
 func (s HistorySize) TableString() string {
 	buf := &bytes.Buffer{}
 	fmt.Fprintln(buf, "| Name                         | Value     | Level of concern               |")
 	fmt.Fprintln(buf, "| ---------------------------- | --------- | ------------------------------ |")
-	stars := "******************************"
 	for _, i := range []item{
 		{"unique_commit_count", s.UniqueCommitCount, MetricPrefixes, " ", 500e3},
 		{"unique_commit_size", s.UniqueCommitSize, BinaryPrefixes, "B", 250e6},
@@ -179,20 +206,8 @@ func (s HistorySize) TableString() string {
 		{"max_expanded_link_count", s.MaxExpandedLinkCount, MetricPrefixes, " ", 25e3},
 		{"max_expanded_submodule_count", s.MaxExpandedSubmoduleCount, MetricPrefixes, " ", 100},
 	} {
-		valueString, unitString := i.Value.Human(i.Prefixes, i.Unit)
-		var warning string
-		if i.Scale == 0 {
-			warning = ""
-		} else {
-			alert := float64(i.Value.ToUint64()) / i.Scale
-			if alert > 30 {
-				warning = "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-			} else {
-				alert := int(alert)
-				warning = stars[:alert]
-			}
-		}
-		fmt.Fprintf(buf, "| %-28s | %5s %-3s | %-30s |\n", i.Name, valueString, unitString, warning)
+		valueString, unitString := i.Value()
+		fmt.Fprintf(buf, "| %-28s | %5s %-3s | %-30s |\n", i.Name(), valueString, unitString, i.LevelOfConcern())
 	}
 	return buf.String()
 }

@@ -24,6 +24,7 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 	defer iter.Close()
 
 	errChan := make(chan error, 1)
+	var refs []Reference
 	// Feed the references that we want into the stdin of the object
 	// iterator:
 	go func() {
@@ -43,7 +44,7 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 			if !filter(ref) {
 				continue
 			}
-			graph.RegisterReference(ref)
+			refs = append(refs, ref)
 			_, err = bufin.WriteString(ref.Oid.String())
 			if err != nil {
 				errChan <- err
@@ -208,6 +209,10 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 	err = <-errChan
 	if err != nil {
 		return HistorySize{}, err
+	}
+
+	for _, ref := range refs {
+		graph.RegisterReference(ref)
 	}
 
 	return graph.HistorySize(), nil

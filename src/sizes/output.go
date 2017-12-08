@@ -146,6 +146,107 @@ const (
 	stars = "******************************"
 )
 
+// A set of lines in the tabular output.
+type lineSet interface {
+	Lines() []line
+}
+
+// A single line in the tabular output.
+type line interface {
+	Name() string
+	Value() (string, string)
+	LevelOfConcern() string
+}
+
+// A blank line in the tabular output.
+type blank struct {
+}
+
+func (l *blank) Lines() []line {
+	return []line{l}
+}
+
+func (l *blank) Name() string {
+	return ""
+}
+
+func (l *blank) Value() (string, string) {
+	return "", ""
+}
+
+func (l *blank) LevelOfConcern() string {
+	return ""
+}
+
+// A header line in the tabular output.
+type header struct {
+	name string
+}
+
+func (l *header) Name() string {
+	return l.name
+}
+
+func (l *header) Value() (string, string) {
+	return "", ""
+}
+
+func (l *header) LevelOfConcern() string {
+	return ""
+}
+
+// A bullet point in the tabular output.
+type bullet struct {
+	prefix string
+	line   line
+}
+
+// Turn `line` into a `bullet`. If it is already a bullet, just
+// increase its level of indentation. Leave blank lines unchanged.
+func newBullet(line line) line {
+	switch line := line.(type) {
+	case *bullet:
+		return &bullet{"  " + line.prefix, line.line}
+	case *blank:
+		return line
+	default:
+		return &bullet{"* ", line}
+	}
+}
+
+func (l *bullet) Name() string {
+	return l.prefix + l.line.Name()
+}
+
+func (l *bullet) Value() (string, string) {
+	return l.line.Value()
+}
+
+func (l *bullet) LevelOfConcern() string {
+	return l.line.LevelOfConcern()
+}
+
+// A section of lines in the tabular output, consisting of a header
+// and a number of bullet lines. The lines in a section can themselves
+// be bulletized, in which case the header becomes a top-level bullet
+// and the lines become second-level bullets.
+type section struct {
+	name     string
+	lineSets []lineSet
+}
+
+func (s *section) Lines() []line {
+	var lines []line
+	lines = append(lines, &header{s.name})
+	for _, ls := range s.lineSets {
+		for _, l := range ls.Lines() {
+			lines = append(lines, newBullet(l))
+		}
+	}
+	return lines
+}
+
+// A line containing data in the tabular output.
 type item struct {
 	name     string
 	value    Humaner
@@ -154,20 +255,24 @@ type item struct {
 	scale    float64
 }
 
-func (i *item) Name() string {
-	return i.name
+func (l *item) Lines() []line {
+	return []line{l}
 }
 
-func (i *item) Value() (string, string) {
-	return i.value.Human(i.prefixes, i.unit)
+func (l *item) Name() string {
+	return l.name
 }
 
-func (i *item) LevelOfConcern() string {
+func (l *item) Value() (string, string) {
+	return l.value.Human(l.prefixes, l.unit)
+}
+
+func (l *item) LevelOfConcern() string {
 	var warning string
-	if i.scale == 0 {
+	if l.scale == 0 {
 		warning = ""
 	} else {
-		alert := float64(i.value.ToUint64()) / i.scale
+		alert := float64(l.value.ToUint64()) / l.scale
 		if alert > 30 {
 			warning = "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 		} else {
@@ -182,32 +287,95 @@ func (s HistorySize) TableString() string {
 	buf := &bytes.Buffer{}
 	fmt.Fprintln(buf, "| Name                         | Value     | Level of concern               |")
 	fmt.Fprintln(buf, "| ---------------------------- | --------- | ------------------------------ |")
-	for _, i := range []item{
-		{"unique_commit_count", s.UniqueCommitCount, MetricPrefixes, " ", 500e3},
-		{"unique_commit_size", s.UniqueCommitSize, BinaryPrefixes, "B", 250e6},
-		{"max_commit_size", s.MaxCommitSize, BinaryPrefixes, "B", 50e3},
-		{"max_history_depth", s.MaxHistoryDepth, MetricPrefixes, " ", 500e3},
-		{"max_parent_count", s.MaxParentCount, MetricPrefixes, " ", 10},
-		{"unique_tree_count", s.UniqueTreeCount, MetricPrefixes, " ", 1.5e6},
-		{"unique_tree_size", s.UniqueTreeSize, BinaryPrefixes, "B", 2e9},
-		{"unique_tree_entries", s.UniqueTreeEntries, MetricPrefixes, " ", 50e6},
-		{"max_tree_entries", s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3},
-		{"unique_blob_count", s.UniqueBlobCount, MetricPrefixes, " ", 1.5e6},
-		{"unique_blob_size", s.UniqueBlobSize, BinaryPrefixes, "B", 10e9},
-		{"max_blob_size", s.MaxBlobSize, BinaryPrefixes, "B", 10e6},
-		{"unique_tag_count", s.UniqueTagCount, MetricPrefixes, " ", 25e3},
-		{"max_tag_depth", s.MaxTagDepth, MetricPrefixes, " ", 1},
-		{"reference_count", s.ReferenceCount, MetricPrefixes, " ", 25e3},
-		{"max_path_depth", s.MaxPathDepth, MetricPrefixes, " ", 10},
-		{"max_path_length", s.MaxPathLength, BinaryPrefixes, "B", 100},
-		{"max_expanded_tree_count", s.MaxExpandedTreeCount, MetricPrefixes, " ", 2000},
-		{"max_expanded_blob_count", s.MaxExpandedBlobCount, MetricPrefixes, " ", 50e3},
-		{"max_expanded_blob_size", s.MaxExpandedBlobSize, BinaryPrefixes, "B", 1e9},
-		{"max_expanded_link_count", s.MaxExpandedLinkCount, MetricPrefixes, " ", 25e3},
-		{"max_expanded_submodule_count", s.MaxExpandedSubmoduleCount, MetricPrefixes, " ", 100},
+	for _, ls := range []lineSet{
+		&section{"Overall repository size",
+			[]lineSet{
+				&section{"Commits",
+					[]lineSet{
+						&item{"Count", s.UniqueCommitCount, MetricPrefixes, " ", 500e3},
+						&item{"Total size", s.UniqueCommitSize, BinaryPrefixes, "B", 250e6},
+					},
+				},
+
+				&section{"Trees",
+					[]lineSet{
+						&item{"Count", s.UniqueTreeCount, MetricPrefixes, " ", 1.5e6},
+						&item{"Total size", s.UniqueTreeSize, BinaryPrefixes, "B", 2e9},
+						&item{"Total tree entries", s.UniqueTreeEntries, MetricPrefixes, " ", 50e6},
+					},
+				},
+
+				&section{"Blobs",
+					[]lineSet{
+						&item{"Count", s.UniqueBlobCount, MetricPrefixes, " ", 1.5e6},
+						&item{"Total size", s.UniqueBlobSize, BinaryPrefixes, "B", 10e9},
+					},
+				},
+
+				&section{"Annotated tags",
+					[]lineSet{
+						&item{"Count", s.UniqueTagCount, MetricPrefixes, " ", 25e3},
+					},
+				},
+
+				&section{"References",
+					[]lineSet{
+						&item{"Count", s.ReferenceCount, MetricPrefixes, " ", 25e3},
+					},
+				},
+			},
+		},
+		&blank{},
+
+		&section{"Biggest commit objects",
+			[]lineSet{
+				&item{"Maximum size", s.MaxCommitSize, BinaryPrefixes, "B", 50e3},
+				&item{"Maximum parents", s.MaxParentCount, MetricPrefixes, " ", 10},
+			},
+		},
+		&blank{},
+
+		&section{"Biggest tree objects",
+			[]lineSet{
+				&item{"Maximum tree entries", s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3},
+			},
+		},
+		&blank{},
+
+		&section{"Biggest blob objects",
+			[]lineSet{
+				&item{"Maximum size", s.MaxBlobSize, BinaryPrefixes, "B", 10e6},
+			},
+		},
+		&blank{},
+
+		&section{"History structure",
+			[]lineSet{
+				&item{"Maximum history depth", s.MaxHistoryDepth, MetricPrefixes, " ", 500e3},
+				&item{"Maximum tag depth", s.MaxTagDepth, MetricPrefixes, " ", 1},
+			},
+		},
+		&blank{},
+
+		&section{"Biggest checkouts",
+			[]lineSet{
+				&item{"Number of directories", s.MaxExpandedTreeCount, MetricPrefixes, " ", 2000},
+				&item{"Maximum path depth", s.MaxPathDepth, MetricPrefixes, " ", 10},
+				&item{"Maximum path length", s.MaxPathLength, BinaryPrefixes, "B", 100},
+
+				&item{"Number of files", s.MaxExpandedBlobCount, MetricPrefixes, " ", 50e3},
+				&item{"Total size of files", s.MaxExpandedBlobSize, BinaryPrefixes, "B", 1e9},
+
+				&item{"Number of symlinks", s.MaxExpandedLinkCount, MetricPrefixes, " ", 25e3},
+
+				&item{"Number of submodules", s.MaxExpandedSubmoduleCount, MetricPrefixes, " ", 100},
+			},
+		},
 	} {
-		valueString, unitString := i.Value()
-		fmt.Fprintf(buf, "| %-28s | %5s %-3s | %-30s |\n", i.Name(), valueString, unitString, i.LevelOfConcern())
+		for _, l := range ls.Lines() {
+			valueString, unitString := l.Value()
+			fmt.Fprintf(buf, "| %-28s | %5s %-3s | %-30s |\n", l.Name(), valueString, unitString, l.LevelOfConcern())
+		}
 	}
 	return buf.String()
 }

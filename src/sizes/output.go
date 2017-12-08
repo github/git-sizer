@@ -143,7 +143,8 @@ func (n Count64) Human(prefixes []Prefix, unit string) (string, string) {
 }
 
 const (
-	stars = "******************************"
+	spaces = "                            "
+	stars  = "******************************"
 )
 
 // A set of lines in the tabular output.
@@ -154,6 +155,7 @@ type lineSet interface {
 // A single line in the tabular output.
 type line interface {
 	Name() string
+	Footnote() string
 	Value() (string, string)
 	LevelOfConcern() string
 }
@@ -167,6 +169,10 @@ func (l *blank) Lines() []line {
 }
 
 func (l *blank) Name() string {
+	return ""
+}
+
+func (l *blank) Footnote() string {
 	return ""
 }
 
@@ -185,6 +191,10 @@ type header struct {
 
 func (l *header) Name() string {
 	return l.name
+}
+
+func (l *header) Footnote() string {
+	return ""
 }
 
 func (l *header) Value() (string, string) {
@@ -218,6 +228,10 @@ func (l *bullet) Name() string {
 	return l.prefix + l.line.Name()
 }
 
+func (l *bullet) Footnote() string {
+	return l.line.Footnote()
+}
+
 func (l *bullet) Value() (string, string) {
 	return l.line.Value()
 }
@@ -249,6 +263,7 @@ func (s *section) Lines() []line {
 // A line containing data in the tabular output.
 type item struct {
 	name     string
+	path     *Path
 	value    Humaner
 	prefixes []Prefix
 	unit     string
@@ -261,6 +276,14 @@ func (l *item) Lines() []line {
 
 func (l *item) Name() string {
 	return l.name
+}
+
+func (l *item) Footnote() string {
+	if l.path == nil || l.path.Oid == NullOid {
+		return ""
+	} else {
+		return l.path.String()
+	}
 }
 
 func (l *item) Value() (string, string) {
@@ -285,42 +308,47 @@ func (l *item) LevelOfConcern() string {
 
 func (s HistorySize) TableString() string {
 	buf := &bytes.Buffer{}
+
 	fmt.Fprintln(buf, "| Name                         | Value     | Level of concern               |")
 	fmt.Fprintln(buf, "| ---------------------------- | --------- | ------------------------------ |")
+
+	var footnotes []string
+	footnoteIndexes := make(map[string]int)
+
 	for _, ls := range []lineSet{
 		&section{"Overall repository size",
 			[]lineSet{
 				&section{"Commits",
 					[]lineSet{
-						&item{"Count", s.UniqueCommitCount, MetricPrefixes, " ", 500e3},
-						&item{"Total size", s.UniqueCommitSize, BinaryPrefixes, "B", 250e6},
+						&item{"Count", nil, s.UniqueCommitCount, MetricPrefixes, " ", 500e3},
+						&item{"Total size", nil, s.UniqueCommitSize, BinaryPrefixes, "B", 250e6},
 					},
 				},
 
 				&section{"Trees",
 					[]lineSet{
-						&item{"Count", s.UniqueTreeCount, MetricPrefixes, " ", 1.5e6},
-						&item{"Total size", s.UniqueTreeSize, BinaryPrefixes, "B", 2e9},
-						&item{"Total tree entries", s.UniqueTreeEntries, MetricPrefixes, " ", 50e6},
+						&item{"Count", nil, s.UniqueTreeCount, MetricPrefixes, " ", 1.5e6},
+						&item{"Total size", nil, s.UniqueTreeSize, BinaryPrefixes, "B", 2e9},
+						&item{"Total tree entries", nil, s.UniqueTreeEntries, MetricPrefixes, " ", 50e6},
 					},
 				},
 
 				&section{"Blobs",
 					[]lineSet{
-						&item{"Count", s.UniqueBlobCount, MetricPrefixes, " ", 1.5e6},
-						&item{"Total size", s.UniqueBlobSize, BinaryPrefixes, "B", 10e9},
+						&item{"Count", nil, s.UniqueBlobCount, MetricPrefixes, " ", 1.5e6},
+						&item{"Total size", nil, s.UniqueBlobSize, BinaryPrefixes, "B", 10e9},
 					},
 				},
 
 				&section{"Annotated tags",
 					[]lineSet{
-						&item{"Count", s.UniqueTagCount, MetricPrefixes, " ", 25e3},
+						&item{"Count", nil, s.UniqueTagCount, MetricPrefixes, " ", 25e3},
 					},
 				},
 
 				&section{"References",
 					[]lineSet{
-						&item{"Count", s.ReferenceCount, MetricPrefixes, " ", 25e3},
+						&item{"Count", nil, s.ReferenceCount, MetricPrefixes, " ", 25e3},
 					},
 				},
 			},
@@ -329,53 +357,80 @@ func (s HistorySize) TableString() string {
 
 		&section{"Biggest commit objects",
 			[]lineSet{
-				&item{"Maximum size", s.MaxCommitSize, BinaryPrefixes, "B", 50e3},
-				&item{"Maximum parents", s.MaxParentCount, MetricPrefixes, " ", 10},
+				&item{"Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, BinaryPrefixes, "B", 50e3},
+				&item{"Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, MetricPrefixes, " ", 10},
 			},
 		},
 		&blank{},
 
 		&section{"Biggest tree objects",
 			[]lineSet{
-				&item{"Maximum tree entries", s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3},
+				&item{"Maximum tree entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3},
 			},
 		},
 		&blank{},
 
 		&section{"Biggest blob objects",
 			[]lineSet{
-				&item{"Maximum size", s.MaxBlobSize, BinaryPrefixes, "B", 10e6},
+				&item{"Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, BinaryPrefixes, "B", 10e6},
 			},
 		},
 		&blank{},
 
 		&section{"History structure",
 			[]lineSet{
-				&item{"Maximum history depth", s.MaxHistoryDepth, MetricPrefixes, " ", 500e3},
-				&item{"Maximum tag depth", s.MaxTagDepth, MetricPrefixes, " ", 1},
+				&item{"Maximum history depth", nil, s.MaxHistoryDepth, MetricPrefixes, " ", 500e3},
+				&item{"Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, MetricPrefixes, " ", 1},
 			},
 		},
 		&blank{},
 
 		&section{"Biggest checkouts",
 			[]lineSet{
-				&item{"Number of directories", s.MaxExpandedTreeCount, MetricPrefixes, " ", 2000},
-				&item{"Maximum path depth", s.MaxPathDepth, MetricPrefixes, " ", 10},
-				&item{"Maximum path length", s.MaxPathLength, BinaryPrefixes, "B", 100},
+				&item{"Number of directories", s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, MetricPrefixes, " ", 2000},
+				&item{"Maximum path depth", s.MaxPathDepthTree, s.MaxPathDepth, MetricPrefixes, " ", 10},
+				&item{"Maximum path length", s.MaxPathLengthTree, s.MaxPathLength, BinaryPrefixes, "B", 100},
 
-				&item{"Number of files", s.MaxExpandedBlobCount, MetricPrefixes, " ", 50e3},
-				&item{"Total size of files", s.MaxExpandedBlobSize, BinaryPrefixes, "B", 1e9},
+				&item{"Number of files", s.MaxExpandedBlobCountTree, s.MaxExpandedBlobCount, MetricPrefixes, " ", 50e3},
+				&item{"Total size of files", s.MaxExpandedBlobSizeTree, s.MaxExpandedBlobSize, BinaryPrefixes, "B", 1e9},
 
-				&item{"Number of symlinks", s.MaxExpandedLinkCount, MetricPrefixes, " ", 25e3},
+				&item{"Number of symlinks", s.MaxExpandedLinkCountTree, s.MaxExpandedLinkCount, MetricPrefixes, " ", 25e3},
 
-				&item{"Number of submodules", s.MaxExpandedSubmoduleCount, MetricPrefixes, " ", 100},
+				&item{"Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, MetricPrefixes, " ", 100},
 			},
 		},
 	} {
 		for _, l := range ls.Lines() {
 			valueString, unitString := l.Value()
-			fmt.Fprintf(buf, "| %-28s | %5s %-3s | %-30s |\n", l.Name(), valueString, unitString, l.LevelOfConcern())
+			footnote := l.Footnote()
+			var citation string
+			if footnote == "" {
+				citation = ""
+			} else {
+				index, ok := footnoteIndexes[footnote]
+				if !ok {
+					index = len(footnoteIndexes) + 1
+					footnotes = append(footnotes, footnote)
+					footnoteIndexes[footnote] = index
+				}
+				citation = fmt.Sprintf("[%d]", index)
+			}
+			nameString := l.Name()
+			if len(nameString)+len(citation) < 28 {
+				nameString += spaces[:28-len(nameString)-len(citation)]
+			}
+			nameString += citation
+			fmt.Fprintf(buf, "| %s | %5s %-3s | %-30s |\n", nameString, valueString, unitString, l.LevelOfConcern())
 		}
 	}
+
+	// Output the footnotes:
+	buf.WriteByte('\n')
+	for i, footnote := range footnotes {
+		index := i + 1
+		citation := fmt.Sprintf("[%d]", index)
+		fmt.Fprintf(buf, "%-4s %s\n", citation, footnote)
+	}
+
 	return buf.String()
 }

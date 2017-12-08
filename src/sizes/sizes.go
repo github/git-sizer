@@ -111,6 +111,9 @@ type HistorySize struct {
 	// The maximum number of direct parents of any analyzed commit.
 	MaxParentCount Count32 `json:"max_parent_count"`
 
+	// The commit with the maximum number of direct parents.
+	MaxParentCountCommit *Path `json:"max_parent_count_commit"`
+
 	// The total number of unique trees analyzed.
 	UniqueTreeCount Count32 `json:"unique_tree_count"`
 
@@ -260,7 +263,9 @@ func (s *HistorySize) recordCommit(g *Graph, oid Oid, commitSize CommitSize, siz
 		setPath(g.pathResolver, &s.MaxCommitSizeCommit, oid, "commit")
 	}
 	s.MaxHistoryDepth.AdjustMax(commitSize.MaxAncestorDepth)
-	s.MaxParentCount.AdjustMax(parentCount)
+	if s.MaxParentCount.AdjustMax(parentCount) {
+		setPath(g.pathResolver, &s.MaxParentCountCommit, oid, "commit")
+	}
 }
 
 func (s *HistorySize) recordTag(g *Graph, oid Oid, tagSize TagSize, size Count32) {

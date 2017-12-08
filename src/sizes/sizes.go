@@ -229,7 +229,7 @@ type HistorySize struct {
 	MaxExpandedSubmoduleCountTree Oid `json:"max_expanded_submodule_count_tree,omitempty"`
 }
 
-func (s *HistorySize) recordBlob(oid Oid, blobSize BlobSize) {
+func (s *HistorySize) recordBlob(g *Graph, oid Oid, blobSize BlobSize) {
 	s.UniqueBlobCount.Increment(1)
 	s.UniqueBlobSize.Increment(Count64(blobSize.Size))
 	if s.MaxBlobSize.AdjustMax(blobSize.Size) {
@@ -237,7 +237,7 @@ func (s *HistorySize) recordBlob(oid Oid, blobSize BlobSize) {
 	}
 }
 
-func (s *HistorySize) recordTree(oid Oid, treeSize TreeSize, size Count32, treeEntries Count32) {
+func (s *HistorySize) recordTree(g *Graph, oid Oid, treeSize TreeSize, size Count32, treeEntries Count32) {
 	s.UniqueTreeCount.Increment(1)
 	s.UniqueTreeSize.Increment(Count64(size))
 	s.UniqueTreeEntries.Increment(Count64(treeEntries))
@@ -268,7 +268,7 @@ func (s *HistorySize) recordTree(oid Oid, treeSize TreeSize, size Count32, treeE
 	}
 }
 
-func (s *HistorySize) recordCommit(oid Oid, commitSize CommitSize, size Count32, parentCount Count32) {
+func (s *HistorySize) recordCommit(g *Graph, oid Oid, commitSize CommitSize, size Count32, parentCount Count32) {
 	s.UniqueCommitCount.Increment(1)
 	s.UniqueCommitSize.Increment(Count64(size))
 	if s.MaxCommitSize.AdjustMax(size) {
@@ -278,14 +278,14 @@ func (s *HistorySize) recordCommit(oid Oid, commitSize CommitSize, size Count32,
 	s.MaxParentCount.AdjustMax(parentCount)
 }
 
-func (s *HistorySize) recordTag(oid Oid, tagSize TagSize, size Count32) {
+func (s *HistorySize) recordTag(g *Graph, oid Oid, tagSize TagSize, size Count32) {
 	s.UniqueTagCount.Increment(1)
 	if s.MaxTagDepth.AdjustMax(tagSize.TagDepth) {
 		s.MaxTagDepthTag = oid
 	}
 }
 
-func (s *HistorySize) recordReference(ref Reference) {
+func (s *HistorySize) recordReference(g *Graph, ref Reference) {
 	s.ReferenceCount.Increment(1)
 }
 

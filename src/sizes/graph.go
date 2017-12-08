@@ -252,7 +252,7 @@ func NewGraph() *Graph {
 
 func (g *Graph) RegisterReference(ref Reference) {
 	g.historyLock.Lock()
-	g.historySize.recordReference(ref)
+	g.historySize.recordReference(g, ref)
 	g.historyLock.Unlock()
 }
 
@@ -283,7 +283,7 @@ func (g *Graph) RegisterBlob(oid Oid, objectSize Count32) {
 	g.blobLock.Unlock()
 
 	g.historyLock.Lock()
-	g.historySize.recordBlob(oid, size)
+	g.historySize.recordBlob(g, oid, size)
 	g.historyLock.Unlock()
 }
 
@@ -366,7 +366,7 @@ func (g *Graph) finalizeTreeSize(oid Oid, size TreeSize, objectSize Count32, tre
 	g.treeLock.Unlock()
 
 	g.historyLock.Lock()
-	g.historySize.recordTree(oid, size, objectSize, treeEntries)
+	g.historySize.recordTree(g, oid, size, objectSize, treeEntries)
 	g.historyLock.Unlock()
 }
 
@@ -528,7 +528,7 @@ func (g *Graph) RegisterCommit(oid Oid, commit *Commit) {
 	g.commitLock.Unlock()
 
 	g.historyLock.Lock()
-	g.historySize.recordCommit(oid, size, commit.Size, parentCount)
+	g.historySize.recordCommit(g, oid, size, commit.Size, parentCount)
 	g.historyLock.Unlock()
 }
 
@@ -582,7 +582,7 @@ func (g *Graph) finalizeTagSize(oid Oid, size TagSize, objectSize Count32) {
 	g.tagLock.Unlock()
 
 	g.historyLock.Lock()
-	g.historySize.recordTag(oid, size, objectSize)
+	g.historySize.recordTag(g, oid, size, objectSize)
 	g.historyLock.Unlock()
 }
 

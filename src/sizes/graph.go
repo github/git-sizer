@@ -356,7 +356,7 @@ func (g *Graph) RegisterTree(oid Oid, tree *Tree) error {
 	g.treeLock.Unlock()
 
 	// Let the record take care of the rest:
-	return record.initialize(g, tree)
+	return record.initialize(g, oid, tree)
 }
 
 func (g *Graph) finalizeTreeSize(oid Oid, size TreeSize, objectSize Count32, treeEntries Count32) {
@@ -407,7 +407,7 @@ func newTreeRecord(oid Oid) *treeRecord {
 }
 
 // Initialize `r` (which is empty) based on `tree`.
-func (r *treeRecord) initialize(g *Graph, tree *Tree) error {
+func (r *treeRecord) initialize(g *Graph, oid Oid, tree *Tree) error {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -572,7 +572,7 @@ func (g *Graph) RegisterTag(oid Oid, tag *Tag) {
 	g.tagLock.Unlock()
 
 	// Let the record take care of the rest:
-	record.initialize(g, tag)
+	record.initialize(g, oid, tag)
 }
 
 func (g *Graph) finalizeTagSize(oid Oid, size TagSize, objectSize Count32) {
@@ -613,7 +613,7 @@ func newTagRecord(oid Oid) *tagRecord {
 }
 
 // Initialize `r` (which is empty) based on `tag`.
-func (r *tagRecord) initialize(g *Graph, tag *Tag) {
+func (r *tagRecord) initialize(g *Graph, oid Oid, tag *Tag) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 

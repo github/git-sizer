@@ -239,6 +239,8 @@ type Graph struct {
 	// Statistics about the overall history size:
 	historyLock sync.Mutex
 	historySize HistorySize
+
+	pathResolver *PathResolver
 }
 
 func NewGraph() *Graph {
@@ -252,6 +254,8 @@ func NewGraph() *Graph {
 
 		tagRecords: make(map[Oid]*tagRecord),
 		tagSizes:   make(map[Oid]TagSize),
+
+		pathResolver: NewPathResolver(),
 	}
 }
 
@@ -259,6 +263,8 @@ func (g *Graph) RegisterReference(ref Reference) {
 	g.historyLock.Lock()
 	g.historySize.recordReference(g, ref)
 	g.historyLock.Unlock()
+
+	g.pathResolver.RecordReference(ref)
 }
 
 func (g *Graph) HistorySize() HistorySize {
@@ -434,11 +440,17 @@ func (r *treeRecord) initialize(g *Graph, oid Oid, tree *Tree) error {
 		case entry.Filemode&0170000 == 0040000:
 			// Tree
 			listener := func(size TreeSize) {
+				// This listener is called when the tree pointed to by
+				// `entry` has been fully processed.
 				r.lock.Lock()
 				defer r.lock.Unlock()
 
+				g.pathResolver.RecordTreeEntry(oid, name, entry.Oid)
+
 				r.size.addDescendent(name, size)
 				r.pending--
+				// This might inform *our* listeners that we are now
+				// fully processed:
 				r.maybeFinalize(g)
 			}
 			treeSize, ok := g.RequireTreeSize(entry.Oid, listener)
@@ -456,11 +468,15 @@ func (r *treeRecord) initialize(g *Graph, oid Oid, tree *Tree) error {
 
 		case entry.Filemode&0170000 == 0120000:
 			// Symlink
+			g.pathResolver.RecordTreeEntry(oid, name, entry.Oid)
+
 			r.size.addLink(name)
 			r.entryCount.Increment(1)
 
 		default:
 			// Blob
+			g.pathResolver.RecordTreeEntry(oid, name, entry.Oid)
+
 			blobSize := g.GetBlobSize(entry.Oid)
 			r.size.addBlob(name, blobSize)
 			r.entryCount.Increment(1)
@@ -519,6 +535,8 @@ func (g *Graph) RegisterCommit(oid Oid, commit *Commit) {
 	// The tree:
 	treeSize := g.GetTreeSize(commit.Tree)
 	size.addTree(treeSize)
+
+	g.pathResolver.RecordCommit(oid, commit)
 
 	for _, parent := range commit.Parents {
 		parentSize := g.GetCommitSize(parent)

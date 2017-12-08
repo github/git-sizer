@@ -59,14 +59,58 @@ type Path struct {
 	relativePath string
 }
 
+// Return the path of this object under the assumption that another
+// path component will be appended to it.
+func (p *Path) TreePrefix() string {
+	switch p.objectType {
+	case "blob", "tree":
+		if p.parent != nil {
+			if p.relativePath == "" {
+				// This is a top-level tree or blob.
+				return p.parent.TreePrefix()
+			} else {
+				// The parent is also a tree.
+				return p.parent.TreePrefix() + p.relativePath + "/"
+			}
+		} else {
+			return fmt.Sprintf("???%s???", p.objectType)
+		}
+	case "commit", "tag":
+		if p.parent != nil {
+			// The parent is a tag.
+			return fmt.Sprintf("%s^{%s}", p.parent.Path(), p.objectType)
+		} else {
+			return p.Oid.String() + ":"
+		}
+	default:
+		return fmt.Sprintf("???%s???", p.objectType)
+	}
+}
+
 func (p *Path) Path() string {
-	if p.parent != nil {
-		return p.parent.Path() + p.relativePath
-	} else if p.relativePath != "" {
-		return p.relativePath
-	} else if p.objectType == "commit" {
-		return p.Oid.String()
-	} else {
+	switch p.objectType {
+	case "blob", "tree":
+		if p.parent != nil {
+			if p.relativePath == "" {
+				// This is a top-level tree or blob.
+				return fmt.Sprintf("%s^{%s}", p.parent.Path(), p.objectType)
+			} else {
+				// The parent is also a tree.
+				return p.parent.TreePrefix() + p.relativePath
+			}
+		} else {
+			return fmt.Sprintf("???%s???", p.objectType)
+		}
+	case "commit", "tag":
+		if p.parent != nil {
+			// The parent is a tag.
+			return fmt.Sprintf("%s^{%s}", p.parent.Path(), p.objectType)
+		} else if p.relativePath != "" {
+			return p.relativePath
+		} else {
+			return p.Oid.String()
+		}
+	default:
 		return fmt.Sprintf("???%s???", p.objectType)
 	}
 }
@@ -181,7 +225,7 @@ func (pr *PathResolver) RecordTreeEntry(oid Oid, name string, childOid Oid) {
 	p.parent = pr.requestPathLocked(oid, "tree")
 
 	// FIXME: needs to depend on the form of this tree's path.
-	p.relativePath = "/" + name
+	p.relativePath = name
 
 	// We don't need to keep looking for the child anymore:
 	delete(pr.soughtPaths, childOid)
@@ -203,7 +247,7 @@ func (pr *PathResolver) RecordCommit(oid Oid, commit *Commit) {
 	p.parent = pr.requestPathLocked(oid, "commit")
 
 	// FIXME: needs to depend on the form of this commit's path.
-	p.relativePath = ":"
+	p.relativePath = ""
 
 	// We don't need to keep looking for the child anymore:
 	delete(pr.soughtPaths, commit.Tree)

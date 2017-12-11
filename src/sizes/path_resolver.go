@@ -249,11 +249,11 @@ func (pr *PathResolver) RecordTreeEntry(oid Oid, name string, childOid Oid) {
 	delete(pr.soughtPaths, childOid)
 }
 
-func (pr *PathResolver) RecordCommit(oid Oid, commit *Commit) {
+func (pr *PathResolver) RecordCommit(oid, tree Oid) {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 
-	p, ok := pr.soughtPaths[commit.Tree]
+	p, ok := pr.soughtPaths[tree]
 	if !ok {
 		// Nobody is looking for the path to our tree.
 		return
@@ -267,7 +267,7 @@ func (pr *PathResolver) RecordCommit(oid Oid, commit *Commit) {
 	p.relativePath = ""
 
 	// We don't need to keep looking for the child anymore:
-	delete(pr.soughtPaths, commit.Tree)
+	delete(pr.soughtPaths, tree)
 }
 
 func (pr *PathResolver) RecordTag(oid Oid, tag *Tag) {

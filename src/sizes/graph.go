@@ -64,6 +64,11 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 		objectSize Count32
 	}
 
+	type CommitHeader struct {
+		ObjectHeader
+		tree Oid
+	}
+
 	// We process the blobs right away, but record these other types
 	// of objects for later processing. The order of processing
 	// strongly affects performance, which prefers object locality and
@@ -89,19 +94,24 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 	//   `AdjustMaxIfNecessary()`, which leads to less churn in the
 	//   `PathResolver`.
 	//
-	// * Commits are processed in roughly chronological order (because
-	//   we iterate over them in reverse below). This is preferable
-	//   because the opposite order would leave most commits pending
-	//   until we worked all the way to the start of history. It does
-	//   force us to use `AdjustMaxIfPossible()`, though, since we
-	//   want the `PathResolver` to report the most recent commit.
+	// * Commits are processed in roughly chronological order when
+	//   computing sizes and looking for the "biggest" commits. This
+	//   is preferable because the opposite order would leave most
+	//   commits pending until we worked all the way to the start of
+	//   history. But by using `AdjustMaxIfPossible()`, we still
+	//   preferentially choose the newest commits.
+	//
+	//   But when feeding commits to the `PathResolver`, we process
+	//   the commits in reverse chronological order. This helps prefer
+	//   new commits when naming blobs and trees.
 	//
 	// * References are processed in alphabetical order. (It might be
 	//   a tiny improvement to pick the order more intentionally, to
 	//   favor certain references when naming commits that are pointed
 	//   to by multiple references, but it doesn't seem worth the
 	//   effort.)
-	var trees, commits, tags []ObjectHeader
+	var trees, tags []ObjectHeader
+	var commits []CommitHeader
 
 	for {
 		oid, objectType, objectSize, err := iter.Next()
@@ -117,7 +127,7 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 		case "tree":
 			trees = append(trees, ObjectHeader{oid, objectSize})
 		case "commit":
-			commits = append(commits, ObjectHeader{oid, objectSize})
+			commits = append(commits, CommitHeader{ObjectHeader{oid, objectSize}, NullOid})
 		case "tag":
 			tags = append(tags, ObjectHeader{oid, objectSize})
 		default:
@@ -205,7 +215,10 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 		}
 	}
 
-	for range commits {
+	// Process the commits in (roughly) chronological order, to
+	// minimize the number of commits that are pending at any one
+	// time:
+	for i := len(commits); i > 0; i-- {
 		oid, objectType, _, data, err := objectIter.Next()
 		if err != nil {
 			if err != io.EOF {
@@ -220,7 +233,17 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 		if err != nil {
 			return HistorySize{}, err
 		}
+		if oid != commits[i-1].oid {
+			panic("commits not read in same order as requested")
+		}
+		commits[i-1].tree = commit.Tree
 		graph.RegisterCommit(oid, commit)
+	}
+
+	// Tell PathResolver about the commits in (roughly) reverse
+	// chronological order, to favor new ones in the paths of trees:
+	for _, commit := range commits {
+		graph.pathResolver.RecordCommit(commit.oid, commit.tree)
 	}
 
 	for range tags {
@@ -570,8 +593,6 @@ func (g *Graph) RegisterCommit(oid Oid, commit *Commit) {
 	// The tree:
 	treeSize := g.GetTreeSize(commit.Tree)
 	size.addTree(treeSize)
-
-	g.pathResolver.RecordCommit(oid, commit)
 
 	for _, parent := range commit.Parents {
 		parentSize := g.GetCommitSize(parent)

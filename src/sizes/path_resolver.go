@@ -98,6 +98,8 @@ func (p *Path) TreePrefix() string {
 		if p.parent != nil {
 			// The parent is a tag.
 			return fmt.Sprintf("%s^{%s}", p.parent.Path(), p.objectType)
+		} else if p.relativePath != "" {
+			return p.relativePath + ":"
 		} else {
 			return p.Oid.String() + ":"
 		}

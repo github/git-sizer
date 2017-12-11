@@ -201,8 +201,6 @@ func (pr *PathResolver) RecordReference(ref Reference) {
 		return
 	}
 
-	// FIXME: probably needs to depend on *where* this relative path
-	// came from.
 	p.relativePath = ref.Refname
 	delete(pr.soughtPaths, ref.Oid)
 }
@@ -224,7 +222,6 @@ func (pr *PathResolver) RecordTreeEntry(oid Oid, name string, childOid Oid) {
 	}
 	p.parent = pr.requestPathLocked(oid, "tree")
 
-	// FIXME: needs to depend on the form of this tree's path.
 	p.relativePath = name
 
 	// We don't need to keep looking for the child anymore:
@@ -246,7 +243,6 @@ func (pr *PathResolver) RecordCommit(oid Oid, commit *Commit) {
 	}
 	p.parent = pr.requestPathLocked(oid, "commit")
 
-	// FIXME: needs to depend on the form of this commit's path.
 	p.relativePath = ""
 
 	// We don't need to keep looking for the child anymore:

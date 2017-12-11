@@ -15,8 +15,8 @@ import (
 //
 // * Tell the `PathResolver` about objects that might be along the
 //   object's reachability path, *in depth-first* order (i.e.,
-//   referents before referers) by calling `RecordReference()`,
-//   `RecordTree()`, `RecordCommit()`, and `RecordTag()`.
+//   referents before referers) by calling `RecordTree()`,
+//   `RecordCommit()`, `RecordTag()`, and `RecordReference()`,.
 //
 // * Read the path out of the `Path` object using `Path.Path()`.
 //
@@ -36,21 +36,40 @@ type PathResolver struct {
 
 // Structure for keeping track of an object whose path we want to know
 // (e.g., the biggest blob, or a tree containing the biggest blob, or
-// a commit whose tree contains the biggest blob).
+// a commit whose tree contains the biggest blob). Valid states:
+//
+// * `parent == nil && relativePath == ""`—we have not yet found
+//   anything that refers to this object.
+//
+// * `parent != nil && relativePath == ""`—this object is a tree, and
+//   we have found a commit that refers to it.
+//
+// * `parent == nil && relativePath != ""`—we have found a reference
+//   that points directly at this object; `relativePath` is the full
+//   name of the reference.
+//
+// * `parent != nil && relativePath != ""`—this object is a blob or
+//   tree, and we have found another tree that refers to it;
+//   `relativePath` is the corresponding tree entry name.
 type Path struct {
-	// The OID of the object whose path we seek.
+	// The OID of the object whose path we seek. This member is always
+	// set.
 	Oid
 
-	// The type of the object whose path we seek.
+	// The type of the object whose path we seek. This member is
+	// always set.
 	objectType string
 
-	// The number of seekers that want this object's path. If this
-	// value goes to zero, we can remove the object from the
-	// PathResolver.
+	// The number of seekers that want this object's path, including 1
+	// for the caller of `RequestPath()` (i.e., it is initialized to
+	// 1). If this value goes to zero, we can remove the object from
+	// the PathResolver.
 	seekerCount uint8
 
-	// The first path we found of a parent from which this object is
-	// reachable.
+	// A path we found of a parent from which this object is
+	// referenced. This is set when we find a parent then never
+	// changed again. It is never set if the "parent" we find is a
+	// reference.
 	parent *Path
 
 	// The relative path from the parent's path to this object; i.e.,

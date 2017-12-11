@@ -34,9 +34,20 @@ func (n1 *Count32) Increment(n2 Count32) {
 }
 
 // Adjust `*n1` to be `max(*n1, n2)` and return true iff n2 was
-// bigger.
-func (n1 *Count32) AdjustMax(n2 Count32) bool {
+// bigger. Favor `*n1` if they are equal.
+func (n1 *Count32) AdjustMaxIfNecessary(n2 Count32) bool {
 	if n2 > *n1 {
+		*n1 = n2
+		return true
+	} else {
+		return false
+	}
+}
+
+// Adjust `*n1` to be `max(*n1, n2)` and return true iff n2 was
+// bigger. Favor `n2` if they are equal.
+func (n1 *Count32) AdjustMaxIfPossible(n2 Count32) bool {
+	if n2 >= *n1 {
 		*n1 = n2
 		return true
 	} else {
@@ -70,8 +81,20 @@ func (n1 *Count64) Increment(n2 Count64) {
 	*n1 = n1.Plus(n2)
 }
 
-// Adjust `*n1` to be `max(*n1, n2)`.
-func (n1 *Count64) AdjustMax(n2 Count64) bool {
+// Adjust `*n1` to be `max(*n1, n2)` and return true iff n2 was
+// bigger. Favor `*n1` if they are equal.
+func (n1 *Count64) AdjustMaxIfNecessary(n2 Count64) bool {
+	if n2 > *n1 {
+		*n1 = n2
+		return true
+	} else {
+		return false
+	}
+}
+
+// Adjust `*n1` to be `max(*n1, n2)` and return true iff n2 was
+// bigger. Favor `n2` if they are equal.
+func (n1 *Count64) AdjustMaxIfPossible(n2 Count64) bool {
 	if n2 > *n1 {
 		*n1 = n2
 		return true

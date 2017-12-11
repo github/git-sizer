@@ -65,7 +65,42 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 	}
 
 	// We process the blobs right away, but record these other types
-	// of objects for later processing:
+	// of objects for later processing. The order of processing
+	// strongly affects performance, which prefers object locality and
+	// prefers having as few "dangling pointers" as possible. It also
+	// affects which of multiple equally-sized objects are chosen and
+	// which references the `PathResolver` chooses to refer to
+	// commits. Note that we process different types of objects in
+	// different orders:
+	//
+	// * Blobs are processed in roughly reverse-chronological order
+	//   This is relatively inconsequential because blobs can't point
+	//   at any other objects.
+	//
+	// * Trees are processed in roughly reverse-chronological order
+	//   (the order that they come out of `git rev-parse --date-order
+	//   --objects`). This is more efficient than the reverse because
+	//   the Git command outputs the whole tree corresponding to a
+	//   commit before moving onto the next commit. So when we process
+	//   them in this order, we have at most one "treeful" of trees
+	//   pending at any given moment (and usually much less); there
+	//   are no "dangling pointers" carried over from one commit to
+	//   the next. Plus, this allows us to use
+	//   `AdjustMaxIfNecessary()`, which leads to less churn in the
+	//   `PathResolver`.
+	//
+	// * Commits are processed in roughly chronological order (because
+	//   we iterate over them in reverse below). This is preferable
+	//   because the opposite order would leave most commits pending
+	//   until we worked all the way to the start of history. It does
+	//   force us to use `AdjustMaxIfPossible()`, though, since we
+	//   want the `PathResolver` to report the most recent commit.
+	//
+	// * References are processed in alphabetical order. (It might be
+	//   a tiny improvement to pick the order more intentionally, to
+	//   favor certain references when naming commits that are pointed
+	//   to by multiple references, but it doesn't seem worth the
+	//   effort.)
 	var trees, commits, tags []ObjectHeader
 
 	for {

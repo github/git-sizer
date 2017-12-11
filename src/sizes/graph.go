@@ -17,7 +17,7 @@ func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (History
 	}
 	defer refIter.Close()
 
-	iter, in, err := repo.NewObjectIter("--stdin", "--topo-order")
+	iter, in, err := repo.NewObjectIter("--stdin", "--date-order")
 	if err != nil {
 		return HistorySize{}, err
 	}

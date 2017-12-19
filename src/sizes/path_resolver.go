@@ -1,7 +1,7 @@
 package sizes
 
 import (
-	"bytes"
+	"encoding/json"
 	"fmt"
 	"sync"
 )
@@ -177,11 +177,7 @@ func (p *Path) String() string {
 }
 
 func (p *Path) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-	buf.WriteByte('"')
-	buf.WriteString(p.String())
-	buf.WriteByte('"')
-	return buf.Bytes(), nil
+	return json.Marshal(p.String())
 }
 
 func NewPathResolver(nameStyle NameStyle) PathResolver {

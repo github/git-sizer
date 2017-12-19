@@ -102,14 +102,14 @@ $ git-sizer
 
 [1]  91cc53b0c78596a73fa708cceb7313e7168bb146 (91cc53b0c78596a73fa708cceb7313e7168bb146)
 [2]  2cde51fbd0f310c8a2c5f977e665c0ac3945b46d (2cde51fbd0f310c8a2c5f977e665c0ac3945b46d)
-[3]  4f86eed5893207aca2c2da86b35b38f2e1ec1fc8 (f335195adf043168ee69d78ea72ac3e30f0c57ce:arch/arm/boot/dts)
-[4]  a02b6794337286bc12c907c33d5d75537c240bd0 (f335195adf043168ee69d78ea72ac3e30f0c57ce:drivers/gpu/drm/amd/include/asic_reg/vega10/NBIO/nbio_6_1_sh_mask.h)
+[3]  4f86eed5893207aca2c2da86b35b38f2e1ec1fc8 (refs/heads/master:arch/arm/boot/dts)
+[4]  a02b6794337286bc12c907c33d5d75537c240bd0 (refs/heads/master:drivers/gpu/drm/amd/include/asic_reg/vega10/NBIO/nbio_6_1_sh_mask.h)
 [5]  5dc01c595e6c6ec9ccda4f6f69c131c0dd945f8c (refs/tags/v2.6.11)
-[6]  de46541e89acaaaf3b69c1ea4543715c155876e1 (a41886f56b7bbb88e6a23b5d738a94f2632142a4^{tree})
+[6]  1459754b9d9acc2ffac8525bed6691e15913c6e2 (589b754df3f37ca0a1f96fccde7f91c59266f38a^{tree})
 [7]  78a269635e76ed927e17d7883f2d90313570fdbc (dae09011115133666e47c35673c0564b0a702db7^{tree})
 [8]  ce5f2e31d3bdc1186041fdfd27a5ac96e728f2c5 (refs/heads/master^{tree})
 [9]  532bdadc08402b7a72a4b45a2e02e5c710b7d626 (e9ef1fe312b533592e39cddc1327463c30b0ed8d^{tree})
-[10] 04745a9399692f288e5494acef2e1a912f0e550e (3cf29931453215536916d0c4da953fce1911ced3^{tree})
+[10] f29a5ea76884ac37e1197bef1941f62fda3f7b99 (f5308d1b83eba20e69df5e0926ba7257c8dd9074^{tree})
 ```
 
 The section "Overall repository size" include repository-wide statistics about distinct objects, not including repetition. "Total size" is the sum of the sizes of the corresponding objects in their uncompressed form, measured in bytes.
@@ -171,7 +171,7 @@ $ git-sizer test/data/git-bomb.git
 | * Number of symlinks         |     0     |                                |
 | * Number of submodules       |     0     |                                |
 
-[1]  18ed56cbc5012117e24a603e7c072cf65d36d469 (18ed56cbc5012117e24a603e7c072cf65d36d469)
+[1]  7af99c9e7d4768fa681f4fe4ff61259794cf719b (refs/heads/master)
 [2]  c1971b07ce6888558e2178a121804774c4201b17 (refs/heads/master^{tree})
 [3]  dacaac6d3b2cf39ec8078dfb0bd3ce691e92557f (18ed56cbc5012117e24a603e7c072cf65d36d469:README.md)
 [4]  d9513477b01825130c48c4bebed114c4b2d50401 (18ed56cbc5012117e24a603e7c072cf65d36d469^{tree})

@@ -123,48 +123,61 @@ func (p *Path) TreePrefix() string {
 				return p.parent.TreePrefix() + p.relativePath + "/"
 			}
 		} else {
-			return fmt.Sprintf("???%s???", p.objectType)
+			return "???"
 		}
 	case "commit", "tag":
 		if p.parent != nil {
 			// The parent is a tag.
-			return fmt.Sprintf("%s^{%s}", p.parent.Path(), p.objectType)
+			return fmt.Sprintf("%s^{%s}", p.parent.BestPath(), p.objectType)
 		} else if p.relativePath != "" {
 			return p.relativePath + ":"
 		} else {
 			return p.Oid.String() + ":"
 		}
 	default:
-		return fmt.Sprintf("???%s???", p.objectType)
+		return "???"
 	}
 }
 
+// Return a human-readable path for this object if we can do better
+// than its OID; otherwise, return "".
 func (p *Path) Path() string {
 	switch p.objectType {
 	case "blob", "tree":
 		if p.parent != nil {
 			if p.relativePath == "" {
 				// This is a top-level tree or blob.
-				return fmt.Sprintf("%s^{%s}", p.parent.Path(), p.objectType)
+				return fmt.Sprintf("%s^{%s}", p.parent.BestPath(), p.objectType)
 			} else {
 				// The parent is also a tree.
 				return p.parent.TreePrefix() + p.relativePath
 			}
 		} else {
-			return fmt.Sprintf("???%s???", p.objectType)
+			return ""
 		}
 	case "commit", "tag":
 		if p.parent != nil {
 			// The parent is a tag.
-			return fmt.Sprintf("%s^{%s}", p.parent.Path(), p.objectType)
+			return fmt.Sprintf("%s^{%s}", p.parent.BestPath(), p.objectType)
 		} else if p.relativePath != "" {
 			return p.relativePath
 		} else {
-			return p.Oid.String()
+			return ""
 		}
 	default:
-		return fmt.Sprintf("???%s???", p.objectType)
+		return ""
 	}
+}
+
+// Return some human-readable path for this object, even if it's just
+// the OID.
+func (p *Path) BestPath() string {
+	path := p.Path()
+	if path != "" {
+		return path
+	}
+
+	return p.Oid.String()
 }
 
 func (p *Path) String() string {

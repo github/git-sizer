@@ -114,7 +114,7 @@ type HistorySize struct {
 	MaxParentCount Count32 `json:"max_parent_count"`
 
 	// The commit with the maximum number of direct parents.
-	MaxParentCountCommit *Path `json:"max_parent_count_commit"`
+	MaxParentCountCommit *Path `json:"max_parent_count_commit,omitempty"`
 
 	// The total number of unique trees analyzed.
 	UniqueTreeCount Count32 `json:"unique_tree_count"`

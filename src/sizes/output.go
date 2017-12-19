@@ -155,7 +155,7 @@ type lineSet interface {
 // A single line in the tabular output.
 type line interface {
 	Name() string
-	Footnote() string
+	Footnote(NameStyle) string
 	Value() (string, string)
 	LevelOfConcern() string
 }
@@ -172,7 +172,7 @@ func (l *blank) Name() string {
 	return ""
 }
 
-func (l *blank) Footnote() string {
+func (l *blank) Footnote(_ NameStyle) string {
 	return ""
 }
 
@@ -193,7 +193,7 @@ func (l *header) Name() string {
 	return l.name
 }
 
-func (l *header) Footnote() string {
+func (l *header) Footnote(_ NameStyle) string {
 	return ""
 }
 
@@ -228,8 +228,8 @@ func (l *bullet) Name() string {
 	return l.prefix + l.line.Name()
 }
 
-func (l *bullet) Footnote() string {
-	return l.line.Footnote()
+func (l *bullet) Footnote(nameStyle NameStyle) string {
+	return l.line.Footnote(nameStyle)
 }
 
 func (l *bullet) Value() (string, string) {
@@ -278,11 +278,19 @@ func (l *item) Name() string {
 	return l.name
 }
 
-func (l *item) Footnote() string {
+func (l *item) Footnote(nameStyle NameStyle) string {
 	if l.path == nil || l.path.Oid == NullOid {
 		return ""
-	} else {
+	}
+	switch nameStyle {
+	case NameStyleNone:
+		return ""
+	case NameStyleHash:
+		return l.path.Oid.String()
+	case NameStyleFull:
 		return l.path.String()
+	default:
+		panic("unexpected NameStyle")
 	}
 }
 
@@ -306,7 +314,47 @@ func (l *item) LevelOfConcern() string {
 	return warning
 }
 
-func (s HistorySize) TableString() string {
+type NameStyle int
+
+const (
+	NameStyleNone NameStyle = iota
+	NameStyleHash
+	NameStyleFull
+)
+
+// Methods to implement flag.Value:
+func (n *NameStyle) String() string {
+	if n == nil {
+		return "UNSET"
+	} else {
+		switch *n {
+		case NameStyleNone:
+			return "none"
+		case NameStyleHash:
+			return "hash"
+		case NameStyleFull:
+			return "full"
+		default:
+			panic("Unexpected NameStyle value")
+		}
+	}
+}
+
+func (n *NameStyle) Set(s string) error {
+	switch s {
+	case "none":
+		*n = NameStyleNone
+	case "hash", "sha-1", "sha1":
+		*n = NameStyleHash
+	case "full":
+		*n = NameStyleFull
+	default:
+		return fmt.Errorf("not a valid name style: %v", s)
+	}
+	return nil
+}
+
+func (s HistorySize) TableString(nameStyle NameStyle) string {
 	buf := &bytes.Buffer{}
 
 	fmt.Fprintln(buf, "| Name                         | Value     | Level of concern               |")
@@ -402,7 +450,7 @@ func (s HistorySize) TableString() string {
 	} {
 		for _, l := range ls.Lines() {
 			valueString, unitString := l.Value()
-			footnote := l.Footnote()
+			footnote := l.Footnote(nameStyle)
 			var citation string
 			if footnote == "" {
 				citation = ""

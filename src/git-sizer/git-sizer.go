@@ -24,12 +24,20 @@ func mainImplementation() error {
 	var processBranches bool
 	var processTags bool
 	var processRemotes bool
+	var nameStyle sizes.NameStyle = sizes.NameStyleFull
 	var cpuprofile string
 	var jsonOutput bool
 
 	flag.BoolVar(&processBranches, "branches", false, "process all branches")
 	flag.BoolVar(&processTags, "tags", false, "process all tags")
 	flag.BoolVar(&processRemotes, "remotes", false, "process all remote-tracking branches")
+	flag.Var(
+		&nameStyle, "names",
+		"display names of large objects in the specified `style`:\n"+
+			"            --names=none        omit footnotes entirely\n"+
+			"            --names=hash        show only the SHA-1s of objects\n"+
+			"            --names=full        show full names",
+	)
 	flag.BoolVar(&jsonOutput, "json", false, "output results in JSON format")
 	flag.BoolVar(&jsonOutput, "j", false, "output results in JSON format")
 
@@ -95,7 +103,7 @@ func mainImplementation() error {
 		}
 		fmt.Printf("%s\n", s)
 	} else {
-		io.WriteString(os.Stdout, historySize.TableString())
+		io.WriteString(os.Stdout, historySize.TableString(nameStyle))
 	}
 
 	return nil

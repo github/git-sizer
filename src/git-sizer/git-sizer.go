@@ -91,7 +91,7 @@ func mainImplementation() error {
 		filter = sizes.AllReferencesFilter
 	}
 
-	historySize, err = sizes.ScanRepositoryUsingGraph(repo, filter)
+	historySize, err = sizes.ScanRepositoryUsingGraph(repo, filter, nameStyle)
 	if err != nil {
 		return fmt.Errorf("error scanning repository: %s", err)
 	}

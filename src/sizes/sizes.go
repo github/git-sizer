@@ -210,7 +210,7 @@ type HistorySize struct {
 // objectType)`. This function can be used if a new largest item was
 // found.
 func setPath(
-	pr *PathResolver,
+	pr PathResolver,
 	path **Path,
 	oid Oid, objectType string) {
 	if *path != nil {

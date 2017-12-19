@@ -29,7 +29,38 @@ import (
 // If a caller decides that it is not interested in a path after all,
 // it can call `ForgetPath()`. This might free up some resources that
 // would otherwise continue consuming memory.
-type PathResolver struct {
+type PathResolver interface {
+	RequestPath(oid Oid, objectType string) *Path
+	ForgetPath(p *Path)
+	RecordReference(ref Reference)
+	RecordTreeEntry(oid Oid, name string, childOid Oid)
+	RecordCommit(oid, tree Oid)
+	RecordTag(oid Oid, tag *Tag)
+}
+
+type NullPathResolver struct{}
+
+func (_ NullPathResolver) RequestPath(oid Oid, objectType string) *Path {
+	// The caller is the only one retaining a reference to this
+	// object. When it loses interest, the object will be GCed,
+	// without our having to do anything to manage its lifetime.
+	return &Path{
+		Oid:        oid,
+		objectType: objectType,
+	}
+}
+
+func (_ NullPathResolver) ForgetPath(p *Path) {}
+
+func (_ NullPathResolver) RecordReference(ref Reference) {}
+
+func (_ NullPathResolver) RecordTreeEntry(oid Oid, name string, childOid Oid) {}
+
+func (_ NullPathResolver) RecordCommit(oid, tree Oid) {}
+
+func (_ NullPathResolver) RecordTag(oid Oid, tag *Tag) {}
+
+type InOrderPathResolver struct {
 	lock        sync.Mutex
 	soughtPaths map[Oid]*Path
 }
@@ -153,21 +184,28 @@ func (p *Path) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func NewPathResolver() *PathResolver {
-	return &PathResolver{
-		soughtPaths: make(map[Oid]*Path),
+func NewPathResolver(nameStyle NameStyle) PathResolver {
+	switch nameStyle {
+	case NameStyleNone, NameStyleHash:
+		return NullPathResolver{}
+	case NameStyleFull:
+		return &InOrderPathResolver{
+			soughtPaths: make(map[Oid]*Path),
+		}
+	default:
+		panic("Unexpected NameStyle value")
 	}
 }
 
 // Request that a path to the object named `oid` be computed.
-func (pr *PathResolver) RequestPath(oid Oid, objectType string) *Path {
+func (pr *InOrderPathResolver) RequestPath(oid Oid, objectType string) *Path {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 	return pr.requestPathLocked(oid, objectType)
 }
 
 // Request that a path to the object named `oid` be computed.
-func (pr *PathResolver) requestPathLocked(oid Oid, objectType string) *Path {
+func (pr *InOrderPathResolver) requestPathLocked(oid Oid, objectType string) *Path {
 	p, ok := pr.soughtPaths[oid]
 	if ok {
 		p.seekerCount++
@@ -185,14 +223,14 @@ func (pr *PathResolver) requestPathLocked(oid Oid, objectType string) *Path {
 
 // Record that the specified path is wanted by one less seeker. If its
 // seeker count goes to zero, remove it from `pr.soughtPaths`.
-func (pr *PathResolver) ForgetPath(p *Path) {
+func (pr *InOrderPathResolver) ForgetPath(p *Path) {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 
 	pr.forgetPathLocked(p)
 }
 
-func (pr *PathResolver) forgetPathLocked(p *Path) {
+func (pr *InOrderPathResolver) forgetPathLocked(p *Path) {
 	if p.seekerCount == 0 {
 		panic("forgetPathLocked() called when refcount zero")
 	}
@@ -212,7 +250,7 @@ func (pr *PathResolver) forgetPathLocked(p *Path) {
 	}
 }
 
-func (pr *PathResolver) RecordReference(ref Reference) {
+func (pr *InOrderPathResolver) RecordReference(ref Reference) {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 
@@ -228,7 +266,7 @@ func (pr *PathResolver) RecordReference(ref Reference) {
 
 // Record that the tree with OID `oid` has an entry with the specified
 // `name` and `childOid`.
-func (pr *PathResolver) RecordTreeEntry(oid Oid, name string, childOid Oid) {
+func (pr *InOrderPathResolver) RecordTreeEntry(oid Oid, name string, childOid Oid) {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 
@@ -249,7 +287,7 @@ func (pr *PathResolver) RecordTreeEntry(oid Oid, name string, childOid Oid) {
 	delete(pr.soughtPaths, childOid)
 }
 
-func (pr *PathResolver) RecordCommit(oid, tree Oid) {
+func (pr *InOrderPathResolver) RecordCommit(oid, tree Oid) {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 
@@ -270,8 +308,6 @@ func (pr *PathResolver) RecordCommit(oid, tree Oid) {
 	delete(pr.soughtPaths, tree)
 }
 
-func (pr *PathResolver) RecordTag(oid Oid, tag *Tag) {
-	pr.lock.Lock()
-	defer pr.lock.Unlock()
-
+func (pr *InOrderPathResolver) RecordTag(oid Oid, tag *Tag) {
+	// Not implemented.
 }

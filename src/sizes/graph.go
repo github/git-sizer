@@ -8,8 +8,10 @@ import (
 	"sync"
 )
 
-func ScanRepositoryUsingGraph(repo *Repository, filter ReferenceFilter) (HistorySize, error) {
-	graph := NewGraph()
+func ScanRepositoryUsingGraph(
+	repo *Repository, filter ReferenceFilter, nameStyle NameStyle,
+) (HistorySize, error) {
+	graph := NewGraph(nameStyle)
 
 	refIter, err := repo.NewReferenceIter()
 	if err != nil {
@@ -298,10 +300,10 @@ type Graph struct {
 	historyLock sync.Mutex
 	historySize HistorySize
 
-	pathResolver *PathResolver
+	pathResolver PathResolver
 }
 
-func NewGraph() *Graph {
+func NewGraph(nameStyle NameStyle) *Graph {
 	return &Graph{
 		blobSizes: make(map[Oid]BlobSize),
 
@@ -313,7 +315,7 @@ func NewGraph() *Graph {
 		tagRecords: make(map[Oid]*tagRecord),
 		tagSizes:   make(map[Oid]TagSize),
 
-		pathResolver: NewPathResolver(),
+		pathResolver: NewPathResolver(nameStyle),
 	}
 }
 

@@ -38,15 +38,21 @@ type PathResolver interface {
 	RecordTag(oid Oid, tag *Tag)
 }
 
-type NullPathResolver struct{}
+type NullPathResolver struct {
+	useHash bool
+}
 
-func (_ NullPathResolver) RequestPath(oid Oid, objectType string) *Path {
+func (n NullPathResolver) RequestPath(oid Oid, objectType string) *Path {
 	// The caller is the only one retaining a reference to this
 	// object. When it loses interest, the object will be GCed,
 	// without our having to do anything to manage its lifetime.
-	return &Path{
-		Oid:        oid,
-		objectType: objectType,
+	if n.useHash {
+		return &Path{
+			Oid:        oid,
+			objectType: objectType,
+		}
+	} else {
+		return nil
 	}
 }
 
@@ -195,8 +201,10 @@ func (p *Path) MarshalJSON() ([]byte, error) {
 
 func NewPathResolver(nameStyle NameStyle) PathResolver {
 	switch nameStyle {
-	case NameStyleNone, NameStyleHash:
-		return NullPathResolver{}
+	case NameStyleNone:
+		return NullPathResolver{false}
+	case NameStyleHash:
+		return NullPathResolver{true}
 	case NameStyleFull:
 		return &InOrderPathResolver{
 			soughtPaths: make(map[Oid]*Path),

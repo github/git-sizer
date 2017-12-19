@@ -33,24 +33,28 @@ Is your Git repository busting at the seams?
 
 ## Getting started
 
-1. Build:
+1.  Build:
 
         script/bootstrap
         make
 
-2. Run:
+    The executable file is written to `bin/git-sizer`. If copy it to your `PATH` and you have Git installed, you can run the program by typing `git sizer`; otherwise, you need to type the full path and filename to run it; e.g., `bin/git-sizer`.
 
-        bin/git-sizer [<opt>...] [<path-to-git-repository>]
+2.  Run:
 
-    To get a list of available options, run
-
-        bin/git-sizer --help
+        git sizer [<opt>...] [<path-to-git-repository>]
 
     To get a summary of the current repository, all you need is
 
-        bin/git-sizer
+        git sizer
 
-    You can also use the `--json` option to get output in JSON format, including the raw numbers. Note that if a value overflows its counter (which should only happen for malicious repositories), the corresponding value is truncated to 2³²-1 or 2⁶⁴-1, depending on the size of the counter.
+    Use the `--json` option to get output in JSON format, which includes the raw numbers.
+
+    Note that if a value overflows its counter (which should only happen for malicious repositories), the corresponding value is displayed as `∞` in tabular form, or truncated to 2³²-1 or 2⁶⁴-1 (depending on the size of the counter) in JSON mode.
+
+    To get a list of other options, run
+
+        git sizer --help
 
 
 ## Example output

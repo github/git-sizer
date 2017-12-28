@@ -435,30 +435,27 @@ func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) strin
 				),
 			),
 
-			S(
-				"Biggest commit objects",
-				I("Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, BinaryPrefixes, "B", 50e3),
-				I("Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, MetricPrefixes, " ", 10),
+			S("Biggest objects",
+				S("Commits",
+						I("Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, BinaryPrefixes, "B", 50e3),
+						I("Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, MetricPrefixes, " ", 10),
+				),
+
+				S("Trees",
+						I("Maximum entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3),
+				),
+
+				S("Blobs",
+						I("Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, BinaryPrefixes, "B", 10e6),
+				),
 			),
 
-			S(
-				"Biggest tree objects",
-				I("Maximum tree entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3),
-			),
-
-			S(
-				"Biggest blob objects",
-				I("Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, BinaryPrefixes, "B", 10e6),
-			),
-
-			S(
-				"History structure",
+			S("History structure",
 				I("Maximum history depth", nil, s.MaxHistoryDepth, MetricPrefixes, " ", 500e3),
 				I("Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, MetricPrefixes, " ", 1),
 			),
 
-			S(
-				"Biggest checkouts",
+			S("Biggest checkouts",
 				I("Number of directories", s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, MetricPrefixes, " ", 2000),
 				I("Maximum path depth", s.MaxPathDepthTree, s.MaxPathDepth, MetricPrefixes, " ", 10),
 				I("Maximum path length", s.MaxPathLengthTree, s.MaxPathLength, BinaryPrefixes, "B", 100),

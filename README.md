@@ -83,15 +83,14 @@ $ git-sizer --verbose
 | * References                 |           |                                |
 |   * Count                    |   539     |                                |
 |                              |           |                                |
-| Biggest commit objects       |           |                                |
-| * Maximum size           [1] |  72.7 KiB | *                              |
-| * Maximum parents        [2] |    66     | ******                         |
-|                              |           |                                |
-| Biggest tree objects         |           |                                |
-| * Maximum tree entries   [3] |  1.68 k   |                                |
-|                              |           |                                |
-| Biggest blob objects         |           |                                |
-| * Maximum size           [4] |  13.5 MiB | *                              |
+| Biggest objects              |           |                                |
+| * Commits                    |           |                                |
+|   * Maximum size         [1] |  72.7 KiB | *                              |
+|   * Maximum parents      [2] |    66     | ******                         |
+| * Trees                      |           |                                |
+|   * Maximum entries      [3] |  1.68 k   |                                |
+| * Blobs                      |           |                                |
+|   * Maximum size         [4] |  13.5 MiB | *                              |
 |                              |           |                                |
 | History structure            |           |                                |
 | * Maximum history depth      |   136 k   |                                |
@@ -120,7 +119,7 @@ $ git-sizer --verbose
 
 The section "Overall repository size" include repository-wide statistics about distinct objects, not including repetition. "Total size" is the sum of the sizes of the corresponding objects in their uncompressed form, measured in bytes.
 
-The "Biggest objects" sections provide information about the biggest single objects of each type, anywhere in the repository.
+The "Biggest objects" section provides information about the biggest single objects of each type, anywhere in the repository.
 
 In the "History structure" section, "maximum history depth" is the longest chain of commits in the history, and "maximum tag depth" reports the longest chain of annotated tags that point at other annotated tags.
 
@@ -154,15 +153,14 @@ $ git-sizer --verbose test/data/git-bomb.git
 | * References                 |           |                                |
 |   * Count                    |     1     |                                |
 |                              |           |                                |
-| Biggest commit objects       |           |                                |
-| * Maximum size           [1] |   218 B   |                                |
-| * Maximum parents        [1] |     1     |                                |
-|                              |           |                                |
-| Biggest tree objects         |           |                                |
-| * Maximum tree entries   [2] |    11     |                                |
-|                              |           |                                |
-| Biggest blob objects         |           |                                |
-| * Maximum size           [3] |  1.82 KiB |                                |
+| Biggest objects              |           |                                |
+| * Commits                    |           |                                |
+|   * Maximum size         [1] |   218 B   |                                |
+|   * Maximum parents      [1] |     1     |                                |
+| * Trees                      |           |                                |
+|   * Maximum entries      [2] |    11     |                                |
+| * Blobs                      |           |                                |
+|   * Maximum size         [3] |  1.82 KiB |                                |
 |                              |           |                                |
 | History structure            |           |                                |
 | * Maximum history depth      |     3     |                                |

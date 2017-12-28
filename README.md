@@ -4,23 +4,55 @@ _Happy Git repositories are all alike; every unhappy Git repository is unhappy i
 
 Is your Git repository busting at the seams?
 
-* Is it too big overall? Ideally, Git repositories should be under 1 GiB, and (without special handling) they really start to get unwieldy over 5 GiB. Big repositories take a long time to clone and repack, and take a lot of disk space.
+* Is the repository too big overall? Ideally, Git repositories should be under 1 GiB, and (without special handling) they start to get unwieldy over 5 GiB. Big repositories take a long time to clone and repack, and take a lot of disk space. Suggestions:
 
-* Does it have too many references? They all have to be transferred to the client for every fetch, even if your clone is up-to-date. Try to limit them to a few tens of thousands at most.
+    * Avoid storing generated files (e.g., compiler output, JAR files) in Git. It would be better to regenerate them when necessary, or store them in a package registry or even a fileserver.
 
-* Does it include too many objects? The more objects, the longer it takes for Git to traverse the repository's history, for example when garbage-collecting.
+    * Avoid storing large media assets in Git. You might want to look into [Git-LFS](https://git-lfs.github.com/), which allows you to version your media assets in Git while actually storing them outside of your repository.
 
-* Does it include gigantic blobs? Git works best with small files. It's OK to have a few files in the megabyte range, but they should generally be the exception. Consider using [Git-LFS](https://git-lfs.github.com/) for storing your large files, especially those (e.g., media assets) that don't diff and merge usefully.
+    * Avoid storing file archives (e.g., ZIP files, tarballs) in Git, especially if compressed. Different versions of such files don't delta well against each other, so Git can't store them efficiently. It would be better to store the individual files in your repository, or store the archive elsewhere.
 
-* Does it include many, many versions of large files, each one slightly changed from the one before? (Git is terrible at storing logfiles or database dumps!) The problem is that all of the full files often need to be reconstructed, which is very expensive.
+* Does the repository have too many references (branches and/or tags)? They all have to be transferred to the client for every fetch, even if your clone is up-to-date. Try to limit them to a few tens of thousands at most. Suggestions:
 
-* Does it include gigantic trees? Every time a file is modified, Git has to create a new copy of every tree (i.e., every directory in the path) leading to the file. Huge trees make this expensive. Moreover, it is very expensive to iterate through history that contains huge trees. It's best to avoid directories with more than a couple of thousand entries. If you must store many files, it is better to shard them into multiple, smaller directories if possible.
+    * Delete unneeded tags and branches.
 
-* Does it have the same (or very similar) files repeated over and over again at different paths in a single commit? If so, your repository might have a reasonable overall size, but when you check it out it balloons into an enormous working copy. (Taken to an extreme, this is called a "git bomb"; see below.) It also makes some Git operations, like `fsck`, very expensive. Perhaps you can achieve your goals more effectively by using tags and branches or a build-time configuration system.
+    * Avoid pushing your "remote-tracking" branches to a shared repository.
 
-* Does it include absurdly long path names? That's probably not going to work well with other tools. One or two hundred characters should be enough, even if you're writing Java.
+    * Consider using ["git notes"](https://git-scm.com/docs/git-notes) rather than tags to attach auxiliary information to commits (for example, CI build results).
 
-* Are there other bizarre and questionable things in your repository?
+    * Perhaps store some of your rarely-needed tags and branches in a separate fork of your repository that is not fetched from by normal developers.
+
+* Does the repository include too many objects? The more objects, the longer it takes for Git to traverse the repository's history, for example when garbage-collecting. Suggestions:
+
+    * Think about whether you are storing very many tiny files that could easily be collected into a few bigger files.
+
+    * Consider breaking your project up into multiple subprojects.
+
+* Does the repository include gigantic blobs (files)? Git works best with small- to medium-sized files. It's OK to have a few files in the megabyte range, but they should generally be the exception. Suggestions:
+
+    * Consider using [Git-LFS](https://git-lfs.github.com/) for storing your large files, especially those (e.g., media assets) that don't diff and merge usefully.
+
+    * See also the section "Is the repository too big overall?"
+
+* Does the repository include many, many versions of large text files, each one slightly changed from the one before? Such files delta very well, so they might not cause your repository to grow alarmingly. But it is expensive for Git to reconstruct the full files and to diff them, which it needs to do internally for many operations. Suggestions:
+
+    * Avoid storing log files and database dumps in Git.
+
+    * Avoid storing giant data files (e.g., XML files) in Git, especially if they are modified frequently. Consider using a database instead.
+
+* Does the repository include gigantic trees (directories)? Every time a file is modified, Git has to create a new copy of every tree (i.e., every directory in the path) leading to the file. Huge trees make this expensive. Moreover, it is very expensive to traverse through history that contains huge trees, for example for `git blame`. Suggestions:
+
+    * Avoid creating directories with more than a couple of thousand entries each.
+
+    * If you must store very many files, it is better to shard them into a hierarchy of multiple, smaller directories.
+
+* Does the repository have the same (or very similar) files repeated over and over again at different paths in a single commit? If so, the repository might have a reasonable overall size, but when you check it out it balloons into an enormous working copy. (Taken to an extreme, this is called a "git bomb"; see below.) Suggestions:
+
+    * Perhaps you can achieve your goals more effectively by using tags and branches or a build-time configuration system.
+
+* Does the repository include absurdly long path names? That's probably not going to work well with other tools. One or two hundred characters should be enough, even if you're writing Java.
+
+* Are there other bizarre and questionable things in the repository?
 
     * Annotated tags pointing at one another in long chains?
 
@@ -28,7 +60,7 @@ Is your Git repository busting at the seams?
 
     * Commits with gigantic log messages?
 
-`git-sizer` computes a bunch of statistics about your repository that can help reveal all of the problems described above.
+`git-sizer` computes a bunch of statistics about your repository that can help reveal all of the problems described above. These practices are not wrong per se, but the more that you stretch Git beyond its sweet spot, the less you will be able to enjoy Git's legendary speed and performance. Moreover, if your Git repository statistics seem out of proportion to your project size, you might be able to make your life easier by adjusting how you use Git.
 
 
 ## Getting started
@@ -48,7 +80,7 @@ Is your Git repository busting at the seams?
 
         git sizer
 
-    Use the `--json` option to get output in JSON format, which includes the raw numbers.
+    Use the `--json` option to get output in JSON format, including the raw numbers.
 
 
 ## Usage
@@ -129,7 +161,7 @@ The footnotes list the SHA-1s of the "biggest" objects referenced in the table, 
 
     git cat-file -p <commit>:<path>
 
-at the command line to view the contents of the object. Use the `--names` option to customize the footnotes.
+at the command line to view the contents of the object. (Use `--names=none` to omit these footnotes.)
 
 By default, only statistics above a minimal level of concern are reported. Use `--verbose` to request that all statistics be output. Use `--threshold=<value>` to suppress the reporting of statistics below the specified level of concern. (`<value>` is interpreted as a numerical value corresponding to the number of asterisks.) Use `--critical` to report only statistics with a critical level of concern (equivalent to `--threshold=30`).
 

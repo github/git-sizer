@@ -180,18 +180,14 @@ type item struct {
 }
 
 func (l *item) Emit(t *table, buf io.Writer, indent int) {
-	valueString, unitString := l.Value()
+	valueString, unitString := l.value.Human(l.prefixes, l.unit)
 	t.emitRow(
 		buf,
 		indent,
-		l.Name(), l.Footnote(t.nameStyle),
+		l.name, l.Footnote(t.nameStyle),
 		valueString, unitString,
 		l.LevelOfConcern(),
 	)
-}
-
-func (l *item) Name() string {
-	return l.name
 }
 
 func (l *item) Footnote(nameStyle NameStyle) string {
@@ -208,10 +204,6 @@ func (l *item) Footnote(nameStyle NameStyle) string {
 	default:
 		panic("unexpected NameStyle")
 	}
-}
-
-func (l *item) Value() (string, string) {
-	return l.value.Human(l.prefixes, l.unit)
 }
 
 func (l *item) LevelOfConcern() string {

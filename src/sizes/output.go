@@ -170,9 +170,23 @@ func newSection(name string, contents ...tableContents) *section {
 }
 
 func (s *section) Emit(t *table, buf io.Writer, indent int) {
-	t.formatRow(buf, indent, s.name, "", "", "", "")
+	if indent == -1 {
+		// As a special case, the top-level section doesn't have its
+		// own header, but prints the table header:
+		fmt.Fprint(buf, t.generateHeader())
+	} else {
+		t.formatRow(buf, indent, s.name, "", "", "", "")
+	}
+
+	linesEmitted := false
 	for _, ls := range s.contents {
+		if indent == -1 && linesEmitted {
+			// The top-level section emits blank lines between its
+			// subsections:
+			t.emitBlankRow(buf)
+		}
 		ls.Emit(t, buf, indent+1)
+		linesEmitted = true
 	}
 }
 
@@ -288,7 +302,7 @@ func (n *NameStyle) Set(s string) error {
 }
 
 type table struct {
-	contents        []tableContents
+	contents        tableContents
 	nameStyle       NameStyle
 	footnotes       []string
 	footnoteIndexes map[string]int
@@ -298,7 +312,8 @@ func (s HistorySize) TableString(nameStyle NameStyle) string {
 	S := newSection
 	I := newItem
 	t := &table{
-		contents: []tableContents{
+		contents: S(
+			"",
 			S(
 				"Overall repository size",
 				S(
@@ -366,7 +381,7 @@ func (s HistorySize) TableString(nameStyle NameStyle) string {
 
 				I("Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, MetricPrefixes, " ", 100),
 			),
-		},
+		),
 		nameStyle:       nameStyle,
 		footnoteIndexes: make(map[string]int),
 	}
@@ -375,10 +390,9 @@ func (s HistorySize) TableString(nameStyle NameStyle) string {
 }
 
 func (t *table) String() string {
-	header := t.generateHeader()
 	lines := t.generateLines()
 	footnotes := t.generateFootnotes()
-	return header + lines + footnotes
+	return lines + footnotes
 }
 
 func (t *table) generateHeader() string {
@@ -390,14 +404,7 @@ func (t *table) generateHeader() string {
 
 func (t *table) generateLines() string {
 	buf := &bytes.Buffer{}
-	linesEmitted := false
-	for _, ls := range t.contents {
-		if linesEmitted {
-			t.emitBlankRow(buf)
-		}
-		ls.Emit(t, buf, 0)
-		linesEmitted = true
-	}
+	t.contents.Emit(t, buf, -1)
 	return buf.String()
 }
 

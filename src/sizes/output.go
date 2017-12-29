@@ -148,8 +148,8 @@ const (
 	stars  = "******************************"
 )
 
-// A set of lines in the tabular output.
-type lineSet interface {
+// Zero or more lines in the tabular output.
+type tableContents interface {
 	Emit(t *table, buf io.Writer, indent int)
 }
 
@@ -159,16 +159,19 @@ type lineSet interface {
 // and the lines become second-level bullets.
 type section struct {
 	name     string
-	lineSets []lineSet
+	contents []tableContents
 }
 
-func newSection(name string, lineSets ...lineSet) *section {
-	return &section{name, lineSets}
+func newSection(name string, contents ...tableContents) *section {
+	return &section{
+		name:     name,
+		contents: contents,
+	}
 }
 
 func (s *section) Emit(t *table, buf io.Writer, indent int) {
 	t.emitRow(buf, indent, s.name, "", "", "", "")
-	for _, ls := range s.lineSets {
+	for _, ls := range s.contents {
 		ls.Emit(t, buf, indent+1)
 	}
 }
@@ -285,7 +288,7 @@ func (n *NameStyle) Set(s string) error {
 }
 
 type table struct {
-	contents        []lineSet
+	contents        []tableContents
 	nameStyle       NameStyle
 	footnotes       []string
 	footnoteIndexes map[string]int
@@ -295,7 +298,7 @@ func (s HistorySize) TableString(nameStyle NameStyle) string {
 	S := newSection
 	I := newItem
 	t := &table{
-		contents: []lineSet{
+		contents: []tableContents{
 			S(
 				"Overall repository size",
 				S(

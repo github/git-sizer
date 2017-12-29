@@ -155,6 +155,7 @@ type lineSet interface {
 
 // A single line in the tabular output.
 type line interface {
+	Emit(t *table, buf io.Writer)
 	Name() string
 	Footnote(NameStyle) string
 	Value() (string, string)
@@ -164,6 +165,10 @@ type line interface {
 // A header line in the tabular output.
 type header struct {
 	name string
+}
+
+func (l *header) Emit(t *table, buf io.Writer) {
+	t.emitRow(buf, l.Name(), "", "", "", "")
 }
 
 func (l *header) Name() string {
@@ -197,6 +202,16 @@ func newBullet(line line) line {
 	default:
 		return &bullet{"* ", line}
 	}
+}
+
+func (l *bullet) Emit(t *table, buf io.Writer) {
+	valueString, unitString := l.Value()
+	t.emitRow(
+		buf,
+		l.Name(), l.Footnote(t.nameStyle),
+		valueString, unitString,
+		l.LevelOfConcern(),
+	)
 }
 
 func (l *bullet) Name() string {
@@ -243,6 +258,16 @@ type item struct {
 	prefixes []Prefix
 	unit     string
 	scale    float64
+}
+
+func (l *item) Emit(t *table, buf io.Writer) {
+	valueString, unitString := l.Value()
+	t.emitRow(
+		buf,
+		l.Name(), l.Footnote(t.nameStyle),
+		valueString, unitString,
+		l.LevelOfConcern(),
+	)
 }
 
 func (l *item) Lines() []line {
@@ -447,19 +472,11 @@ func (t *table) generateLines() string {
 			t.emitBlankRow(buf)
 		}
 		for _, l := range ls.Lines() {
-			t.emitLine(buf, l)
+			l.Emit(t, buf)
 		}
 		linesEmitted = true
 	}
 	return buf.String()
-}
-
-func (t *table) emitLine(buf io.Writer, l line) {
-	valueString, unitString := l.Value()
-	footnote := l.Footnote(t.nameStyle)
-	name := l.Name()
-	levelOfConcern := l.LevelOfConcern()
-	t.emitRow(buf, name, footnote, valueString, unitString, levelOfConcern)
 }
 
 func (t *table) emitBlankRow(buf io.Writer) {

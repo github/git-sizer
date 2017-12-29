@@ -161,30 +161,6 @@ type line interface {
 	LevelOfConcern() string
 }
 
-// A blank line in the tabular output.
-type blank struct {
-}
-
-func (l *blank) Lines() []line {
-	return []line{l}
-}
-
-func (l *blank) Name() string {
-	return ""
-}
-
-func (l *blank) Footnote(_ NameStyle) string {
-	return ""
-}
-
-func (l *blank) Value() (string, string) {
-	return "", ""
-}
-
-func (l *blank) LevelOfConcern() string {
-	return ""
-}
-
 // A header line in the tabular output.
 type header struct {
 	name string
@@ -213,13 +189,11 @@ type bullet struct {
 }
 
 // Turn `line` into a `bullet`. If it is already a bullet, just
-// increase its level of indentation. Leave blank lines unchanged.
+// increase its level of indentation.
 func newBullet(line line) line {
 	switch line := line.(type) {
 	case *bullet:
 		return &bullet{"  " + line.prefix, line.line}
-	case *blank:
-		return line
 	default:
 		return &bullet{"* ", line}
 	}
@@ -470,7 +444,7 @@ func (t *table) generateLines() string {
 	linesEmitted := false
 	for _, ls := range t.contents {
 		if linesEmitted {
-			t.emitLine(buf, &blank{})
+			t.emitBlankRow(buf)
 		}
 		for _, l := range ls.Lines() {
 			t.emitLine(buf, l)
@@ -486,6 +460,10 @@ func (t *table) emitLine(buf io.Writer, l line) {
 	name := l.Name()
 	levelOfConcern := l.LevelOfConcern()
 	t.emitRow(buf, name, footnote, valueString, unitString, levelOfConcern)
+}
+
+func (t *table) emitBlankRow(buf io.Writer) {
+	t.emitRow(buf, "", "", "", "", "")
 }
 
 func (t *table) emitRow(buf io.Writer, name, footnote, valueString, unitString, levelOfConcern string) {

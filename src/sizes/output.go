@@ -170,7 +170,7 @@ func newSection(name string, contents ...tableContents) *section {
 }
 
 func (s *section) Emit(t *table, buf io.Writer, indent int) {
-	t.emitRow(buf, indent, s.name, "", "", "", "")
+	t.formatRow(buf, indent, s.name, "", "", "", "")
 	for _, ls := range s.contents {
 		ls.Emit(t, buf, indent+1)
 	}
@@ -206,7 +206,7 @@ func newItem(
 
 func (l *item) Emit(t *table, buf io.Writer, indent int) {
 	valueString, unitString := l.value.Human(l.prefixes, l.unit)
-	t.emitRow(
+	t.formatRow(
 		buf,
 		indent,
 		l.name, l.Footnote(t.nameStyle),
@@ -402,10 +402,10 @@ func (t *table) generateLines() string {
 }
 
 func (t *table) emitBlankRow(buf io.Writer) {
-	t.emitRow(buf, 0, "", "", "", "", "")
+	t.formatRow(buf, 0, "", "", "", "", "")
 }
 
-func (t *table) emitRow(
+func (t *table) formatRow(
 	buf io.Writer, indent int,
 	name, footnote, valueString, unitString, levelOfConcern string,
 ) {

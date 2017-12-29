@@ -354,112 +354,122 @@ func (n *NameStyle) Set(s string) error {
 	return nil
 }
 
+type table struct {
+	contents        []lineSet
+	nameStyle       NameStyle
+	footnotes       []string
+	footnoteIndexes map[string]int
+}
+
 func (s HistorySize) TableString(nameStyle NameStyle) string {
+	t := &table{
+		contents: []lineSet{
+			&section{"Overall repository size",
+				[]lineSet{
+					&section{"Commits",
+						[]lineSet{
+							&item{"Count", nil, s.UniqueCommitCount, MetricPrefixes, " ", 500e3},
+							&item{"Total size", nil, s.UniqueCommitSize, BinaryPrefixes, "B", 250e6},
+						},
+					},
+
+					&section{"Trees",
+						[]lineSet{
+							&item{"Count", nil, s.UniqueTreeCount, MetricPrefixes, " ", 1.5e6},
+							&item{"Total size", nil, s.UniqueTreeSize, BinaryPrefixes, "B", 2e9},
+							&item{"Total tree entries", nil, s.UniqueTreeEntries, MetricPrefixes, " ", 50e6},
+						},
+					},
+
+					&section{"Blobs",
+						[]lineSet{
+							&item{"Count", nil, s.UniqueBlobCount, MetricPrefixes, " ", 1.5e6},
+							&item{"Total size", nil, s.UniqueBlobSize, BinaryPrefixes, "B", 10e9},
+						},
+					},
+
+					&section{"Annotated tags",
+						[]lineSet{
+							&item{"Count", nil, s.UniqueTagCount, MetricPrefixes, " ", 25e3},
+						},
+					},
+
+					&section{"References",
+						[]lineSet{
+							&item{"Count", nil, s.ReferenceCount, MetricPrefixes, " ", 25e3},
+						},
+					},
+				},
+			},
+			&blank{},
+
+			&section{"Biggest commit objects",
+				[]lineSet{
+					&item{"Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, BinaryPrefixes, "B", 50e3},
+					&item{"Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, MetricPrefixes, " ", 10},
+				},
+			},
+			&blank{},
+
+			&section{"Biggest tree objects",
+				[]lineSet{
+					&item{"Maximum tree entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3},
+				},
+			},
+			&blank{},
+
+			&section{"Biggest blob objects",
+				[]lineSet{
+					&item{"Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, BinaryPrefixes, "B", 10e6},
+				},
+			},
+			&blank{},
+
+			&section{"History structure",
+				[]lineSet{
+					&item{"Maximum history depth", nil, s.MaxHistoryDepth, MetricPrefixes, " ", 500e3},
+					&item{"Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, MetricPrefixes, " ", 1},
+				},
+			},
+			&blank{},
+
+			&section{"Biggest checkouts",
+				[]lineSet{
+					&item{"Number of directories", s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, MetricPrefixes, " ", 2000},
+					&item{"Maximum path depth", s.MaxPathDepthTree, s.MaxPathDepth, MetricPrefixes, " ", 10},
+					&item{"Maximum path length", s.MaxPathLengthTree, s.MaxPathLength, BinaryPrefixes, "B", 100},
+
+					&item{"Number of files", s.MaxExpandedBlobCountTree, s.MaxExpandedBlobCount, MetricPrefixes, " ", 50e3},
+					&item{"Total size of files", s.MaxExpandedBlobSizeTree, s.MaxExpandedBlobSize, BinaryPrefixes, "B", 1e9},
+
+					&item{"Number of symlinks", s.MaxExpandedLinkCountTree, s.MaxExpandedLinkCount, MetricPrefixes, " ", 25e3},
+
+					&item{"Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, MetricPrefixes, " ", 100},
+				},
+			},
+		},
+		nameStyle:       nameStyle,
+		footnoteIndexes: make(map[string]int),
+	}
+
 	buf := &bytes.Buffer{}
 
 	fmt.Fprintln(buf, "| Name                         | Value     | Level of concern               |")
 	fmt.Fprintln(buf, "| ---------------------------- | --------- | ------------------------------ |")
 
-	var footnotes []string
-	footnoteIndexes := make(map[string]int)
-
-	for _, ls := range []lineSet{
-		&section{"Overall repository size",
-			[]lineSet{
-				&section{"Commits",
-					[]lineSet{
-						&item{"Count", nil, s.UniqueCommitCount, MetricPrefixes, " ", 500e3},
-						&item{"Total size", nil, s.UniqueCommitSize, BinaryPrefixes, "B", 250e6},
-					},
-				},
-
-				&section{"Trees",
-					[]lineSet{
-						&item{"Count", nil, s.UniqueTreeCount, MetricPrefixes, " ", 1.5e6},
-						&item{"Total size", nil, s.UniqueTreeSize, BinaryPrefixes, "B", 2e9},
-						&item{"Total tree entries", nil, s.UniqueTreeEntries, MetricPrefixes, " ", 50e6},
-					},
-				},
-
-				&section{"Blobs",
-					[]lineSet{
-						&item{"Count", nil, s.UniqueBlobCount, MetricPrefixes, " ", 1.5e6},
-						&item{"Total size", nil, s.UniqueBlobSize, BinaryPrefixes, "B", 10e9},
-					},
-				},
-
-				&section{"Annotated tags",
-					[]lineSet{
-						&item{"Count", nil, s.UniqueTagCount, MetricPrefixes, " ", 25e3},
-					},
-				},
-
-				&section{"References",
-					[]lineSet{
-						&item{"Count", nil, s.ReferenceCount, MetricPrefixes, " ", 25e3},
-					},
-				},
-			},
-		},
-		&blank{},
-
-		&section{"Biggest commit objects",
-			[]lineSet{
-				&item{"Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, BinaryPrefixes, "B", 50e3},
-				&item{"Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, MetricPrefixes, " ", 10},
-			},
-		},
-		&blank{},
-
-		&section{"Biggest tree objects",
-			[]lineSet{
-				&item{"Maximum tree entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3},
-			},
-		},
-		&blank{},
-
-		&section{"Biggest blob objects",
-			[]lineSet{
-				&item{"Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, BinaryPrefixes, "B", 10e6},
-			},
-		},
-		&blank{},
-
-		&section{"History structure",
-			[]lineSet{
-				&item{"Maximum history depth", nil, s.MaxHistoryDepth, MetricPrefixes, " ", 500e3},
-				&item{"Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, MetricPrefixes, " ", 1},
-			},
-		},
-		&blank{},
-
-		&section{"Biggest checkouts",
-			[]lineSet{
-				&item{"Number of directories", s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, MetricPrefixes, " ", 2000},
-				&item{"Maximum path depth", s.MaxPathDepthTree, s.MaxPathDepth, MetricPrefixes, " ", 10},
-				&item{"Maximum path length", s.MaxPathLengthTree, s.MaxPathLength, BinaryPrefixes, "B", 100},
-
-				&item{"Number of files", s.MaxExpandedBlobCountTree, s.MaxExpandedBlobCount, MetricPrefixes, " ", 50e3},
-				&item{"Total size of files", s.MaxExpandedBlobSizeTree, s.MaxExpandedBlobSize, BinaryPrefixes, "B", 1e9},
-
-				&item{"Number of symlinks", s.MaxExpandedLinkCountTree, s.MaxExpandedLinkCount, MetricPrefixes, " ", 25e3},
-
-				&item{"Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, MetricPrefixes, " ", 100},
-			},
-		},
-	} {
+	for _, ls := range t.contents {
 		for _, l := range ls.Lines() {
 			valueString, unitString := l.Value()
-			footnote := l.Footnote(nameStyle)
+			footnote := l.Footnote(t.nameStyle)
 			var citation string
 			if footnote == "" {
 				citation = ""
 			} else {
-				index, ok := footnoteIndexes[footnote]
+				index, ok := t.footnoteIndexes[footnote]
 				if !ok {
-					index = len(footnoteIndexes) + 1
-					footnotes = append(footnotes, footnote)
-					footnoteIndexes[footnote] = index
+					index = len(t.footnoteIndexes) + 1
+					t.footnotes = append(t.footnotes, footnote)
+					t.footnoteIndexes[footnote] = index
 				}
 				citation = fmt.Sprintf("[%d]", index)
 			}
@@ -474,7 +484,7 @@ func (s HistorySize) TableString(nameStyle NameStyle) string {
 
 	// Output the footnotes:
 	buf.WriteByte('\n')
-	for i, footnote := range footnotes {
+	for i, footnote := range t.footnotes {
 		index := i + 1
 		citation := fmt.Sprintf("[%d]", index)
 		fmt.Fprintf(buf, "%-4s %s\n", citation, footnote)

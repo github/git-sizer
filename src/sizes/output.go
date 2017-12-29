@@ -168,7 +168,7 @@ type header struct {
 }
 
 func (l *header) Emit(t *table, buf io.Writer) {
-	t.emitRow(buf, l.Name(), "", "", "", "")
+	t.emitRow(buf, 0, l.Name(), "", "", "", "")
 }
 
 func (l *header) Name() string {
@@ -189,7 +189,7 @@ func (l *header) LevelOfConcern() string {
 
 // A bullet point in the tabular output.
 type bullet struct {
-	prefix string
+	indent int
 	line   line
 }
 
@@ -198,9 +198,9 @@ type bullet struct {
 func newBullet(line line) line {
 	switch line := line.(type) {
 	case *bullet:
-		return &bullet{"  " + line.prefix, line.line}
+		return &bullet{line.indent + 1, line.line}
 	default:
-		return &bullet{"* ", line}
+		return &bullet{1, line}
 	}
 }
 
@@ -208,6 +208,7 @@ func (l *bullet) Emit(t *table, buf io.Writer) {
 	valueString, unitString := l.Value()
 	t.emitRow(
 		buf,
+		l.indent,
 		l.Name(), l.Footnote(t.nameStyle),
 		valueString, unitString,
 		l.LevelOfConcern(),
@@ -215,7 +216,7 @@ func (l *bullet) Emit(t *table, buf io.Writer) {
 }
 
 func (l *bullet) Name() string {
-	return l.prefix + l.line.Name()
+	return l.line.Name()
 }
 
 func (l *bullet) Footnote(nameStyle NameStyle) string {
@@ -264,6 +265,7 @@ func (l *item) Emit(t *table, buf io.Writer) {
 	valueString, unitString := l.Value()
 	t.emitRow(
 		buf,
+		0,
 		l.Name(), l.Footnote(t.nameStyle),
 		valueString, unitString,
 		l.LevelOfConcern(),
@@ -480,18 +482,26 @@ func (t *table) generateLines() string {
 }
 
 func (t *table) emitBlankRow(buf io.Writer) {
-	t.emitRow(buf, "", "", "", "", "")
+	t.emitRow(buf, 0, "", "", "", "", "")
 }
 
-func (t *table) emitRow(buf io.Writer, name, footnote, valueString, unitString, levelOfConcern string) {
+func (t *table) emitRow(
+	buf io.Writer, indent int,
+	name, footnote, valueString, unitString, levelOfConcern string,
+) {
+	prefix := ""
+	if indent != 0 {
+		prefix = spaces[:2*(indent-1)] + "* "
+	}
 	citation := t.createCitation(footnote)
 	spacer := ""
-	if len(name)+len(citation) < 28 {
-		spacer = spaces[:28-len(name)-len(citation)]
+	l := len(prefix) + len(name) + len(citation)
+	if l < 28 {
+		spacer = spaces[:28-l]
 	}
 	fmt.Fprintf(
-		buf, "| %s%s%s | %5s %-3s | %-30s |\n",
-		name, spacer, citation, valueString, unitString, levelOfConcern,
+		buf, "| %s%s%s%s | %5s %-3s | %-30s |\n",
+		prefix, name, spacer, citation, valueString, unitString, levelOfConcern,
 	)
 }
 

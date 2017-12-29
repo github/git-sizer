@@ -402,7 +402,6 @@ func (s HistorySize) TableString(nameStyle NameStyle) string {
 					},
 				},
 			},
-			&blank{},
 
 			&section{"Biggest commit objects",
 				[]lineSet{
@@ -410,21 +409,18 @@ func (s HistorySize) TableString(nameStyle NameStyle) string {
 					&item{"Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, MetricPrefixes, " ", 10},
 				},
 			},
-			&blank{},
 
 			&section{"Biggest tree objects",
 				[]lineSet{
 					&item{"Maximum tree entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3},
 				},
 			},
-			&blank{},
 
 			&section{"Biggest blob objects",
 				[]lineSet{
 					&item{"Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, BinaryPrefixes, "B", 10e6},
 				},
 			},
-			&blank{},
 
 			&section{"History structure",
 				[]lineSet{
@@ -432,7 +428,6 @@ func (s HistorySize) TableString(nameStyle NameStyle) string {
 					&item{"Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, MetricPrefixes, " ", 1},
 				},
 			},
-			&blank{},
 
 			&section{"Biggest checkouts",
 				[]lineSet{
@@ -472,10 +467,15 @@ func (t *table) generateHeader() string {
 
 func (t *table) generateLines() string {
 	buf := &bytes.Buffer{}
+	linesEmitted := false
 	for _, ls := range t.contents {
+		if linesEmitted {
+			t.emitLine(buf, &blank{})
+		}
 		for _, l := range ls.Lines() {
 			t.emitLine(buf, l)
 		}
+		linesEmitted = true
 	}
 	return buf.String()
 }

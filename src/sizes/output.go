@@ -507,6 +507,10 @@ func (t *table) createCitation(footnote string) string {
 }
 
 func (t *table) generateFootnotes() string {
+	if len(t.footnotes) == 0 {
+		return ""
+	}
+
 	buf := &bytes.Buffer{}
 	buf.WriteByte('\n')
 	for i, footnote := range t.footnotes {

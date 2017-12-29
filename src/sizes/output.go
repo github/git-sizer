@@ -3,6 +3,7 @@ package sizes
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"math"
 )
 
@@ -452,43 +453,66 @@ func (s HistorySize) TableString(nameStyle NameStyle) string {
 		footnoteIndexes: make(map[string]int),
 	}
 
-	buf := &bytes.Buffer{}
+	return t.String()
+}
 
+func (t *table) String() string {
+	header := t.generateHeader()
+	lines := t.generateLines()
+	footnotes := t.generateFootnotes()
+	return header + lines + footnotes
+}
+
+func (t *table) generateHeader() string {
+	buf := &bytes.Buffer{}
 	fmt.Fprintln(buf, "| Name                         | Value     | Level of concern               |")
 	fmt.Fprintln(buf, "| ---------------------------- | --------- | ------------------------------ |")
+	return buf.String()
+}
 
+func (t *table) generateLines() string {
+	buf := &bytes.Buffer{}
 	for _, ls := range t.contents {
 		for _, l := range ls.Lines() {
-			valueString, unitString := l.Value()
-			footnote := l.Footnote(t.nameStyle)
-			var citation string
-			if footnote == "" {
-				citation = ""
-			} else {
-				index, ok := t.footnoteIndexes[footnote]
-				if !ok {
-					index = len(t.footnoteIndexes) + 1
-					t.footnotes = append(t.footnotes, footnote)
-					t.footnoteIndexes[footnote] = index
-				}
-				citation = fmt.Sprintf("[%d]", index)
-			}
-			nameString := l.Name()
-			if len(nameString)+len(citation) < 28 {
-				nameString += spaces[:28-len(nameString)-len(citation)]
-			}
-			nameString += citation
-			fmt.Fprintf(buf, "| %s | %5s %-3s | %-30s |\n", nameString, valueString, unitString, l.LevelOfConcern())
+			t.emitLine(buf, l)
 		}
 	}
+	return buf.String()
+}
 
-	// Output the footnotes:
+func (t *table) emitLine(buf io.Writer, l line) {
+	valueString, unitString := l.Value()
+	footnote := l.Footnote(t.nameStyle)
+	citation := t.createCitation(footnote)
+	nameString := l.Name()
+	if len(nameString)+len(citation) < 28 {
+		nameString += spaces[:28-len(nameString)-len(citation)]
+	}
+	nameString += citation
+	fmt.Fprintf(buf, "| %s | %5s %-3s | %-30s |\n", nameString, valueString, unitString, l.LevelOfConcern())
+}
+
+func (t *table) createCitation(footnote string) string {
+	if footnote == "" {
+		return ""
+	}
+
+	index, ok := t.footnoteIndexes[footnote]
+	if !ok {
+		index = len(t.footnoteIndexes) + 1
+		t.footnotes = append(t.footnotes, footnote)
+		t.footnoteIndexes[footnote] = index
+	}
+	return fmt.Sprintf("[%d]", index)
+}
+
+func (t *table) generateFootnotes() string {
+	buf := &bytes.Buffer{}
 	buf.WriteByte('\n')
 	for i, footnote := range t.footnotes {
 		index := i + 1
 		citation := fmt.Sprintf("[%d]", index)
 		fmt.Fprintf(buf, "%-4s %s\n", citation, footnote)
 	}
-
 	return buf.String()
 }

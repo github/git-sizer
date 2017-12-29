@@ -483,13 +483,21 @@ func (t *table) generateLines() string {
 func (t *table) emitLine(buf io.Writer, l line) {
 	valueString, unitString := l.Value()
 	footnote := l.Footnote(t.nameStyle)
+	name := l.Name()
+	levelOfConcern := l.LevelOfConcern()
+	t.emitRow(buf, name, footnote, valueString, unitString, levelOfConcern)
+}
+
+func (t *table) emitRow(buf io.Writer, name, footnote, valueString, unitString, levelOfConcern string) {
 	citation := t.createCitation(footnote)
-	nameString := l.Name()
-	if len(nameString)+len(citation) < 28 {
-		nameString += spaces[:28-len(nameString)-len(citation)]
+	spacer := ""
+	if len(name)+len(citation) < 28 {
+		spacer = spaces[:28-len(name)-len(citation)]
 	}
-	nameString += citation
-	fmt.Fprintf(buf, "| %s | %5s %-3s | %-30s |\n", nameString, valueString, unitString, l.LevelOfConcern())
+	fmt.Fprintf(
+		buf, "| %s%s%s | %5s %-3s | %-30s |\n",
+		name, spacer, citation, valueString, unitString, levelOfConcern,
+	)
 }
 
 func (t *table) createCitation(footnote string) string {

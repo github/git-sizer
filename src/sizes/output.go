@@ -162,6 +162,10 @@ type section struct {
 	lineSets []lineSet
 }
 
+func newSection(name string, lineSets ...lineSet) *section {
+	return &section{name, lineSets}
+}
+
 func (s *section) Emit(t *table, buf io.Writer, indent int) {
 	t.emitRow(buf, indent, s.name, "", "", "", "")
 	for _, ls := range s.lineSets {
@@ -270,86 +274,76 @@ type table struct {
 }
 
 func (s HistorySize) TableString(nameStyle NameStyle) string {
+	S := newSection
 	t := &table{
 		contents: []lineSet{
-			&section{"Overall repository size",
-				[]lineSet{
-					&section{"Commits",
-						[]lineSet{
-							&item{"Count", nil, s.UniqueCommitCount, MetricPrefixes, " ", 500e3},
-							&item{"Total size", nil, s.UniqueCommitSize, BinaryPrefixes, "B", 250e6},
-						},
-					},
+			S(
+				"Overall repository size",
+				S(
+					"Commits",
+					&item{"Count", nil, s.UniqueCommitCount, MetricPrefixes, " ", 500e3},
+					&item{"Total size", nil, s.UniqueCommitSize, BinaryPrefixes, "B", 250e6},
+				),
 
-					&section{"Trees",
-						[]lineSet{
-							&item{"Count", nil, s.UniqueTreeCount, MetricPrefixes, " ", 1.5e6},
-							&item{"Total size", nil, s.UniqueTreeSize, BinaryPrefixes, "B", 2e9},
-							&item{"Total tree entries", nil, s.UniqueTreeEntries, MetricPrefixes, " ", 50e6},
-						},
-					},
+				S(
+					"Trees",
+					&item{"Count", nil, s.UniqueTreeCount, MetricPrefixes, " ", 1.5e6},
+					&item{"Total size", nil, s.UniqueTreeSize, BinaryPrefixes, "B", 2e9},
+					&item{"Total tree entries", nil, s.UniqueTreeEntries, MetricPrefixes, " ", 50e6},
+				),
 
-					&section{"Blobs",
-						[]lineSet{
-							&item{"Count", nil, s.UniqueBlobCount, MetricPrefixes, " ", 1.5e6},
-							&item{"Total size", nil, s.UniqueBlobSize, BinaryPrefixes, "B", 10e9},
-						},
-					},
+				S(
+					"Blobs",
+					&item{"Count", nil, s.UniqueBlobCount, MetricPrefixes, " ", 1.5e6},
+					&item{"Total size", nil, s.UniqueBlobSize, BinaryPrefixes, "B", 10e9},
+				),
 
-					&section{"Annotated tags",
-						[]lineSet{
-							&item{"Count", nil, s.UniqueTagCount, MetricPrefixes, " ", 25e3},
-						},
-					},
+				S(
+					"Annotated tags",
+					&item{"Count", nil, s.UniqueTagCount, MetricPrefixes, " ", 25e3},
+				),
 
-					&section{"References",
-						[]lineSet{
-							&item{"Count", nil, s.ReferenceCount, MetricPrefixes, " ", 25e3},
-						},
-					},
-				},
-			},
+				S(
+					"References",
+					&item{"Count", nil, s.ReferenceCount, MetricPrefixes, " ", 25e3},
+				),
+			),
 
-			&section{"Biggest commit objects",
-				[]lineSet{
-					&item{"Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, BinaryPrefixes, "B", 50e3},
-					&item{"Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, MetricPrefixes, " ", 10},
-				},
-			},
+			S(
+				"Biggest commit objects",
+				&item{"Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, BinaryPrefixes, "B", 50e3},
+				&item{"Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, MetricPrefixes, " ", 10},
+			),
 
-			&section{"Biggest tree objects",
-				[]lineSet{
-					&item{"Maximum tree entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3},
-				},
-			},
+			S(
+				"Biggest tree objects",
+				&item{"Maximum tree entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3},
+			),
 
-			&section{"Biggest blob objects",
-				[]lineSet{
-					&item{"Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, BinaryPrefixes, "B", 10e6},
-				},
-			},
+			S(
+				"Biggest blob objects",
+				&item{"Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, BinaryPrefixes, "B", 10e6},
+			),
 
-			&section{"History structure",
-				[]lineSet{
-					&item{"Maximum history depth", nil, s.MaxHistoryDepth, MetricPrefixes, " ", 500e3},
-					&item{"Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, MetricPrefixes, " ", 1},
-				},
-			},
+			S(
+				"History structure",
+				&item{"Maximum history depth", nil, s.MaxHistoryDepth, MetricPrefixes, " ", 500e3},
+				&item{"Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, MetricPrefixes, " ", 1},
+			),
 
-			&section{"Biggest checkouts",
-				[]lineSet{
-					&item{"Number of directories", s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, MetricPrefixes, " ", 2000},
-					&item{"Maximum path depth", s.MaxPathDepthTree, s.MaxPathDepth, MetricPrefixes, " ", 10},
-					&item{"Maximum path length", s.MaxPathLengthTree, s.MaxPathLength, BinaryPrefixes, "B", 100},
+			S(
+				"Biggest checkouts",
+				&item{"Number of directories", s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, MetricPrefixes, " ", 2000},
+				&item{"Maximum path depth", s.MaxPathDepthTree, s.MaxPathDepth, MetricPrefixes, " ", 10},
+				&item{"Maximum path length", s.MaxPathLengthTree, s.MaxPathLength, BinaryPrefixes, "B", 100},
 
-					&item{"Number of files", s.MaxExpandedBlobCountTree, s.MaxExpandedBlobCount, MetricPrefixes, " ", 50e3},
-					&item{"Total size of files", s.MaxExpandedBlobSizeTree, s.MaxExpandedBlobSize, BinaryPrefixes, "B", 1e9},
+				&item{"Number of files", s.MaxExpandedBlobCountTree, s.MaxExpandedBlobCount, MetricPrefixes, " ", 50e3},
+				&item{"Total size of files", s.MaxExpandedBlobSizeTree, s.MaxExpandedBlobSize, BinaryPrefixes, "B", 1e9},
 
-					&item{"Number of symlinks", s.MaxExpandedLinkCountTree, s.MaxExpandedLinkCount, MetricPrefixes, " ", 25e3},
+				&item{"Number of symlinks", s.MaxExpandedLinkCountTree, s.MaxExpandedLinkCount, MetricPrefixes, " ", 25e3},
 
-					&item{"Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, MetricPrefixes, " ", 100},
-				},
-			},
+				&item{"Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, MetricPrefixes, " ", 100},
+			),
 		},
 		nameStyle:       nameStyle,
 		footnoteIndexes: make(map[string]int),

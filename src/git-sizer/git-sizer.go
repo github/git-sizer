@@ -27,10 +27,24 @@ func mainImplementation() error {
 	var nameStyle sizes.NameStyle = sizes.NameStyleFull
 	var cpuprofile string
 	var jsonOutput bool
+	var threshold sizes.Threshold = 1
 
 	flag.BoolVar(&processBranches, "branches", false, "process all branches")
 	flag.BoolVar(&processTags, "tags", false, "process all tags")
 	flag.BoolVar(&processRemotes, "remotes", false, "process all remote-tracking branches")
+	flag.Var(
+		&threshold, "threshold",
+		"minimum level of concern (i.e., number of stars) that should be\n"+
+			"        reported",
+	)
+	flag.Var(
+		sizes.NewThresholdFlagValue(&threshold, 30),
+		"critical", "only report critical statistics",
+	)
+	flag.Var(
+		sizes.NewThresholdFlagValue(&threshold, 0),
+		"verbose", "report all statistics, whether concerning or not",
+	)
 	flag.Var(
 		&nameStyle, "names",
 		"display names of large objects in the specified `style`:\n"+
@@ -103,7 +117,7 @@ func mainImplementation() error {
 		}
 		fmt.Printf("%s\n", s)
 	} else {
-		io.WriteString(os.Stdout, historySize.TableString(nameStyle))
+		io.WriteString(os.Stdout, historySize.TableString(threshold, nameStyle))
 	}
 
 	return nil

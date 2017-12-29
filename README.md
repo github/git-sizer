@@ -50,6 +50,8 @@ Is your Git repository busting at the seams?
 
     Use the `--json` option to get output in JSON format, which includes the raw numbers.
 
+    By default, only statistics above a minimal level of concern are reported. Use `--verbose` to report all statistics. Use `--threshold=<value>` to suppress the reporting of statistics below the specified level of concern. (`<value>` is interpreted as a numerical value corresponding to a number of asterisks.) Use `--critical` to report only statistics with a critical level of concern (equivalent to `--threshold=30`).
+
     Note that if a value overflows its counter (which should only happen for malicious repositories), the corresponding value is displayed as `∞` in tabular form, or truncated to 2³²-1 or 2⁶⁴-1 (depending on the size of the counter) in JSON mode.
 
     To get a list of other options, run
@@ -62,7 +64,7 @@ Is your Git repository busting at the seams?
 Here is the output for [the Linux repository](https://github.com/torvalds/linux) as of this writing:
 
 ```
-$ git-sizer
+$ git-sizer --verbose
 | Name                         | Value     | Level of concern               |
 | ---------------------------- | --------- | ------------------------------ |
 | Overall repository size      |           |                                |
@@ -133,7 +135,7 @@ The Linux repository is large by most standards, and as you can see, it is pushi
 Here is the output for one of the famous ["git bomb"](https://kate.io/blog/git-bomb/) repositories:
 
 ```
-$ git-sizer test/data/git-bomb.git
+$ git-sizer --verbose test/data/git-bomb.git
 | Name                         | Value     | Level of concern               |
 | ---------------------------- | --------- | ------------------------------ |
 | Overall repository size      |           |                                |
@@ -181,4 +183,18 @@ $ git-sizer test/data/git-bomb.git
 [4]  d9513477b01825130c48c4bebed114c4b2d50401 (18ed56cbc5012117e24a603e7c072cf65d36d469^{tree})
 ```
 
-This repository is mischievously constructed to have a pathological tree structure, with the same directories repeated over and over again. As a result, even though the entire repository is less than 20 kb in size, when checked out it would explode into over a billion directories containing over ten billion files. (`git-sizer` prints `∞` for the blob count because the true number has overflowed the 32-bit counter used for that field.)
+This repository is mischievously constructed to have a pathological tree structure, with the same directories repeated over and over again. As a result, even though the entire repository is less than 20 kb in size, when checked out it would explode into over a billion directories containing over ten billion files. (`git-sizer` prints `∞` for the blob count because the true number has overflowed the 32-bit counter used for that field.) To see only the critical statistics, use the `--critical` option:
+
+
+```
+$ git-sizer --critical test/data/git-bomb.git
+| Name                         | Value     | Level of concern               |
+| ---------------------------- | --------- | ------------------------------ |
+| Biggest checkouts            |           |                                |
+| * Number of directories  [1] |  1.11 G   | !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! |
+| * Number of files        [1] |     ∞     | !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! |
+| * Total size of files    [2] |  83.8 GiB | !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! |
+
+[1]  c1971b07ce6888558e2178a121804774c4201b17 (refs/heads/master^{tree})
+[2]  d9513477b01825130c48c4bebed114c4b2d50401 (18ed56cbc5012117e24a603e7c072cf65d36d469^{tree})
+```

@@ -2,9 +2,11 @@ package sizes
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io"
 	"math"
+	"strconv"
 )
 
 func (s BlobSize) String() string {
@@ -170,6 +172,28 @@ func newSection(name string, contents ...tableContents) *section {
 }
 
 func (s *section) Emit(t *table, buf io.Writer, indent int) {
+	var linesBuf bytes.Buffer
+	for _, c := range s.contents {
+		var cBuf bytes.Buffer
+		c.Emit(t, &cBuf, indent+1)
+
+		if indent == -1 && linesBuf.Len() > 0 && cBuf.Len() > 0 {
+			// The top-level section emits blank lines between its
+			// subsections:
+			t.emitBlankRow(&linesBuf)
+		}
+
+		fmt.Fprint(&linesBuf, cBuf.String())
+	}
+
+	if linesBuf.Len() == 0 {
+		if indent == -1 {
+			fmt.Fprintln(buf, "No problems above the current threshold were found")
+		}
+		return
+	}
+
+	// There's output, so emit the section header first:
 	if indent == -1 {
 		// As a special case, the top-level section doesn't have its
 		// own header, but prints the table header:
@@ -178,16 +202,7 @@ func (s *section) Emit(t *table, buf io.Writer, indent int) {
 		t.formatRow(buf, indent, s.name, "", "", "", "")
 	}
 
-	linesEmitted := false
-	for _, ls := range s.contents {
-		if indent == -1 && linesEmitted {
-			// The top-level section emits blank lines between its
-			// subsections:
-			t.emitBlankRow(buf)
-		}
-		ls.Emit(t, buf, indent+1)
-		linesEmitted = true
-	}
+	fmt.Fprint(buf, linesBuf.String())
 }
 
 // A line containing data in the tabular output.
@@ -219,13 +234,17 @@ func newItem(
 }
 
 func (l *item) Emit(t *table, buf io.Writer, indent int) {
+	levelOfConcern, interesting := l.levelOfConcern(t)
+	if !interesting {
+		return
+	}
 	valueString, unitString := l.value.Human(l.prefixes, l.unit)
 	t.formatRow(
 		buf,
 		indent,
 		l.name, l.Footnote(t.nameStyle),
 		valueString, unitString,
-		l.LevelOfConcern(),
+		levelOfConcern,
 	)
 }
 
@@ -245,20 +264,89 @@ func (l *item) Footnote(nameStyle NameStyle) string {
 	}
 }
 
-func (l *item) LevelOfConcern() string {
-	var warning string
-	if l.scale == 0 {
-		warning = ""
+// If this item's alert level is at least as high as the threshold,
+// return the string that should be used as its "level of concern" and
+// `true`; otherwise, return `"", false`.
+func (l *item) levelOfConcern(t *table) (string, bool) {
+	alert := Threshold(float64(l.value.ToUint64()) / l.scale)
+	if alert < t.threshold {
+		return "", false
+	}
+	if alert > 30 {
+		return "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", true
 	} else {
-		alert := float64(l.value.ToUint64()) / l.scale
-		if alert > 30 {
-			warning = "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-		} else {
-			alert := int(alert)
-			warning = stars[:alert]
+		return stars[:int(alert)], true
+	}
+}
+
+type Threshold float64
+
+// Methods to implement flag.Value:
+func (t *Threshold) String() string {
+	if t == nil {
+		return "UNSET"
+	} else {
+		switch *t {
+		case 0:
+			return "--verbose"
+		case 1:
+			return "--threshold=1"
+		case 30:
+			return "--critical"
+		default:
+			return fmt.Sprintf("--threshold=%g", *t)
 		}
 	}
-	return warning
+}
+
+func (t *Threshold) Set(s string) error {
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return fmt.Errorf("error parsing floating-point value %q: %s", s, err)
+	}
+	*t = Threshold(v)
+	return nil
+}
+
+// A `flag.Value` that can be used as a boolean option that sets a
+// `Threshold` variable to a fixed value. For example,
+//
+//		flag.Var(
+//			sizes.NewThresholdFlagValue(&threshold, 30),
+//			"critical", "only report critical statistics",
+//		)
+//
+// adds a `--critical` flag that sets `threshold` to 30.
+type thresholdFlagValue struct {
+	b         bool
+	threshold *Threshold
+	value     Threshold
+}
+
+func NewThresholdFlagValue(threshold *Threshold, value Threshold) flag.Value {
+	return &thresholdFlagValue{false, threshold, value}
+}
+
+func (v *thresholdFlagValue) IsBoolFlag() bool {
+	return true
+}
+
+func (v *thresholdFlagValue) String() string {
+	return strconv.FormatBool(v.b)
+}
+
+func (v *thresholdFlagValue) Set(s string) error {
+	value, err := strconv.ParseBool(s)
+	if err != nil {
+		return err
+	}
+	v.b = value
+	if value {
+		*v.threshold = v.value
+	} else {
+		*v.threshold = 1
+	}
+	return nil
 }
 
 type NameStyle int
@@ -303,12 +391,13 @@ func (n *NameStyle) Set(s string) error {
 
 type table struct {
 	contents        tableContents
+	threshold       Threshold
 	nameStyle       NameStyle
 	footnotes       []string
 	footnoteIndexes map[string]int
 }
 
-func (s HistorySize) TableString(nameStyle NameStyle) string {
+func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) string {
 	S := newSection
 	I := newItem
 	t := &table{
@@ -382,6 +471,7 @@ func (s HistorySize) TableString(nameStyle NameStyle) string {
 				I("Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, MetricPrefixes, " ", 100),
 			),
 		),
+		threshold:       threshold,
 		nameStyle:       nameStyle,
 		footnoteIndexes: make(map[string]int),
 	}

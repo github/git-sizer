@@ -155,7 +155,7 @@ type lineSet interface {
 
 // A single line in the tabular output.
 type line interface {
-	Emit(t *table, buf io.Writer)
+	Emit(t *table, buf io.Writer, indent int)
 	Name() string
 	Footnote(NameStyle) string
 	Value() (string, string)
@@ -167,8 +167,8 @@ type header struct {
 	name string
 }
 
-func (l *header) Emit(t *table, buf io.Writer) {
-	t.emitRow(buf, 0, l.Name(), "", "", "", "")
+func (l *header) Emit(t *table, buf io.Writer, indent int) {
+	t.emitRow(buf, indent, l.Name(), "", "", "", "")
 }
 
 func (l *header) Name() string {
@@ -204,11 +204,11 @@ func newBullet(line line) line {
 	}
 }
 
-func (l *bullet) Emit(t *table, buf io.Writer) {
+func (l *bullet) Emit(t *table, buf io.Writer, indent int) {
 	valueString, unitString := l.Value()
 	t.emitRow(
 		buf,
-		l.indent,
+		indent+l.indent,
 		l.Name(), l.Footnote(t.nameStyle),
 		valueString, unitString,
 		l.LevelOfConcern(),
@@ -261,11 +261,11 @@ type item struct {
 	scale    float64
 }
 
-func (l *item) Emit(t *table, buf io.Writer) {
+func (l *item) Emit(t *table, buf io.Writer, indent int) {
 	valueString, unitString := l.Value()
 	t.emitRow(
 		buf,
-		0,
+		indent,
 		l.Name(), l.Footnote(t.nameStyle),
 		valueString, unitString,
 		l.LevelOfConcern(),
@@ -474,7 +474,7 @@ func (t *table) generateLines() string {
 			t.emitBlankRow(buf)
 		}
 		for _, l := range ls.Lines() {
-			l.Emit(t, buf)
+			l.Emit(t, buf, 0)
 		}
 		linesEmitted = true
 	}

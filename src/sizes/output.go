@@ -150,85 +150,7 @@ const (
 
 // A set of lines in the tabular output.
 type lineSet interface {
-	Lines() []line
-}
-
-// A single line in the tabular output.
-type line interface {
 	Emit(t *table, buf io.Writer, indent int)
-	Name() string
-	Footnote(NameStyle) string
-	Value() (string, string)
-	LevelOfConcern() string
-}
-
-// A header line in the tabular output.
-type header struct {
-	name string
-}
-
-func (l *header) Emit(t *table, buf io.Writer, indent int) {
-	t.emitRow(buf, indent, l.Name(), "", "", "", "")
-}
-
-func (l *header) Name() string {
-	return l.name
-}
-
-func (l *header) Footnote(_ NameStyle) string {
-	return ""
-}
-
-func (l *header) Value() (string, string) {
-	return "", ""
-}
-
-func (l *header) LevelOfConcern() string {
-	return ""
-}
-
-// A bullet point in the tabular output.
-type bullet struct {
-	indent int
-	line   line
-}
-
-// Turn `line` into a `bullet`. If it is already a bullet, just
-// increase its level of indentation.
-func newBullet(line line) line {
-	switch line := line.(type) {
-	case *bullet:
-		return &bullet{line.indent + 1, line.line}
-	default:
-		return &bullet{1, line}
-	}
-}
-
-func (l *bullet) Emit(t *table, buf io.Writer, indent int) {
-	valueString, unitString := l.Value()
-	t.emitRow(
-		buf,
-		indent+l.indent,
-		l.Name(), l.Footnote(t.nameStyle),
-		valueString, unitString,
-		l.LevelOfConcern(),
-	)
-}
-
-func (l *bullet) Name() string {
-	return l.line.Name()
-}
-
-func (l *bullet) Footnote(nameStyle NameStyle) string {
-	return l.line.Footnote(nameStyle)
-}
-
-func (l *bullet) Value() (string, string) {
-	return l.line.Value()
-}
-
-func (l *bullet) LevelOfConcern() string {
-	return l.line.LevelOfConcern()
 }
 
 // A section of lines in the tabular output, consisting of a header
@@ -240,15 +162,11 @@ type section struct {
 	lineSets []lineSet
 }
 
-func (s *section) Lines() []line {
-	var lines []line
-	lines = append(lines, &header{s.name})
+func (s *section) Emit(t *table, buf io.Writer, indent int) {
+	t.emitRow(buf, indent, s.name, "", "", "", "")
 	for _, ls := range s.lineSets {
-		for _, l := range ls.Lines() {
-			lines = append(lines, newBullet(l))
-		}
+		ls.Emit(t, buf, indent+1)
 	}
-	return lines
 }
 
 // A line containing data in the tabular output.
@@ -270,10 +188,6 @@ func (l *item) Emit(t *table, buf io.Writer, indent int) {
 		valueString, unitString,
 		l.LevelOfConcern(),
 	)
-}
-
-func (l *item) Lines() []line {
-	return []line{l}
 }
 
 func (l *item) Name() string {
@@ -473,9 +387,7 @@ func (t *table) generateLines() string {
 		if linesEmitted {
 			t.emitBlankRow(buf)
 		}
-		for _, l := range ls.Lines() {
-			l.Emit(t, buf, 0)
-		}
+		ls.Emit(t, buf, 0)
 		linesEmitted = true
 	}
 	return buf.String()

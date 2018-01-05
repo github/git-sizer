@@ -50,18 +50,10 @@ Is your Git repository busting at the seams?
 
     Use the `--json` option to get output in JSON format, which includes the raw numbers.
 
-    By default, only statistics above a minimal level of concern are reported. Use `--verbose` to report all statistics. Use `--threshold=<value>` to suppress the reporting of statistics below the specified level of concern. (`<value>` is interpreted as a numerical value corresponding to a number of asterisks.) Use `--critical` to report only statistics with a critical level of concern (equivalent to `--threshold=30`).
 
-    Note that if a value overflows its counter (which should only happen for malicious repositories), the corresponding value is displayed as `∞` in tabular form, or truncated to 2³²-1 or 2⁶⁴-1 (depending on the size of the counter) in JSON mode.
+## Usage
 
-    To get a list of other options, run
-
-        git sizer --help
-
-
-## Example output
-
-Here is the output for [the Linux repository](https://github.com/torvalds/linux) as of this writing:
+By default, `git-sizer` outputs its results in tabular format. For example, let's use it to check [the Linux repository](https://github.com/torvalds/linux), using the `--verbose` option to cause all statistics to be output:
 
 ```
 $ git-sizer --verbose
@@ -117,82 +109,50 @@ $ git-sizer --verbose
 [10] f29a5ea76884ac37e1197bef1941f62fda3f7b99 (f5308d1b83eba20e69df5e0926ba7257c8dd9074^{tree})
 ```
 
-The section "Overall repository size" include repository-wide statistics about distinct objects, not including repetition. "Total size" is the sum of the sizes of the corresponding objects in their uncompressed form, measured in bytes.
+`git-sizer` has to traverse all of the history, so the analysis can take a while.
 
-The "Biggest objects" section provides information about the biggest single objects of each type, anywhere in the repository.
+The output is a table showing the thing that was measured, its numerical value, and a rough indication of which values might be a cause for concern.
+
+The section "Overall repository size" includes repository-wide statistics about distinct objects, not including repetition. "Total size" is the sum of the sizes of the corresponding objects in their uncompressed form, measured in bytes.
+
+The "Biggest objects" section provides information about the biggest single objects of each type, anywhere in the history.
 
 In the "History structure" section, "maximum history depth" is the longest chain of commits in the history, and "maximum tag depth" reports the longest chain of annotated tags that point at other annotated tags.
 
-The "Biggest checkouts" section is about the sizes of commits as checked out into a working copy. "Maximum path depth" is the largest number of path components within the repository, and "maximum path length" is the longest path in terms of bytes. "Total size of files" is the sum of all file sizes in a single commit, in bytes.
+The "Biggest checkouts" section is about the sizes of commits as checked out into a working copy. "Maximum path depth" is the largest number of path components within the repository, and "maximum path length" is the longest path in terms of bytes. "Total size of files" is the sum of all file sizes in the single biggest commit, including multiplicities if the same file appears multiple times.
 
-The asterisks indicate values that seem unusually high. The more asterisks, the more trouble this value is expected to cause. Exclamation points indicate values that are extremely high (i.e., equivalent to more than 30 asterisks).
+The "Value" column displays counts, using units "k" (thousand), "M" (million), "G" (billion) etc., and sizes, using units "B" (bytes), "KiB" (1024 bytes), "MiB" (1024 KiB), etc. Note that if a value overflows its counter (which should only happen for malicious repositories), the corresponding value is displayed as `∞` in tabular form, or truncated to 2³²-1 or 2⁶⁴-1 (depending on the size of the counter) in JSON mode.
 
-The footnotes list the SHA-1s of the "biggest" objects referenced in the table, along with a more human-readable `<commit>:<path>` description of where that object is located in the repository's history.
+The "Level of concern" column uses asterisks to indicate values that seem high compared with "typical" Git repositories. The more asterisks, the more inconvenience this value might be expected to cause. Exclamation points indicate values that are extremely high (i.e., equivalent to more than 30 asterisks).
+
+The footnotes list the SHA-1s of the "biggest" objects referenced in the table, along with a more human-readable `<commit>:<path>` description of where that object is located in the repository's history. Given the name of a large object, you could, for example, type
+
+    git cat-file -p <commit>:<path>
+
+at the command line to view the contents of the object. Use the `--names` option to customize the footnotes.
+
+By default, only statistics above a minimal level of concern are reported. Use `--verbose` to request that all statistics be output. Use `--threshold=<value>` to suppress the reporting of statistics below the specified level of concern. (`<value>` is interpreted as a numerical value corresponding to the number of asterisks.) Use `--critical` to report only statistics with a critical level of concern (equivalent to `--threshold=30`).
+
+To get a list of other options, run
+
+    git sizer --help
 
 The Linux repository is large by most standards, and as you can see, it is pushing some of Git's limits. And indeed, some Git operations on the Linux repository (e.g., `git fsck`, `git gc`) take a while. But due to its sane structure, none of its dimensions are wildly out of proportion to the size of the code base, so it can be managed successfully using Git.
 
-Here is the output for one of the famous ["git bomb"](https://kate.io/blog/git-bomb/) repositories:
+Here is the non-verbose  output for one of the famous ["git bomb"](https://kate.io/blog/git-bomb/) repositories:
 
 ```
-$ git-sizer --verbose test/data/git-bomb.git
-| Name                         | Value     | Level of concern               |
-| ---------------------------- | --------- | ------------------------------ |
-| Overall repository size      |           |                                |
-| * Commits                    |           |                                |
-|   * Count                    |     3     |                                |
-|   * Total size               |   606 B   |                                |
-| * Trees                      |           |                                |
-|   * Count                    |    12     |                                |
-|   * Total size               |  3.48 KiB |                                |
-|   * Total tree entries       |   122     |                                |
-| * Blobs                      |           |                                |
-|   * Count                    |     3     |                                |
-|   * Total size               |  3.65 KiB |                                |
-| * Annotated tags             |           |                                |
-|   * Count                    |     0     |                                |
-| * References                 |           |                                |
-|   * Count                    |     1     |                                |
-|                              |           |                                |
-| Biggest objects              |           |                                |
-| * Commits                    |           |                                |
-|   * Maximum size         [1] |   218 B   |                                |
-|   * Maximum parents      [1] |     1     |                                |
-| * Trees                      |           |                                |
-|   * Maximum entries      [2] |    11     |                                |
-| * Blobs                      |           |                                |
-|   * Maximum size         [3] |  1.82 KiB |                                |
-|                              |           |                                |
-| History structure            |           |                                |
-| * Maximum history depth      |     3     |                                |
-| * Maximum tag depth          |     0     |                                |
-|                              |           |                                |
-| Biggest checkouts            |           |                                |
-| * Number of directories  [2] |  1.11 G   | !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! |
-| * Maximum path depth     [2] |    11     | *                              |
-| * Maximum path length    [2] |    29 B   |                                |
-| * Number of files        [2] |     ∞     | !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! |
-| * Total size of files    [4] |  83.8 GiB | !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! |
-| * Number of symlinks         |     0     |                                |
-| * Number of submodules       |     0     |                                |
-
-[1]  7af99c9e7d4768fa681f4fe4ff61259794cf719b (refs/heads/master)
-[2]  c1971b07ce6888558e2178a121804774c4201b17 (refs/heads/master^{tree})
-[3]  dacaac6d3b2cf39ec8078dfb0bd3ce691e92557f (18ed56cbc5012117e24a603e7c072cf65d36d469:README.md)
-[4]  d9513477b01825130c48c4bebed114c4b2d50401 (18ed56cbc5012117e24a603e7c072cf65d36d469^{tree})
-```
-
-This repository is mischievously constructed to have a pathological tree structure, with the same directories repeated over and over again. As a result, even though the entire repository is less than 20 kb in size, when checked out it would explode into over a billion directories containing over ten billion files. (`git-sizer` prints `∞` for the blob count because the true number has overflowed the 32-bit counter used for that field.) To see only the critical statistics, use the `--critical` option:
-
-
-```
-$ git-sizer --critical test/data/git-bomb.git
+$ git-sizer
 | Name                         | Value     | Level of concern               |
 | ---------------------------- | --------- | ------------------------------ |
 | Biggest checkouts            |           |                                |
 | * Number of directories  [1] |  1.11 G   | !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! |
+| * Maximum path depth     [1] |    11     | *                              |
 | * Number of files        [1] |     ∞     | !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! |
 | * Total size of files    [2] |  83.8 GiB | !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! |
 
 [1]  c1971b07ce6888558e2178a121804774c4201b17 (refs/heads/master^{tree})
 [2]  d9513477b01825130c48c4bebed114c4b2d50401 (18ed56cbc5012117e24a603e7c072cf65d36d469^{tree})
 ```
+
+This repository is mischievously constructed to have a pathological tree structure, with the same directories repeated over and over again. As a result, even though the entire repository is less than 20 kb in size, when checked out it would explode into over a billion directories containing over ten billion files. (`git-sizer` prints `∞` for the blob count because the true number has overflowed the 32-bit counter used for that field.)

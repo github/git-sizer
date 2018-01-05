@@ -38,7 +38,7 @@ Is your Git repository busting at the seams?
 
     * Avoid storing log files and database dumps in Git.
 
-    * Avoid storing giant data files (e.g., XML files) in Git, especially if they are modified frequently. Consider using a database instead.
+    * Avoid storing giant data files (e.g., enormous XML files) in Git, especially if they are modified frequently. Consider using a database instead.
 
 * Does the repository include gigantic trees (directories)? Every time a file is modified, Git has to create a new copy of every tree (i.e., every directory in the path) leading to the file. Huge trees make this expensive. Moreover, it is very expensive to traverse through history that contains huge trees, for example for `git blame`. Suggestions:
 
@@ -145,7 +145,7 @@ $ git-sizer --verbose
 
 The output is a table showing the thing that was measured, its numerical value, and a rough indication of which values might be a cause for concern.
 
-The section "Overall repository size" includes repository-wide statistics about distinct objects, not including repetition. "Total size" is the sum of the sizes of the corresponding objects in their uncompressed form, measured in bytes.
+The "Overall repository size" section includes repository-wide statistics about distinct objects, not including repetition. "Total size" is the sum of the sizes of the corresponding objects in their uncompressed form, measured in bytes.
 
 The "Biggest objects" section provides information about the biggest single objects of each type, anywhere in the history.
 
@@ -161,9 +161,9 @@ The footnotes list the SHA-1s of the "biggest" objects referenced in the table, 
 
     git cat-file -p <commit>:<path>
 
-at the command line to view the contents of the object. (Use `--names=none` to omit these footnotes.)
+at the command line to view the contents of the object. (Use `--names=none` if you'd rather omit these footnotes.)
 
-By default, only statistics above a minimal level of concern are reported. Use `--verbose` to request that all statistics be output. Use `--threshold=<value>` to suppress the reporting of statistics below the specified level of concern. (`<value>` is interpreted as a numerical value corresponding to the number of asterisks.) Use `--critical` to report only statistics with a critical level of concern (equivalent to `--threshold=30`).
+By default, only statistics above a minimal level of concern are reported. Use `--verbose` (as above) to request that all statistics be output. Use `--threshold=<value>` to suppress the reporting of statistics below a specified level of concern. (`<value>` is interpreted as a numerical value corresponding to the number of asterisks.) Use `--critical` to report only statistics with a critical level of concern (equivalent to `--threshold=30`).
 
 To get a list of other options, run
 

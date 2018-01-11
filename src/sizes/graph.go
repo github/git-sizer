@@ -5,13 +5,55 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 )
 
+type Progress interface {
+	Start(format string, frequency uint64)
+	Inc()
+	Done()
+}
+
+type ProgressMeter struct {
+	format    string
+	frequency uint64
+	count     uint64
+}
+
+func (p *ProgressMeter) Start(format string, frequency uint64) {
+	p.format = "\r" + format
+	p.frequency = frequency
+	p.count = 0
+}
+
+func (p *ProgressMeter) Inc() {
+	p.count++
+	if p.count%p.frequency == 0 {
+		fmt.Fprintf(os.Stderr, p.format, p.count)
+	}
+}
+
+func (p *ProgressMeter) Done() {
+	fmt.Fprintf(os.Stderr, p.format+"\n", p.count)
+}
+
+type NoProgressMeter struct{}
+
+func (p *NoProgressMeter) Start(format string, frequency uint64) {}
+func (p *NoProgressMeter) Inc()                                  {}
+func (p *NoProgressMeter) Done()                                 {}
+
 func ScanRepositoryUsingGraph(
-	repo *Repository, filter ReferenceFilter, nameStyle NameStyle,
+	repo *Repository, filter ReferenceFilter, nameStyle NameStyle, progress bool,
 ) (HistorySize, error) {
 	graph := NewGraph(nameStyle)
+	var progressMeter Progress
+	if progress {
+		progressMeter = &ProgressMeter{}
+	} else {
+		progressMeter = &NoProgressMeter{}
+	}
 
 	refIter, err := repo.NewReferenceIter()
 	if err != nil {
@@ -115,6 +157,7 @@ func ScanRepositoryUsingGraph(
 	var trees, tags []ObjectHeader
 	var commits []CommitHeader
 
+	progressMeter.Start("Processing blobs: %-20d", 100)
 	for {
 		oid, objectType, objectSize, err := iter.Next()
 		if err != nil {
@@ -125,6 +168,7 @@ func ScanRepositoryUsingGraph(
 		}
 		switch objectType {
 		case "blob":
+			progressMeter.Inc()
 			graph.RegisterBlob(oid, objectSize)
 		case "tree":
 			trees = append(trees, ObjectHeader{oid, objectSize})
@@ -136,6 +180,7 @@ func ScanRepositoryUsingGraph(
 			err = fmt.Errorf("unexpected object type: %s", objectType)
 		}
 	}
+	progressMeter.Done()
 
 	err = <-errChan
 	if err != nil {
@@ -196,6 +241,7 @@ func ScanRepositoryUsingGraph(
 		errChan <- nil
 	}()
 
+	progressMeter.Start("Processing trees: %-20d", 100)
 	for _ = range trees {
 		oid, objectType, _, data, err := objectIter.Next()
 		if err != nil {
@@ -207,6 +253,7 @@ func ScanRepositoryUsingGraph(
 		if objectType != "tree" {
 			return HistorySize{}, fmt.Errorf("expected tree; read %#v", objectType)
 		}
+		progressMeter.Inc()
 		tree, err := ParseTree(oid, data)
 		if err != nil {
 			return HistorySize{}, err
@@ -216,10 +263,12 @@ func ScanRepositoryUsingGraph(
 			return HistorySize{}, err
 		}
 	}
+	progressMeter.Done()
 
 	// Process the commits in (roughly) chronological order, to
 	// minimize the number of commits that are pending at any one
 	// time:
+	progressMeter.Start("Processing commits: %-20d", 100)
 	for i := len(commits); i > 0; i-- {
 		oid, objectType, _, data, err := objectIter.Next()
 		if err != nil {
@@ -239,15 +288,23 @@ func ScanRepositoryUsingGraph(
 			panic("commits not read in same order as requested")
 		}
 		commits[i-1].tree = commit.Tree
+		progressMeter.Inc()
 		graph.RegisterCommit(oid, commit)
 	}
+	progressMeter.Done()
 
 	// Tell PathResolver about the commits in (roughly) reverse
 	// chronological order, to favor new ones in the paths of trees:
-	for _, commit := range commits {
-		graph.pathResolver.RecordCommit(commit.oid, commit.tree)
+	if nameStyle != NameStyleNone {
+		progressMeter.Start("Matching commits to trees: %-20d", 100)
+		for _, commit := range commits {
+			progressMeter.Inc()
+			graph.pathResolver.RecordCommit(commit.oid, commit.tree)
+		}
+		progressMeter.Done()
 	}
 
+	progressMeter.Start("Processing annotated tags: %-20d", 100)
 	for range tags {
 		oid, objectType, _, data, err := objectIter.Next()
 		if err != nil {
@@ -263,17 +320,22 @@ func ScanRepositoryUsingGraph(
 		if err != nil {
 			return HistorySize{}, err
 		}
+		progressMeter.Inc()
 		graph.RegisterTag(oid, tag)
 	}
+	progressMeter.Done()
 
 	err = <-errChan
 	if err != nil {
 		return HistorySize{}, err
 	}
 
+	progressMeter.Start("Processing references: %-20d", 100)
 	for _, ref := range refs {
+		progressMeter.Inc()
 		graph.RegisterReference(ref)
 	}
+	progressMeter.Done()
 
 	return graph.HistorySize(), nil
 }

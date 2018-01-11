@@ -8,9 +8,37 @@ import (
 	"io"
 	"os"
 	"runtime/pprof"
+	"strconv"
 
+	"github.com/github/git-sizer/isatty"
 	"github.com/github/git-sizer/sizes"
 )
+
+type NegatedBoolValue struct {
+	value *bool
+}
+
+func (b *NegatedBoolValue) Set(s string) error {
+	v, err := strconv.ParseBool(s)
+	*b.value = !v
+	return err
+}
+
+func (b *NegatedBoolValue) Get() interface{} {
+	return !*b.value
+}
+
+func (b *NegatedBoolValue) String() string {
+	if b == nil || b.value == nil {
+		return "true"
+	} else {
+		return strconv.FormatBool(!*b.value)
+	}
+}
+
+func (v *NegatedBoolValue) IsBoolFlag() bool {
+	return true
+}
 
 func main() {
 	err := mainImplementation()
@@ -28,6 +56,7 @@ func mainImplementation() error {
 	var cpuprofile string
 	var jsonOutput bool
 	var threshold sizes.Threshold = 1
+	var progress bool
 
 	flag.BoolVar(&processBranches, "branches", false, "process all branches")
 	flag.BoolVar(&processTags, "tags", false, "process all tags")
@@ -54,6 +83,14 @@ func mainImplementation() error {
 	)
 	flag.BoolVar(&jsonOutput, "json", false, "output results in JSON format")
 	flag.BoolVar(&jsonOutput, "j", false, "output results in JSON format")
+
+	atty, err := isatty.Isatty(os.Stderr.Fd())
+	if err != nil {
+		atty = false
+	}
+
+	flag.BoolVar(&progress, "progress", atty, "report progress to stderr")
+	flag.Var(&NegatedBoolValue{&progress}, "no-progress", "suppress progress output")
 
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 
@@ -105,7 +142,7 @@ func mainImplementation() error {
 		filter = sizes.AllReferencesFilter
 	}
 
-	historySize, err = sizes.ScanRepositoryUsingGraph(repo, filter, nameStyle)
+	historySize, err = sizes.ScanRepositoryUsingGraph(repo, filter, nameStyle, progress)
 	if err != nil {
 		return fmt.Errorf("error scanning repository: %s", err)
 	}

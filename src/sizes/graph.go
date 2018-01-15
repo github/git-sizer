@@ -5,54 +5,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sync"
+	"time"
+
+	"github.com/github/git-sizer/meter"
 )
-
-type Progress interface {
-	Start(format string, frequency uint64)
-	Inc()
-	Done()
-}
-
-type ProgressMeter struct {
-	format    string
-	frequency uint64
-	count     uint64
-}
-
-func (p *ProgressMeter) Start(format string, frequency uint64) {
-	p.format = "\r" + format
-	p.frequency = frequency
-	p.count = 0
-}
-
-func (p *ProgressMeter) Inc() {
-	p.count++
-	if p.count%p.frequency == 0 {
-		fmt.Fprintf(os.Stderr, p.format, p.count)
-	}
-}
-
-func (p *ProgressMeter) Done() {
-	fmt.Fprintf(os.Stderr, p.format+"\n", p.count)
-}
-
-type NoProgressMeter struct{}
-
-func (p *NoProgressMeter) Start(format string, frequency uint64) {}
-func (p *NoProgressMeter) Inc()                                  {}
-func (p *NoProgressMeter) Done()                                 {}
 
 func ScanRepositoryUsingGraph(
 	repo *Repository, filter ReferenceFilter, nameStyle NameStyle, progress bool,
 ) (HistorySize, error) {
 	graph := NewGraph(nameStyle)
-	var progressMeter Progress
+	var progressMeter meter.Progress
 	if progress {
-		progressMeter = &ProgressMeter{}
+		progressMeter = meter.NewProgressMeter(100 * time.Millisecond)
 	} else {
-		progressMeter = &NoProgressMeter{}
+		progressMeter = &meter.NoProgressMeter{}
 	}
 
 	refIter, err := repo.NewReferenceIter()
@@ -157,7 +124,7 @@ func ScanRepositoryUsingGraph(
 	var trees, tags []ObjectHeader
 	var commits []CommitHeader
 
-	progressMeter.Start("Processing blobs: %-20d", 100)
+	progressMeter.Start("Processing blobs: %-20d")
 	for {
 		oid, objectType, objectSize, err := iter.Next()
 		if err != nil {
@@ -241,7 +208,7 @@ func ScanRepositoryUsingGraph(
 		errChan <- nil
 	}()
 
-	progressMeter.Start("Processing trees: %-20d", 100)
+	progressMeter.Start("Processing trees: %-20d")
 	for _ = range trees {
 		oid, objectType, _, data, err := objectIter.Next()
 		if err != nil {
@@ -268,7 +235,7 @@ func ScanRepositoryUsingGraph(
 	// Process the commits in (roughly) chronological order, to
 	// minimize the number of commits that are pending at any one
 	// time:
-	progressMeter.Start("Processing commits: %-20d", 100)
+	progressMeter.Start("Processing commits: %-20d")
 	for i := len(commits); i > 0; i-- {
 		oid, objectType, _, data, err := objectIter.Next()
 		if err != nil {
@@ -296,7 +263,7 @@ func ScanRepositoryUsingGraph(
 	// Tell PathResolver about the commits in (roughly) reverse
 	// chronological order, to favor new ones in the paths of trees:
 	if nameStyle != NameStyleNone {
-		progressMeter.Start("Matching commits to trees: %-20d", 100)
+		progressMeter.Start("Matching commits to trees: %-20d")
 		for _, commit := range commits {
 			progressMeter.Inc()
 			graph.pathResolver.RecordCommit(commit.oid, commit.tree)
@@ -304,7 +271,7 @@ func ScanRepositoryUsingGraph(
 		progressMeter.Done()
 	}
 
-	progressMeter.Start("Processing annotated tags: %-20d", 100)
+	progressMeter.Start("Processing annotated tags: %-20d")
 	for range tags {
 		oid, objectType, _, data, err := objectIter.Next()
 		if err != nil {
@@ -330,7 +297,7 @@ func ScanRepositoryUsingGraph(
 		return HistorySize{}, err
 	}
 
-	progressMeter.Start("Processing references: %-20d", 100)
+	progressMeter.Start("Processing references: %-20d")
 	for _, ref := range refs {
 		progressMeter.Inc()
 		graph.RegisterReference(ref)

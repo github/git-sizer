@@ -36,11 +36,15 @@ func NewSizeScanner(repo *Repository) (*SizeScanner, error) {
 		commitSizes: make(map[Oid]CommitSize),
 		tagSizes:    make(map[Oid]TagSize),
 	}
+	err := scanner.preloadBlobs()
+	if err != nil {
+		return nil, err
+	}
 	return scanner, nil
 }
 
 // Prime the blobs.
-func (scanner *SizeScanner) PreloadBlobs() error {
+func (scanner *SizeScanner) preloadBlobs() error {
 	iter, err := scanner.repo.NewAllObjectIter()
 	if err != nil {
 		return err
@@ -72,11 +76,6 @@ func (scanner *SizeScanner) PreloadBlobs() error {
 // Scan all of the references in `repo` that match `filter`.
 func ScanRepository(repo *Repository, filter ReferenceFilter) (HistorySize, error) {
 	scanner, err := NewSizeScanner(repo)
-	if err != nil {
-		return HistorySize{}, err
-	}
-
-	err = scanner.PreloadBlobs()
 	if err != nil {
 		return HistorySize{}, err
 	}

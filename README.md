@@ -196,3 +196,8 @@ $ git-sizer
 ```
 
 This repository is mischievously constructed to have a pathological tree structure, with the same directories repeated over and over again. As a result, even though the entire repository is less than 20 kb in size, when checked out it would explode into over a billion directories containing over ten billion files. (`git-sizer` prints `∞` for the blob count because the true number has overflowed the 32-bit counter used for that field.)
+
+
+## Contributing
+
+`git-sizer` is in regular use and is still under active development. If you would like to help out, please see [`CONTRIBUTING.md`](CONTRIBUTING.md).

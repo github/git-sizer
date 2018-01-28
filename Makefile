@@ -9,8 +9,12 @@ GOFMT := $(CURDIR)/script/gofmt
 GOFLAGS := \
 	--tags "static" \
 	-ldflags "-X main.BuildVersion=$(shell git rev-parse HEAD) -X main.BuildDescribe=$(shell git describe --tags --always --dirty)"
-GO_PKGS := $(shell cd .gopath/src && find github.com/github/git-sizer/ -type f -name '*.go' | xargs -n1 dirname | grep -v '^github.com/github/git-sizer/vendor/' | sort -u)
-GO_SRCS := $(shell find . -type f -name '*.go' | grep -v '^\./vendor/' | sort -u)
+GO_PKGS := $(PACKAGE) \
+	$(PACKAGE)/git-sizer \
+	$(PACKAGE)/isatty \
+	$(PACKAGE)/meter \
+	$(PACKAGE)/sizes
+GO_SRCS := $(shell $(GO) list -f '{{$$ip := .ImportPath}}{{range .GoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}{{range .CgoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}{{range .TestGoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}{{range .XTestGoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}' $(GO_PKGS))
 
 .PHONY: all
 all: bin/git-sizer

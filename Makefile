@@ -15,7 +15,8 @@ GO_SRCS := $(shell find . -type f -name '*.go' | grep -v '^\./vendor/' | sort -u
 .PHONY: all
 all: bin/git-sizer
 
-bin/git-sizer: $(GO_SRCS)
+.PHONY: bin/git-sizer
+bin/git-sizer:
 	mkdir -p bin
 	$(GO) build $(GOFLAGS) -o $@ $(PACKAGE)/git-sizer
 

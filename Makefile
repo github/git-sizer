@@ -10,7 +10,6 @@ GOFLAGS := \
 	--tags "static" \
 	-ldflags "-X main.BuildVersion=$(shell git rev-parse HEAD) -X main.BuildDescribe=$(shell git describe --tags --always --dirty)"
 GO_PKGS := $(PACKAGE) \
-	$(PACKAGE)/git-sizer \
 	$(PACKAGE)/isatty \
 	$(PACKAGE)/meter \
 	$(PACKAGE)/sizes
@@ -22,7 +21,7 @@ all: bin/git-sizer
 .PHONY: bin/git-sizer
 bin/git-sizer:
 	mkdir -p bin
-	$(GO) build $(GOFLAGS) -o $@ $(PACKAGE)/git-sizer
+	$(GO) build $(GOFLAGS) -o $@ $(PACKAGE)
 
 .PHONY: test
 test: bin/git-sizer gotest

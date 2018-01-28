@@ -437,16 +437,16 @@ func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) strin
 
 			S("Biggest objects",
 				S("Commits",
-						I("Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, BinaryPrefixes, "B", 50e3),
-						I("Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, MetricPrefixes, " ", 10),
+					I("Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, BinaryPrefixes, "B", 50e3),
+					I("Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, MetricPrefixes, " ", 10),
 				),
 
 				S("Trees",
-						I("Maximum entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3),
+					I("Maximum entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3),
 				),
 
 				S("Blobs",
-						I("Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, BinaryPrefixes, "B", 10e6),
+					I("Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, BinaryPrefixes, "B", 10e6),
 				),
 			),
 

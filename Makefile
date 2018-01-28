@@ -13,7 +13,7 @@ GOFLAGS := \
 	-ldflags "-X main.BuildVersion=$(shell git rev-parse HEAD) -X main.BuildDescribe=$(shell git describe --tags --always --dirty)"
 GO_CMDS := $(BIN)/git-sizer
 GO_PKGS := $(shell cd .gopath/src && find github.com/github/git-sizer/ -type f -name '*.go' | xargs -n1 dirname | grep -v '^github.com/github/git-sizer/vendor/' | sort -u)
-GO_SRCS := $(shell find src -type f -name '*.go')
+GO_SRCS := $(shell find . -type f -name '*.go' | grep -v '^\./vendor/' | sort -u)
 
 .PHONY: all
 all: $(GO_CMDS)
@@ -33,11 +33,11 @@ gotest:
 
 .PHONY: gofmt
 gofmt:
-	find src test -name "*.go" -print0 | xargs -0 $(GOFMT) -l -w | sed -e 's/^/Fixing /'
+	$(GOFMT) -l -w $(GO_SRCS) | sed -e 's/^/Fixing /'
 
 .PHONY: goimports
 goimports:
-	find src -name "*.go" -print0 | xargs -0 goimports -l -w -e
+	goimports -l -w -e $(GO_SRCS)
 
 .PHONY: govet
 govet:

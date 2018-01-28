@@ -12,15 +12,7 @@ if [[ "$(uname -s)" = "Darwin" ]]; then
 fi
 . script/ensure-go-installed.sh
 
-go get -u github.com/golang/dep/cmd/dep
-
 BASE="$GOPATH/src/github.com/github/git-sizer"
 rm -f "$BASE"
 mkdir -p $(dirname "$BASE")
 ln -s "$(pwd)/src" "$BASE"
-
-(
-    cd $BASE
-    "$GOPATH/bin/dep" ensure
-    "$GOPATH/bin/dep" prune
-)

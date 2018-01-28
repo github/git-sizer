@@ -67,14 +67,20 @@ Is your Git repository bursting at the seams?
 
 ## Getting started
 
-1.  Build:
+1.  [Install the Git command-line client](https://git-scm.com/) and put it in your `PATH`. (`git-sizer` invokes `git` commands to examine the contents of your repository.)
 
-        script/bootstrap
-        make
+2.  Build:
 
-    The executable file is written to `bin/git-sizer`. If copy it to your `PATH` and you have Git installed, you can run the program by typing `git sizer`; otherwise, you need to type the full path and filename to run it; e.g., `bin/git-sizer`.
+    *   On Linux or OS X:
 
-2.  Run:
+            script/bootstrap
+            make
+
+        The executable file is written to `bin/git-sizer`. If you copy it to your `PATH`, you can run the program by typing `git sizer`; otherwise, you need to type the full path and filename to run it; e.g., `bin/git-sizer`.
+
+    *   On other platforms: TBD
+
+3.  Run:
 
         git sizer [<opt>...] [<path-to-git-repository>]
 

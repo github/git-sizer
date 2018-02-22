@@ -9,11 +9,8 @@ GOFMT := $(CURDIR)/script/gofmt
 GOFLAGS := \
 	--tags "static" \
 	-ldflags "-X main.BuildVersion=$(shell git rev-parse HEAD) -X main.BuildDescribe=$(shell git describe --tags --always --dirty)"
-GO_PKGS := $(PACKAGE) \
-	$(PACKAGE)/isatty \
-	$(PACKAGE)/meter \
-	$(PACKAGE)/sizes
-GO_SRCS := $(shell $(GO) list -f '{{$$ip := .ImportPath}}{{range .GoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}{{range .CgoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}{{range .TestGoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}{{range .XTestGoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}' $(GO_PKGS))
+
+GO_SRCS := $(shell cd $(GOPATH)/src/$(PACKAGE) && $(GO) list -f '{{$$ip := .ImportPath}}{{range .GoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}{{range .CgoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}{{range .TestGoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}{{range .XTestGoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}' ./...)
 
 .PHONY: all
 all: bin/git-sizer

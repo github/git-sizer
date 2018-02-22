@@ -46,3 +46,7 @@ govet:
 .PHONY: clean
 clean:
 	rm -rf bin
+
+.PHONY: srcs
+srcs:
+	@printf "%s\n" $(GO_SRCS)

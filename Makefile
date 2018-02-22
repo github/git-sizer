@@ -28,7 +28,7 @@ test: bin/git-sizer gotest
 
 .PHONY: gotest
 gotest:
-	$(GO) test -timeout 60s $(GOFLAGS) $(GO_PKGS)
+	$(GO) test -timeout 60s $(GOFLAGS) ./...
 
 .PHONY: gofmt
 gofmt:
@@ -40,7 +40,7 @@ goimports:
 
 .PHONY: govet
 govet:
-	$(GO) vet $(GO_PKGS)
+	$(GO) vet ./...
 
 .PHONY: clean
 clean:

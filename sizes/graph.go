@@ -26,7 +26,11 @@ func ScanRepositoryUsingGraph(
 	if err != nil {
 		return HistorySize{}, err
 	}
-	defer refIter.Close()
+	defer func() {
+		if refIter != nil {
+			refIter.Close()
+		}
+	}()
 
 	iter, in, err := repo.NewObjectIter("--stdin", "--date-order")
 	if err != nil {
@@ -67,7 +71,9 @@ func ScanRepositoryUsingGraph(
 				return
 			}
 		}
-		errChan <- nil
+		err := refIter.Close()
+		refIter = nil
+		errChan <- err
 	}()
 
 	type ObjectHeader struct {

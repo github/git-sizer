@@ -26,13 +26,21 @@ func ScanRepositoryUsingGraph(
 	if err != nil {
 		return HistorySize{}, err
 	}
-	defer refIter.Close()
+	defer func() {
+		if refIter != nil {
+			refIter.Close()
+		}
+	}()
 
 	iter, in, err := repo.NewObjectIter("--stdin", "--date-order")
 	if err != nil {
 		return HistorySize{}, err
 	}
-	defer iter.Close()
+	defer func() {
+		if iter != nil {
+			iter.Close()
+		}
+	}()
 
 	errChan := make(chan error, 1)
 	var refs []Reference
@@ -67,7 +75,9 @@ func ScanRepositoryUsingGraph(
 				return
 			}
 		}
-		errChan <- nil
+		err := refIter.Close()
+		refIter = nil
+		errChan <- err
 	}()
 
 	type ObjectHeader struct {
@@ -154,11 +164,21 @@ func ScanRepositoryUsingGraph(
 		return HistorySize{}, err
 	}
 
+	err = iter.Close()
+	iter = nil
+	if err != nil {
+		return HistorySize{}, err
+	}
+
 	objectIter, objectIn, err := repo.NewBatchObjectIter()
 	if err != nil {
 		return HistorySize{}, err
 	}
-	defer objectIter.Close()
+	defer func() {
+		if objectIter != nil {
+			objectIter.Close()
+		}
+	}()
 
 	go func() {
 		defer objectIn.Close()
@@ -293,6 +313,12 @@ func ScanRepositoryUsingGraph(
 	progressMeter.Done()
 
 	err = <-errChan
+	if err != nil {
+		return HistorySize{}, err
+	}
+
+	err = objectIter.Close()
+	objectIter = nil
 	if err != nil {
 		return HistorySize{}, err
 	}

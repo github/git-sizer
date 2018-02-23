@@ -80,9 +80,9 @@ Is your Git repository bursting at the seams?
 
     *   On other platforms: TBD
 
-3.  Run:
+3.  Change to the directory containing the Git repository, then run
 
-        git sizer [<opt>...] [<path-to-git-repository>]
+        git sizer [<opt>...]
 
     To get a summary of the current repository, all you need is
 

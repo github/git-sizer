@@ -57,9 +57,35 @@ type Repository struct {
 }
 
 func NewRepository(path string) (*Repository, error) {
-	return &Repository{
-		path: path,
-	}, nil
+	command := exec.Command(
+		"git", "-C", path,
+		"rev-parse", "--git-dir",
+	)
+	out, err := command.Output()
+	if err != nil {
+		switch err := err.(type) {
+		case *exec.Error:
+			return nil, errors.New(
+				fmt.Sprintf(
+					"could not run git (is it in your PATH?): %s",
+					err.Err,
+				),
+			)
+		case *exec.ExitError:
+			return nil, errors.New(
+				fmt.Sprintf(
+					"git rev-parse failed: %s",
+					err.Stderr,
+				),
+			)
+		default:
+			return nil, err
+		}
+	}
+	repo := &Repository{
+		path: string(bytes.TrimSpace(out)),
+	}
+	return repo, nil
 }
 
 func (repo *Repository) Close() error {

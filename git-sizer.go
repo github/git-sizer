@@ -43,7 +43,7 @@ func (v *NegatedBoolValue) IsBoolFlag() bool {
 func main() {
 	err := mainImplementation()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
 	}
 }

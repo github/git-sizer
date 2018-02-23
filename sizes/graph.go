@@ -174,7 +174,11 @@ func ScanRepositoryUsingGraph(
 	if err != nil {
 		return HistorySize{}, err
 	}
-	defer objectIter.Close()
+	defer func() {
+		if objectIter != nil {
+			objectIter.Close()
+		}
+	}()
 
 	go func() {
 		defer objectIn.Close()
@@ -309,6 +313,12 @@ func ScanRepositoryUsingGraph(
 	progressMeter.Done()
 
 	err = <-errChan
+	if err != nil {
+		return HistorySize{}, err
+	}
+
+	err = objectIter.Close()
+	objectIter = nil
 	if err != nil {
 		return HistorySize{}, err
 	}

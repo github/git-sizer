@@ -107,19 +107,13 @@ func mainImplementation() error {
 
 	args := flag.Args()
 
-	var path string
-	switch len(args) {
-	case 0:
-		path = "."
-	case 1:
-		path = args[0]
-	default:
+	if len(args) != 0 {
 		return errors.New("excess arguments")
 	}
 
-	repo, err := sizes.NewRepository(path)
+	repo, err := sizes.NewRepository(".")
 	if err != nil {
-		return fmt.Errorf("couldn't open %v: %s", path, err)
+		return fmt.Errorf("couldn't open Git repository: %s", err)
 	}
 	defer repo.Close()
 

@@ -15,4 +15,4 @@ fi
 BASE="$GOPATH/src/github.com/github/git-sizer"
 rm -f "$BASE"
 mkdir -p $(dirname "$BASE")
-ln -s "$(pwd)/src" "$BASE"
+ln -s "$(pwd)" "$BASE"

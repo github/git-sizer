@@ -36,7 +36,11 @@ func ScanRepositoryUsingGraph(
 	if err != nil {
 		return HistorySize{}, err
 	}
-	defer iter.Close()
+	defer func() {
+		if iter != nil {
+			iter.Close()
+		}
+	}()
 
 	errChan := make(chan error, 1)
 	var refs []Reference
@@ -156,6 +160,12 @@ func ScanRepositoryUsingGraph(
 	progressMeter.Done()
 
 	err = <-errChan
+	if err != nil {
+		return HistorySize{}, err
+	}
+
+	err = iter.Close()
+	iter = nil
 	if err != nil {
 		return HistorySize{}, err
 	}

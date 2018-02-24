@@ -7,7 +7,6 @@ GO := $(CURDIR)/script/go
 GOFMT := $(CURDIR)/script/gofmt
 
 GOFLAGS := \
-	--tags "static" \
 	-ldflags "-X main.BuildVersion=$(shell git rev-parse HEAD) -X main.BuildDescribe=$(shell git describe --tags --always --dirty)"
 
 ifdef USE_ISATTY

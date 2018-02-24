@@ -24,6 +24,38 @@ bin/git-sizer:
 	mkdir -p bin
 	$(GO) build $(GOFLAGS) -o $@ $(PACKAGE)
 
+# Cross-compile for a bunch of common platforms. Note that this
+# doesn't work with USE_ISATTY:
+.PHONY: common-platforms
+common-platforms: \
+	bin/git-sizer-linux-amd64 \
+	bin/git-sizer-linux-386 \
+	bin/git-sizer-darwin-amd64 \
+	bin/git-sizer-darwin-386 \
+	bin/git-sizer-windows-amd64.exe \
+	bin/git-sizer-windows-386.exe
+
+# Define rules for a bunch of common platforms that are supported by go; see
+#     https://golang.org/doc/install/source#environment
+# You can compile for any other platform in that list by running
+#     make GOOS=foo GOARCH=bar
+
+define PLATFORM_template =
+.PHONY: bin/git-sizer-$(1)-$(2)$(3)
+bin/git-sizer-$(1)-$(2)$(3):
+	mkdir -p bin
+	GOOS=$(1) GOARCH=$(2) $$(GO) build $$(GOFLAGS) -o $$@ $$(PACKAGE)
+endef
+
+$(eval $(call PLATFORM_template,linux,amd64))
+$(eval $(call PLATFORM_template,linux,386))
+
+$(eval $(call PLATFORM_template,darwin,386))
+$(eval $(call PLATFORM_template,darwin,amd64))
+
+$(eval $(call PLATFORM_template,windows,amd64,.exe))
+$(eval $(call PLATFORM_template,windows,386,.exe))
+
 .PHONY: test
 test: bin/git-sizer gotest
 

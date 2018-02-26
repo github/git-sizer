@@ -168,14 +168,14 @@ func (l *item) Emit(t *table, buf io.Writer, indent int) {
 }
 
 func (l *item) Footnote(nameStyle NameStyle) string {
-	if l.path == nil || l.path.Oid == git.NullOid {
+	if l.path == nil || l.path.OID == git.NullOID {
 		return ""
 	}
 	switch nameStyle {
 	case NameStyleNone:
 		return ""
 	case NameStyleHash:
-		return l.path.Oid.String()
+		return l.path.OID.String()
 	case NameStyleFull:
 		return l.path.String()
 	default:

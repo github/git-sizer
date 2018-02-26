@@ -66,7 +66,7 @@ func ScanRepositoryUsingGraph(
 				continue
 			}
 			refs = append(refs, ref)
-			_, err = bufin.WriteString(ref.Oid.String())
+			_, err = bufin.WriteString(ref.OID.String())
 			if err != nil {
 				errChan <- err
 				return
@@ -83,13 +83,13 @@ func ScanRepositoryUsingGraph(
 	}()
 
 	type ObjectHeader struct {
-		oid        git.Oid
+		oid        git.OID
 		objectSize counts.Count32
 	}
 
 	type CommitHeader struct {
 		ObjectHeader
-		tree git.Oid
+		tree git.OID
 	}
 
 	// We process the blobs right away, but record these other types
@@ -152,7 +152,7 @@ func ScanRepositoryUsingGraph(
 		case "tree":
 			trees = append(trees, ObjectHeader{oid, objectSize})
 		case "commit":
-			commits = append(commits, CommitHeader{ObjectHeader{oid, objectSize}, git.NullOid})
+			commits = append(commits, CommitHeader{ObjectHeader{oid, objectSize}, git.NullOID})
 		case "tag":
 			tags = append(tags, ObjectHeader{oid, objectSize})
 		default:
@@ -340,18 +340,18 @@ type Graph struct {
 	repo *git.Repository
 
 	blobLock  sync.Mutex
-	blobSizes map[git.Oid]BlobSize
+	blobSizes map[git.OID]BlobSize
 
 	treeLock    sync.Mutex
-	treeRecords map[git.Oid]*treeRecord
-	treeSizes   map[git.Oid]TreeSize
+	treeRecords map[git.OID]*treeRecord
+	treeSizes   map[git.OID]TreeSize
 
 	commitLock  sync.Mutex
-	commitSizes map[git.Oid]CommitSize
+	commitSizes map[git.OID]CommitSize
 
 	tagLock    sync.Mutex
-	tagRecords map[git.Oid]*tagRecord
-	tagSizes   map[git.Oid]TagSize
+	tagRecords map[git.OID]*tagRecord
+	tagSizes   map[git.OID]TagSize
 
 	// Statistics about the overall history size:
 	historyLock sync.Mutex
@@ -362,15 +362,15 @@ type Graph struct {
 
 func NewGraph(nameStyle NameStyle) *Graph {
 	return &Graph{
-		blobSizes: make(map[git.Oid]BlobSize),
+		blobSizes: make(map[git.OID]BlobSize),
 
-		treeRecords: make(map[git.Oid]*treeRecord),
-		treeSizes:   make(map[git.Oid]TreeSize),
+		treeRecords: make(map[git.OID]*treeRecord),
+		treeSizes:   make(map[git.OID]TreeSize),
 
-		commitSizes: make(map[git.Oid]CommitSize),
+		commitSizes: make(map[git.OID]CommitSize),
 
-		tagRecords: make(map[git.Oid]*tagRecord),
-		tagSizes:   make(map[git.Oid]TagSize),
+		tagRecords: make(map[git.OID]*tagRecord),
+		tagSizes:   make(map[git.OID]TagSize),
 
 		pathResolver: NewPathResolver(nameStyle),
 	}
@@ -401,7 +401,7 @@ func (g *Graph) HistorySize() HistorySize {
 }
 
 // Record that the specified `oid` is a blob with the specified size.
-func (g *Graph) RegisterBlob(oid git.Oid, objectSize counts.Count32) {
+func (g *Graph) RegisterBlob(oid git.OID, objectSize counts.Count32) {
 	size := BlobSize{Size: objectSize}
 	// There are no listeners. Since this is a blob, we know all that
 	// we need to know about it. So skip the record and just fill in
@@ -424,7 +424,7 @@ func (g *Graph) RegisterBlob(oid git.Oid, objectSize counts.Count32) {
 //   listener to be informed some time in the future when the size is
 //   known. In this case, return false as the second value.
 
-func (g *Graph) GetBlobSize(oid git.Oid) BlobSize {
+func (g *Graph) GetBlobSize(oid git.OID) BlobSize {
 	// See if we already know the size:
 	size, ok := g.blobSizes[oid]
 	if !ok {
@@ -433,7 +433,7 @@ func (g *Graph) GetBlobSize(oid git.Oid) BlobSize {
 	return size
 }
 
-func (g *Graph) RequireTreeSize(oid git.Oid, listener func(TreeSize)) (TreeSize, bool) {
+func (g *Graph) RequireTreeSize(oid git.OID, listener func(TreeSize)) (TreeSize, bool) {
 	g.treeLock.Lock()
 
 	size, ok := g.treeSizes[oid]
@@ -455,7 +455,7 @@ func (g *Graph) RequireTreeSize(oid git.Oid, listener func(TreeSize)) (TreeSize,
 	return TreeSize{}, false
 }
 
-func (g *Graph) GetTreeSize(oid git.Oid) TreeSize {
+func (g *Graph) GetTreeSize(oid git.OID) TreeSize {
 	g.treeLock.Lock()
 
 	size, ok := g.treeSizes[oid]
@@ -467,7 +467,7 @@ func (g *Graph) GetTreeSize(oid git.Oid) TreeSize {
 }
 
 // Record that the specified `oid` is the specified `tree`.
-func (g *Graph) RegisterTree(oid git.Oid, tree *git.Tree) error {
+func (g *Graph) RegisterTree(oid git.OID, tree *git.Tree) error {
 	g.treeLock.Lock()
 
 	if _, ok := g.treeSizes[oid]; ok {
@@ -488,7 +488,7 @@ func (g *Graph) RegisterTree(oid git.Oid, tree *git.Tree) error {
 }
 
 func (g *Graph) finalizeTreeSize(
-	oid git.Oid, size TreeSize, objectSize counts.Count32, treeEntries counts.Count32,
+	oid git.OID, size TreeSize, objectSize counts.Count32, treeEntries counts.Count32,
 ) {
 	g.treeLock.Lock()
 	g.treeSizes[oid] = size
@@ -501,7 +501,7 @@ func (g *Graph) finalizeTreeSize(
 }
 
 type treeRecord struct {
-	oid git.Oid
+	oid git.OID
 
 	// Limit to only one mutator at a time.
 	lock sync.Mutex
@@ -528,7 +528,7 @@ type treeRecord struct {
 	listeners []func(TreeSize)
 }
 
-func newTreeRecord(oid git.Oid) *treeRecord {
+func newTreeRecord(oid git.OID) *treeRecord {
 	return &treeRecord{
 		oid:     oid,
 		size:    TreeSize{ExpandedTreeCount: 1},
@@ -537,7 +537,7 @@ func newTreeRecord(oid git.Oid) *treeRecord {
 }
 
 // Initialize `r` (which is empty) based on `tree`.
-func (r *treeRecord) initialize(g *Graph, oid git.Oid, tree *git.Tree) error {
+func (r *treeRecord) initialize(g *Graph, oid git.OID, tree *git.Tree) error {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -564,7 +564,7 @@ func (r *treeRecord) initialize(g *Graph, oid git.Oid, tree *git.Tree) error {
 				r.lock.Lock()
 				defer r.lock.Unlock()
 
-				g.pathResolver.RecordTreeEntry(oid, name, entry.Oid)
+				g.pathResolver.RecordTreeEntry(oid, name, entry.OID)
 
 				r.size.addDescendent(name, size)
 				r.pending--
@@ -572,7 +572,7 @@ func (r *treeRecord) initialize(g *Graph, oid git.Oid, tree *git.Tree) error {
 				// fully processed:
 				r.maybeFinalize(g)
 			}
-			treeSize, ok := g.RequireTreeSize(entry.Oid, listener)
+			treeSize, ok := g.RequireTreeSize(entry.OID, listener)
 			if ok {
 				r.size.addDescendent(name, treeSize)
 			} else {
@@ -587,16 +587,16 @@ func (r *treeRecord) initialize(g *Graph, oid git.Oid, tree *git.Tree) error {
 
 		case entry.Filemode&0170000 == 0120000:
 			// Symlink
-			g.pathResolver.RecordTreeEntry(oid, name, entry.Oid)
+			g.pathResolver.RecordTreeEntry(oid, name, entry.OID)
 
 			r.size.addLink(name)
 			r.entryCount.Increment(1)
 
 		default:
 			// Blob
-			g.pathResolver.RecordTreeEntry(oid, name, entry.Oid)
+			g.pathResolver.RecordTreeEntry(oid, name, entry.OID)
 
-			blobSize := g.GetBlobSize(entry.Oid)
+			blobSize := g.GetBlobSize(entry.OID)
 			r.size.addBlob(name, blobSize)
 			r.entryCount.Increment(1)
 		}
@@ -625,7 +625,7 @@ func (r *treeRecord) addListener(listener func(TreeSize)) {
 	r.listeners = append(r.listeners, listener)
 }
 
-func (g *Graph) GetCommitSize(oid git.Oid) CommitSize {
+func (g *Graph) GetCommitSize(oid git.OID) CommitSize {
 	g.commitLock.Lock()
 
 	size, ok := g.commitSizes[oid]
@@ -638,7 +638,7 @@ func (g *Graph) GetCommitSize(oid git.Oid) CommitSize {
 }
 
 // Record that the specified `oid` is the specified `commit`.
-func (g *Graph) RegisterCommit(oid git.Oid, commit *git.Commit) {
+func (g *Graph) RegisterCommit(oid git.OID, commit *git.Commit) {
 	g.commitLock.Lock()
 	if _, ok := g.commitSizes[oid]; ok {
 		panic(fmt.Sprintf("commit %s registered twice!", oid))
@@ -672,7 +672,7 @@ func (g *Graph) RegisterCommit(oid git.Oid, commit *git.Commit) {
 	g.historyLock.Unlock()
 }
 
-func (g *Graph) RequireTagSize(oid git.Oid, listener func(TagSize)) (TagSize, bool) {
+func (g *Graph) RequireTagSize(oid git.OID, listener func(TagSize)) (TagSize, bool) {
 	g.tagLock.Lock()
 
 	size, ok := g.tagSizes[oid]
@@ -695,7 +695,7 @@ func (g *Graph) RequireTagSize(oid git.Oid, listener func(TagSize)) (TagSize, bo
 }
 
 // Record that the specified `oid` is the specified `tag`.
-func (g *Graph) RegisterTag(oid git.Oid, tag *git.Tag) {
+func (g *Graph) RegisterTag(oid git.OID, tag *git.Tag) {
 	g.tagLock.Lock()
 
 	if _, ok := g.tagSizes[oid]; ok {
@@ -715,7 +715,7 @@ func (g *Graph) RegisterTag(oid git.Oid, tag *git.Tag) {
 	record.initialize(g, oid, tag)
 }
 
-func (g *Graph) finalizeTagSize(oid git.Oid, size TagSize, objectSize counts.Count32) {
+func (g *Graph) finalizeTagSize(oid git.OID, size TagSize, objectSize counts.Count32) {
 	g.tagLock.Lock()
 	g.tagSizes[oid] = size
 	delete(g.tagRecords, oid)
@@ -727,7 +727,7 @@ func (g *Graph) finalizeTagSize(oid git.Oid, size TagSize, objectSize counts.Cou
 }
 
 type tagRecord struct {
-	oid git.Oid
+	oid git.OID
 
 	// Limit to only one mutator at a time.
 	lock sync.Mutex
@@ -745,7 +745,7 @@ type tagRecord struct {
 	listeners []func(TagSize)
 }
 
-func newTagRecord(oid git.Oid) *tagRecord {
+func newTagRecord(oid git.OID) *tagRecord {
 	return &tagRecord{
 		oid:     oid,
 		pending: -1,
@@ -753,7 +753,7 @@ func newTagRecord(oid git.Oid) *tagRecord {
 }
 
 // Initialize `r` (which is empty) based on `tag`.
-func (r *tagRecord) initialize(g *Graph, oid git.Oid, tag *git.Tag) {
+func (r *tagRecord) initialize(g *Graph, oid git.OID, tag *git.Tag) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 

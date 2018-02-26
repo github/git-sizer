@@ -33,8 +33,8 @@ func (n1 *Count32) Increment(n2 Count32) {
 	*n1 = n1.Plus(n2)
 }
 
-// Adjust `*n1` to be `max(*n1, n2)` and return true iff n2 was
-// bigger. Favor `*n1` if they are equal.
+// AdjustMaxIfNecessary adjusts `*n1` to be `max(*n1, n2)`. Return
+// true iff `n2` was greater than `*n1`.
 func (n1 *Count32) AdjustMaxIfNecessary(n2 Count32) bool {
 	if n2 > *n1 {
 		*n1 = n2
@@ -44,8 +44,8 @@ func (n1 *Count32) AdjustMaxIfNecessary(n2 Count32) bool {
 	}
 }
 
-// Adjust `*n1` to be `max(*n1, n2)` and return true iff n2 was
-// bigger. Favor `n2` if they are equal.
+// AdjustMaxIfPossible adjusts `*n1` to be `max(*n1, n2)`. Return true
+// iff `n2` was greater than or equal to `*n1`.
 func (n1 *Count32) AdjustMaxIfPossible(n2 Count32) bool {
 	if n2 >= *n1 {
 		*n1 = n2
@@ -81,8 +81,8 @@ func (n1 *Count64) Increment(n2 Count64) {
 	*n1 = n1.Plus(n2)
 }
 
-// Adjust `*n1` to be `max(*n1, n2)` and return true iff n2 was
-// bigger. Favor `*n1` if they are equal.
+// AdjustMaxIfNecessary adjusts `*n1` to be `max(*n1, n2)`. Return
+// true iff `n2` was greater than `*n1`.
 func (n1 *Count64) AdjustMaxIfNecessary(n2 Count64) bool {
 	if n2 > *n1 {
 		*n1 = n2
@@ -92,8 +92,8 @@ func (n1 *Count64) AdjustMaxIfNecessary(n2 Count64) bool {
 	}
 }
 
-// Adjust `*n1` to be `max(*n1, n2)` and return true iff n2 was
-// bigger. Favor `n2` if they are equal.
+// AdjustMaxIfPossible adjusts `*n1` to be `max(*n1, n2)`. Return true
+// iff `n2` was greater than or equal to `*n1`.
 func (n1 *Count64) AdjustMaxIfPossible(n2 Count64) bool {
 	if n2 > *n1 {
 		*n1 = n2

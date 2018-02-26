@@ -74,7 +74,7 @@ func Human(n uint64, prefixes []Prefix, unit string) (string, string) {
 
 func (n Count32) Human(prefixes []Prefix, unit string) (string, string) {
 	if n == math.MaxUint32 {
-		return "∞", ""
+		return "∞", unit
 	} else {
 		return Human(uint64(n), prefixes, unit)
 	}

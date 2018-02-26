@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/github/git-sizer/counts"
 	"github.com/github/git-sizer/meter"
 )
 
@@ -82,7 +83,7 @@ func ScanRepositoryUsingGraph(
 
 	type ObjectHeader struct {
 		oid        Oid
-		objectSize Count32
+		objectSize counts.Count32
 	}
 
 	type CommitHeader struct {
@@ -399,7 +400,7 @@ func (g *Graph) HistorySize() HistorySize {
 }
 
 // Record that the specified `oid` is a blob with the specified size.
-func (g *Graph) RegisterBlob(oid Oid, objectSize Count32) {
+func (g *Graph) RegisterBlob(oid Oid, objectSize counts.Count32) {
 	size := BlobSize{Size: objectSize}
 	// There are no listeners. Since this is a blob, we know all that
 	// we need to know about it. So skip the record and just fill in
@@ -485,7 +486,9 @@ func (g *Graph) RegisterTree(oid Oid, tree *Tree) error {
 	return record.initialize(g, oid, tree)
 }
 
-func (g *Graph) finalizeTreeSize(oid Oid, size TreeSize, objectSize Count32, treeEntries Count32) {
+func (g *Graph) finalizeTreeSize(
+	oid Oid, size TreeSize, objectSize counts.Count32, treeEntries counts.Count32,
+) {
 	g.treeLock.Lock()
 	g.treeSizes[oid] = size
 	delete(g.treeRecords, oid)
@@ -504,11 +507,11 @@ type treeRecord struct {
 
 	// The size of this object, in bytes. Initialized iff pending !=
 	// -1.
-	objectSize Count32
+	objectSize counts.Count32
 
 	// The number of entries directly in this tree. Initialized iff
 	// pending != -1.
-	entryCount Count32
+	entryCount counts.Count32
 
 	// The size of the items we know so far:
 	size TreeSize
@@ -537,7 +540,7 @@ func (r *treeRecord) initialize(g *Graph, oid Oid, tree *Tree) error {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	r.objectSize = NewCount32(uint64(len(tree.data)))
+	r.objectSize = counts.NewCount32(uint64(len(tree.data)))
 	r.pending = 0
 
 	iter := tree.Iter()
@@ -642,7 +645,7 @@ func (g *Graph) RegisterCommit(oid Oid, commit *Commit) {
 	g.commitLock.Unlock()
 
 	// The number of direct parents of this commit.
-	parentCount := NewCount32(uint64(len(commit.Parents)))
+	parentCount := counts.NewCount32(uint64(len(commit.Parents)))
 
 	// The size of the items we know so far:
 	size := CommitSize{}
@@ -711,7 +714,7 @@ func (g *Graph) RegisterTag(oid Oid, tag *Tag) {
 	record.initialize(g, oid, tag)
 }
 
-func (g *Graph) finalizeTagSize(oid Oid, size TagSize, objectSize Count32) {
+func (g *Graph) finalizeTagSize(oid Oid, size TagSize, objectSize counts.Count32) {
 	g.tagLock.Lock()
 	g.tagSizes[oid] = size
 	delete(g.tagRecords, oid)
@@ -729,7 +732,7 @@ type tagRecord struct {
 	lock sync.Mutex
 
 	// The size of this commit object in bytes.
-	objectSize Count32
+	objectSize counts.Count32
 
 	// The size of the items we know so far:
 	size TagSize

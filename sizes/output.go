@@ -5,8 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"math"
 	"strconv"
+
+	"github.com/github/git-sizer/counts"
 )
 
 func (s BlobSize) String() string {
@@ -60,89 +61,6 @@ func (s HistorySize) String() string {
 		s.MaxExpandedBlobSize, s.MaxExpandedLinkCount,
 		s.MaxExpandedSubmoduleCount,
 	)
-}
-
-type Prefix struct {
-	Name       string
-	Multiplier uint64
-}
-
-type Humaner interface {
-	Human([]Prefix, string) (string, string)
-	ToUint64() uint64
-}
-
-var MetricPrefixes []Prefix
-
-func init() {
-	MetricPrefixes = []Prefix{
-		{"", 1},
-		{"k", 1e3},
-		{"M", 1e6},
-		{"G", 1e9},
-		{"T", 1e12},
-		{"P", 1e15},
-	}
-}
-
-var BinaryPrefixes []Prefix
-
-func init() {
-	BinaryPrefixes = []Prefix{
-		{"", 1 << (10 * 0)},
-		{"Ki", 1 << (10 * 1)},
-		{"Mi", 1 << (10 * 2)},
-		{"Gi", 1 << (10 * 3)},
-		{"Ti", 1 << (10 * 4)},
-		{"Pi", 1 << (10 * 5)},
-	}
-}
-
-// Format values, aligned, in `len(unit) + 10` or fewer characters
-// (except for extremely large numbers).
-func Human(n uint64, prefixes []Prefix, unit string) (string, string) {
-	prefix := prefixes[0]
-	wholePart := n
-	for _, p := range prefixes {
-		w := n / p.Multiplier
-		if w >= 1 {
-			wholePart = w
-			prefix = p
-		}
-	}
-
-	if prefix.Multiplier == 1 {
-		return fmt.Sprintf("%d", n), unit
-	} else {
-		mantissa := float64(n) / float64(prefix.Multiplier)
-		var format string
-
-		if wholePart >= 100 {
-			// `mantissa` can actually be up to 1023.999.
-			format = "%.0f"
-		} else if wholePart >= 10 {
-			format = "%.1f"
-		} else {
-			format = "%.2f"
-		}
-		return fmt.Sprintf(format, mantissa), prefix.Name + unit
-	}
-}
-
-func (n Count32) Human(prefixes []Prefix, unit string) (string, string) {
-	if n == math.MaxUint32 {
-		return "∞", ""
-	} else {
-		return Human(uint64(n), prefixes, unit)
-	}
-}
-
-func (n Count64) Human(prefixes []Prefix, unit string) (string, string) {
-	if n == math.MaxUint64 {
-		return "∞", unit
-	} else {
-		return Human(uint64(n), prefixes, unit)
-	}
 }
 
 const (
@@ -209,8 +127,8 @@ func (s *section) Emit(t *table, buf io.Writer, indent int) {
 type item struct {
 	name     string
 	path     *Path
-	value    Humaner
-	prefixes []Prefix
+	value    counts.Humaner
+	prefixes []counts.Prefix
 	unit     string
 	scale    float64
 }
@@ -218,8 +136,8 @@ type item struct {
 func newItem(
 	name string,
 	path *Path,
-	value Humaner,
-	prefixes []Prefix,
+	value counts.Humaner,
+	prefixes []counts.Prefix,
 	unit string,
 	scale float64,
 ) *item {
@@ -407,65 +325,65 @@ func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) strin
 				"Overall repository size",
 				S(
 					"Commits",
-					I("Count", nil, s.UniqueCommitCount, MetricPrefixes, " ", 500e3),
-					I("Total size", nil, s.UniqueCommitSize, BinaryPrefixes, "B", 250e6),
+					I("Count", nil, s.UniqueCommitCount, counts.MetricPrefixes, " ", 500e3),
+					I("Total size", nil, s.UniqueCommitSize, counts.BinaryPrefixes, "B", 250e6),
 				),
 
 				S(
 					"Trees",
-					I("Count", nil, s.UniqueTreeCount, MetricPrefixes, " ", 1.5e6),
-					I("Total size", nil, s.UniqueTreeSize, BinaryPrefixes, "B", 2e9),
-					I("Total tree entries", nil, s.UniqueTreeEntries, MetricPrefixes, " ", 50e6),
+					I("Count", nil, s.UniqueTreeCount, counts.MetricPrefixes, " ", 1.5e6),
+					I("Total size", nil, s.UniqueTreeSize, counts.BinaryPrefixes, "B", 2e9),
+					I("Total tree entries", nil, s.UniqueTreeEntries, counts.MetricPrefixes, " ", 50e6),
 				),
 
 				S(
 					"Blobs",
-					I("Count", nil, s.UniqueBlobCount, MetricPrefixes, " ", 1.5e6),
-					I("Total size", nil, s.UniqueBlobSize, BinaryPrefixes, "B", 10e9),
+					I("Count", nil, s.UniqueBlobCount, counts.MetricPrefixes, " ", 1.5e6),
+					I("Total size", nil, s.UniqueBlobSize, counts.BinaryPrefixes, "B", 10e9),
 				),
 
 				S(
 					"Annotated tags",
-					I("Count", nil, s.UniqueTagCount, MetricPrefixes, " ", 25e3),
+					I("Count", nil, s.UniqueTagCount, counts.MetricPrefixes, " ", 25e3),
 				),
 
 				S(
 					"References",
-					I("Count", nil, s.ReferenceCount, MetricPrefixes, " ", 25e3),
+					I("Count", nil, s.ReferenceCount, counts.MetricPrefixes, " ", 25e3),
 				),
 			),
 
 			S("Biggest objects",
 				S("Commits",
-					I("Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, BinaryPrefixes, "B", 50e3),
-					I("Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, MetricPrefixes, " ", 10),
+					I("Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, counts.BinaryPrefixes, "B", 50e3),
+					I("Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, counts.MetricPrefixes, " ", 10),
 				),
 
 				S("Trees",
-					I("Maximum entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, MetricPrefixes, " ", 2.5e3),
+					I("Maximum entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, counts.MetricPrefixes, " ", 2.5e3),
 				),
 
 				S("Blobs",
-					I("Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, BinaryPrefixes, "B", 10e6),
+					I("Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, counts.BinaryPrefixes, "B", 10e6),
 				),
 			),
 
 			S("History structure",
-				I("Maximum history depth", nil, s.MaxHistoryDepth, MetricPrefixes, " ", 500e3),
-				I("Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, MetricPrefixes, " ", 1),
+				I("Maximum history depth", nil, s.MaxHistoryDepth, counts.MetricPrefixes, " ", 500e3),
+				I("Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, counts.MetricPrefixes, " ", 1),
 			),
 
 			S("Biggest checkouts",
-				I("Number of directories", s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, MetricPrefixes, " ", 2000),
-				I("Maximum path depth", s.MaxPathDepthTree, s.MaxPathDepth, MetricPrefixes, " ", 10),
-				I("Maximum path length", s.MaxPathLengthTree, s.MaxPathLength, BinaryPrefixes, "B", 100),
+				I("Number of directories", s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, counts.MetricPrefixes, " ", 2000),
+				I("Maximum path depth", s.MaxPathDepthTree, s.MaxPathDepth, counts.MetricPrefixes, " ", 10),
+				I("Maximum path length", s.MaxPathLengthTree, s.MaxPathLength, counts.BinaryPrefixes, "B", 100),
 
-				I("Number of files", s.MaxExpandedBlobCountTree, s.MaxExpandedBlobCount, MetricPrefixes, " ", 50e3),
-				I("Total size of files", s.MaxExpandedBlobSizeTree, s.MaxExpandedBlobSize, BinaryPrefixes, "B", 1e9),
+				I("Number of files", s.MaxExpandedBlobCountTree, s.MaxExpandedBlobCount, counts.MetricPrefixes, " ", 50e3),
+				I("Total size of files", s.MaxExpandedBlobSizeTree, s.MaxExpandedBlobSize, counts.BinaryPrefixes, "B", 1e9),
 
-				I("Number of symlinks", s.MaxExpandedLinkCountTree, s.MaxExpandedLinkCount, MetricPrefixes, " ", 25e3),
+				I("Number of symlinks", s.MaxExpandedLinkCountTree, s.MaxExpandedLinkCount, counts.MetricPrefixes, " ", 25e3),
 
-				I("Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, MetricPrefixes, " ", 100),
+				I("Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, counts.MetricPrefixes, " ", 100),
 			),
 		),
 		threshold:       threshold,

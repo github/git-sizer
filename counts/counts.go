@@ -1,4 +1,4 @@
-package sizes
+package counts
 
 import (
 	"math"

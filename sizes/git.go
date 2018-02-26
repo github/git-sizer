@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/github/git-sizer/counts"
 )
 
 // The type of an object ("blob", "tree", "commit", "tag", "missing").
@@ -97,7 +99,7 @@ func (repo *Repository) Close() error {
 type Reference struct {
 	Refname    string
 	ObjectType ObjectType
-	ObjectSize Count32
+	ObjectSize counts.Count32
 	Oid        Oid
 }
 
@@ -162,7 +164,7 @@ func (iter *ReferenceIter) Next() (Reference, bool, error) {
 	return Reference{
 		Refname:    refname,
 		ObjectType: objectType,
-		ObjectSize: Count32(objectSize),
+		ObjectSize: counts.Count32(objectSize),
 		Oid:        oid,
 	}, true, nil
 }
@@ -215,7 +217,7 @@ func (repo *Repository) NewBatchObjectIter() (*BatchObjectIter, io.WriteCloser, 
 	}, in, nil
 }
 
-func (iter *BatchObjectIter) Next() (Oid, ObjectType, Count32, []byte, error) {
+func (iter *BatchObjectIter) Next() (Oid, ObjectType, counts.Count32, []byte, error) {
 	header, err := iter.f.ReadString('\n')
 	if err != nil {
 		return Oid{}, "", 0, nil, err
@@ -321,7 +323,7 @@ func NotFilter(filter ReferenceFilter) ReferenceFilter {
 
 // Parse a `cat-file --batch[-check]` output header line (including
 // the trailing LF). `spec`, if not "", is used in error messages.
-func parseBatchHeader(spec string, header string) (Oid, ObjectType, Count32, error) {
+func parseBatchHeader(spec string, header string) (Oid, ObjectType, counts.Count32, error) {
 	header = header[:len(header)-1]
 	words := strings.Split(header, " ")
 	if words[len(words)-1] == "missing" {
@@ -340,7 +342,7 @@ func parseBatchHeader(spec string, header string) (Oid, ObjectType, Count32, err
 	if err != nil {
 		return Oid{}, "missing", 0, err
 	}
-	return oid, ObjectType(words[1]), NewCount32(size), nil
+	return oid, ObjectType(words[1]), counts.NewCount32(size), nil
 }
 
 type ObjectIter struct {
@@ -443,7 +445,7 @@ func (repo *Repository) NewObjectIter(args ...string) (
 }
 
 // Next returns the next object, or EOF when done.
-func (l *ObjectIter) Next() (Oid, ObjectType, Count32, error) {
+func (l *ObjectIter) Next() (Oid, ObjectType, counts.Count32, error) {
 	line, err := l.f.ReadString('\n')
 	if err != nil {
 		return Oid{}, "", 0, err
@@ -508,7 +510,7 @@ func (iter *ObjectHeaderIter) Next() (string, string, error) {
 }
 
 type Commit struct {
-	Size    Count32
+	Size    counts.Count32
 	Parents []Oid
 	Tree    Oid
 }
@@ -548,7 +550,7 @@ func ParseCommit(oid Oid, data []byte) (*Commit, error) {
 		return nil, fmt.Errorf("no tree found in commit %s", oid)
 	}
 	return &Commit{
-		Size:    NewCount32(uint64(len(data))),
+		Size:    counts.NewCount32(uint64(len(data))),
 		Parents: parents,
 		Tree:    tree,
 	}, nil
@@ -619,7 +621,7 @@ func (iter *TreeIter) NextEntry() (TreeEntry, bool, error) {
 }
 
 type Tag struct {
-	Size         Count32
+	Size         counts.Count32
 	Referent     Oid
 	ReferentType ObjectType
 }
@@ -663,7 +665,7 @@ func ParseTag(oid Oid, data []byte) (*Tag, error) {
 		return nil, fmt.Errorf("no type found in tag %s", oid)
 	}
 	return &Tag{
-		Size:         NewCount32(uint64(len(data))),
+		Size:         counts.NewCount32(uint64(len(data))),
 		Referent:     referent,
 		ReferentType: referentType,
 	}, nil

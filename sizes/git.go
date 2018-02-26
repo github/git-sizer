@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -82,8 +83,9 @@ func NewRepository(path string) (*Repository, error) {
 			return nil, err
 		}
 	}
+	gitDir := filepath.Join(path, string(bytes.TrimSpace(out)))
 	repo := &Repository{
-		path: string(bytes.TrimSpace(out)),
+		path: gitDir,
 	}
 	return repo, nil
 }

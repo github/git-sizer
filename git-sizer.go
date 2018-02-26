@@ -10,6 +10,7 @@ import (
 	"runtime/pprof"
 	"strconv"
 
+	"github.com/github/git-sizer/git"
 	"github.com/github/git-sizer/isatty"
 	"github.com/github/git-sizer/sizes"
 )
@@ -111,7 +112,7 @@ func mainImplementation() error {
 		return errors.New("excess arguments")
 	}
 
-	repo, err := sizes.NewRepository(".")
+	repo, err := git.NewRepository(".")
 	if err != nil {
 		return fmt.Errorf("couldn't open Git repository: %s", err)
 	}
@@ -119,21 +120,21 @@ func mainImplementation() error {
 
 	var historySize sizes.HistorySize
 
-	var filter sizes.ReferenceFilter
+	var filter git.ReferenceFilter
 	if processBranches || processTags || processRemotes {
-		var filters []sizes.ReferenceFilter
+		var filters []git.ReferenceFilter
 		if processBranches {
-			filters = append(filters, sizes.BranchesFilter)
+			filters = append(filters, git.BranchesFilter)
 		}
 		if processTags {
-			filters = append(filters, sizes.TagsFilter)
+			filters = append(filters, git.TagsFilter)
 		}
 		if processRemotes {
-			filters = append(filters, sizes.RemotesFilter)
+			filters = append(filters, git.RemotesFilter)
 		}
-		filter = sizes.OrFilter(filters...)
+		filter = git.OrFilter(filters...)
 	} else {
-		filter = sizes.AllReferencesFilter
+		filter = git.AllReferencesFilter
 	}
 
 	historySize, err = sizes.ScanRepositoryUsingGraph(repo, filter, nameStyle, progress)

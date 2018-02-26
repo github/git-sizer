@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/github/git-sizer/counts"
+	"github.com/github/git-sizer/git"
 )
 
 type Size interface {
@@ -214,14 +215,14 @@ type HistorySize struct {
 func setPath(
 	pr PathResolver,
 	path **Path,
-	oid Oid, objectType string) {
+	oid git.Oid, objectType string) {
 	if *path != nil {
 		pr.ForgetPath(*path)
 	}
 	*path = pr.RequestPath(oid, objectType)
 }
 
-func (s *HistorySize) recordBlob(g *Graph, oid Oid, blobSize BlobSize) {
+func (s *HistorySize) recordBlob(g *Graph, oid git.Oid, blobSize BlobSize) {
 	s.UniqueBlobCount.Increment(1)
 	s.UniqueBlobSize.Increment(counts.Count64(blobSize.Size))
 	if s.MaxBlobSize.AdjustMaxIfNecessary(blobSize.Size) {
@@ -230,7 +231,7 @@ func (s *HistorySize) recordBlob(g *Graph, oid Oid, blobSize BlobSize) {
 }
 
 func (s *HistorySize) recordTree(
-	g *Graph, oid Oid, treeSize TreeSize, size counts.Count32, treeEntries counts.Count32,
+	g *Graph, oid git.Oid, treeSize TreeSize, size counts.Count32, treeEntries counts.Count32,
 ) {
 	s.UniqueTreeCount.Increment(1)
 	s.UniqueTreeSize.Increment(counts.Count64(size))
@@ -263,7 +264,7 @@ func (s *HistorySize) recordTree(
 }
 
 func (s *HistorySize) recordCommit(
-	g *Graph, oid Oid, commitSize CommitSize,
+	g *Graph, oid git.Oid, commitSize CommitSize,
 	size counts.Count32, parentCount counts.Count32,
 ) {
 	s.UniqueCommitCount.Increment(1)
@@ -277,13 +278,13 @@ func (s *HistorySize) recordCommit(
 	}
 }
 
-func (s *HistorySize) recordTag(g *Graph, oid Oid, tagSize TagSize, size counts.Count32) {
+func (s *HistorySize) recordTag(g *Graph, oid git.Oid, tagSize TagSize, size counts.Count32) {
 	s.UniqueTagCount.Increment(1)
 	if s.MaxTagDepth.AdjustMaxIfNecessary(tagSize.TagDepth) {
 		setPath(g.pathResolver, &s.MaxTagDepthTag, oid, "tag")
 	}
 }
 
-func (s *HistorySize) recordReference(g *Graph, ref Reference) {
+func (s *HistorySize) recordReference(g *Graph, ref git.Reference) {
 	s.ReferenceCount.Increment(1)
 }

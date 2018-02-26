@@ -1,4 +1,4 @@
-package sizes
+package git
 
 import (
 	"bufio"
@@ -562,6 +562,10 @@ type Tree struct {
 
 func ParseTree(oid Oid, data []byte) (*Tree, error) {
 	return &Tree{string(data)}, nil
+}
+
+func (tree Tree) Size() counts.Count32 {
+	return counts.NewCount32(uint64(len(tree.data)))
 }
 
 // Note that Name shares memory with the tree data that were

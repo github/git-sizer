@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/github/git-sizer/counts"
+	"github.com/github/git-sizer/git"
 )
 
 func (s BlobSize) String() string {
@@ -167,7 +168,7 @@ func (l *item) Emit(t *table, buf io.Writer, indent int) {
 }
 
 func (l *item) Footnote(nameStyle NameStyle) string {
-	if l.path == nil || l.path.Oid == NullOid {
+	if l.path == nil || l.path.Oid == git.NullOid {
 		return ""
 	}
 	switch nameStyle {

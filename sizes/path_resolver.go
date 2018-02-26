@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+
+	"github.com/github/git-sizer/git"
 )
 
 // PathResolver figures out a "reachability path" (i.e., Git
@@ -30,19 +32,19 @@ import (
 // it can call `ForgetPath()`. This might free up some resources that
 // would otherwise continue consuming memory.
 type PathResolver interface {
-	RequestPath(oid Oid, objectType string) *Path
+	RequestPath(oid git.Oid, objectType string) *Path
 	ForgetPath(p *Path)
-	RecordReference(ref Reference)
-	RecordTreeEntry(oid Oid, name string, childOid Oid)
-	RecordCommit(oid, tree Oid)
-	RecordTag(oid Oid, tag *Tag)
+	RecordReference(ref git.Reference)
+	RecordTreeEntry(oid git.Oid, name string, childOid git.Oid)
+	RecordCommit(oid, tree git.Oid)
+	RecordTag(oid git.Oid, tag *git.Tag)
 }
 
 type NullPathResolver struct {
 	useHash bool
 }
 
-func (n NullPathResolver) RequestPath(oid Oid, objectType string) *Path {
+func (n NullPathResolver) RequestPath(oid git.Oid, objectType string) *Path {
 	// The caller is the only one retaining a reference to this
 	// object. When it loses interest, the object will be GCed,
 	// without our having to do anything to manage its lifetime.
@@ -58,17 +60,17 @@ func (n NullPathResolver) RequestPath(oid Oid, objectType string) *Path {
 
 func (_ NullPathResolver) ForgetPath(p *Path) {}
 
-func (_ NullPathResolver) RecordReference(ref Reference) {}
+func (_ NullPathResolver) RecordReference(ref git.Reference) {}
 
-func (_ NullPathResolver) RecordTreeEntry(oid Oid, name string, childOid Oid) {}
+func (_ NullPathResolver) RecordTreeEntry(oid git.Oid, name string, childOid git.Oid) {}
 
-func (_ NullPathResolver) RecordCommit(oid, tree Oid) {}
+func (_ NullPathResolver) RecordCommit(oid, tree git.Oid) {}
 
-func (_ NullPathResolver) RecordTag(oid Oid, tag *Tag) {}
+func (_ NullPathResolver) RecordTag(oid git.Oid, tag *git.Tag) {}
 
 type InOrderPathResolver struct {
 	lock        sync.Mutex
-	soughtPaths map[Oid]*Path
+	soughtPaths map[git.Oid]*Path
 }
 
 // Structure for keeping track of an object whose path we want to know
@@ -91,7 +93,7 @@ type InOrderPathResolver struct {
 type Path struct {
 	// The OID of the object whose path we seek. This member is always
 	// set.
-	Oid
+	git.Oid
 
 	// The type of the object whose path we seek. This member is
 	// always set.
@@ -207,7 +209,7 @@ func NewPathResolver(nameStyle NameStyle) PathResolver {
 		return NullPathResolver{true}
 	case NameStyleFull:
 		return &InOrderPathResolver{
-			soughtPaths: make(map[Oid]*Path),
+			soughtPaths: make(map[git.Oid]*Path),
 		}
 	default:
 		panic("Unexpected NameStyle value")
@@ -215,14 +217,14 @@ func NewPathResolver(nameStyle NameStyle) PathResolver {
 }
 
 // Request that a path to the object named `oid` be computed.
-func (pr *InOrderPathResolver) RequestPath(oid Oid, objectType string) *Path {
+func (pr *InOrderPathResolver) RequestPath(oid git.Oid, objectType string) *Path {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 	return pr.requestPathLocked(oid, objectType)
 }
 
 // Request that a path to the object named `oid` be computed.
-func (pr *InOrderPathResolver) requestPathLocked(oid Oid, objectType string) *Path {
+func (pr *InOrderPathResolver) requestPathLocked(oid git.Oid, objectType string) *Path {
 	p, ok := pr.soughtPaths[oid]
 	if ok {
 		p.seekerCount++
@@ -267,7 +269,7 @@ func (pr *InOrderPathResolver) forgetPathLocked(p *Path) {
 	}
 }
 
-func (pr *InOrderPathResolver) RecordReference(ref Reference) {
+func (pr *InOrderPathResolver) RecordReference(ref git.Reference) {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 
@@ -283,7 +285,7 @@ func (pr *InOrderPathResolver) RecordReference(ref Reference) {
 
 // Record that the tree with OID `oid` has an entry with the specified
 // `name` and `childOid`.
-func (pr *InOrderPathResolver) RecordTreeEntry(oid Oid, name string, childOid Oid) {
+func (pr *InOrderPathResolver) RecordTreeEntry(oid git.Oid, name string, childOid git.Oid) {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 
@@ -304,7 +306,7 @@ func (pr *InOrderPathResolver) RecordTreeEntry(oid Oid, name string, childOid Oi
 	delete(pr.soughtPaths, childOid)
 }
 
-func (pr *InOrderPathResolver) RecordCommit(oid, tree Oid) {
+func (pr *InOrderPathResolver) RecordCommit(oid, tree git.Oid) {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 
@@ -325,6 +327,6 @@ func (pr *InOrderPathResolver) RecordCommit(oid, tree Oid) {
 	delete(pr.soughtPaths, tree)
 }
 
-func (pr *InOrderPathResolver) RecordTag(oid Oid, tag *Tag) {
+func (pr *InOrderPathResolver) RecordTag(oid git.Oid, tag *git.Tag) {
 	// Not implemented.
 }

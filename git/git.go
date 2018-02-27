@@ -1,4 +1,4 @@
-package sizes
+package git
 
 import (
 	"bufio"
@@ -7,43 +7,51 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/github/git-sizer/counts"
 )
 
 // The type of an object ("blob", "tree", "commit", "tag", "missing").
 type ObjectType string
 
-type Oid struct {
+type OID struct {
 	v [20]byte
 }
 
-var NullOid Oid
+var NullOID OID
 
-func OidFromBytes(oidBytes []byte) (Oid, error) {
-	var oid Oid
+func OIDFromBytes(oidBytes []byte) (OID, error) {
+	var oid OID
 	if len(oidBytes) != len(oid.v) {
-		return Oid{}, errors.New("bytes oid has the wrong length")
+		return OID{}, errors.New("bytes oid has the wrong length")
 	}
 	copy(oid.v[0:20], oidBytes)
 	return oid, nil
 }
 
-func NewOid(s string) (Oid, error) {
+func NewOID(s string) (OID, error) {
 	oidBytes, err := hex.DecodeString(s)
 	if err != nil {
-		return Oid{}, err
+		return OID{}, err
 	}
-	return OidFromBytes(oidBytes)
+	return OIDFromBytes(oidBytes)
 }
 
-func (oid Oid) String() string {
+func (oid OID) String() string {
 	return hex.EncodeToString(oid.v[:])
 }
 
-func (oid Oid) MarshalJSON() ([]byte, error) {
+func (oid OID) Bytes() []byte {
+	return oid.v[:]
+}
+
+func (oid OID) MarshalJSON() ([]byte, error) {
 	src := oid.v[:]
 	dst := make([]byte, hex.EncodedLen(len(src))+2)
 	dst[0] = '"'
@@ -82,10 +90,15 @@ func NewRepository(path string) (*Repository, error) {
 			return nil, err
 		}
 	}
+	gitDir := filepath.Join(path, string(bytes.TrimSpace(out)))
 	repo := &Repository{
-		path: string(bytes.TrimSpace(out)),
+		path: gitDir,
 	}
 	return repo, nil
+}
+
+func (repo *Repository) Path() string {
+	return repo.path
 }
 
 func (repo *Repository) Close() error {
@@ -95,8 +108,8 @@ func (repo *Repository) Close() error {
 type Reference struct {
 	Refname    string
 	ObjectType ObjectType
-	ObjectSize Count32
-	Oid        Oid
+	ObjectSize counts.Count32
+	OID        OID
 }
 
 type ReferenceIter struct {
@@ -147,7 +160,7 @@ func (iter *ReferenceIter) Next() (Reference, bool, error) {
 	if len(words) != 4 {
 		return Reference{}, false, fmt.Errorf("line improperly formatted: %#v", line)
 	}
-	oid, err := NewOid(words[0])
+	oid, err := NewOID(words[0])
 	if err != nil {
 		return Reference{}, false, fmt.Errorf("SHA-1 improperly formatted: %#v", words[0])
 	}
@@ -160,8 +173,8 @@ func (iter *ReferenceIter) Next() (Reference, bool, error) {
 	return Reference{
 		Refname:    refname,
 		ObjectType: objectType,
-		ObjectSize: Count32(objectSize),
-		Oid:        oid,
+		ObjectSize: counts.Count32(objectSize),
+		OID:        oid,
 	}, true, nil
 }
 
@@ -213,20 +226,20 @@ func (repo *Repository) NewBatchObjectIter() (*BatchObjectIter, io.WriteCloser, 
 	}, in, nil
 }
 
-func (iter *BatchObjectIter) Next() (Oid, ObjectType, Count32, []byte, error) {
+func (iter *BatchObjectIter) Next() (OID, ObjectType, counts.Count32, []byte, error) {
 	header, err := iter.f.ReadString('\n')
 	if err != nil {
-		return Oid{}, "", 0, nil, err
+		return OID{}, "", 0, nil, err
 	}
 	oid, objectType, objectSize, err := parseBatchHeader("", header)
 	if err != nil {
-		return Oid{}, "", 0, nil, err
+		return OID{}, "", 0, nil, err
 	}
 	// +1 for LF:
 	data := make([]byte, objectSize+1)
 	_, err = io.ReadFull(iter.f, data)
 	if err != nil {
-		return Oid{}, "", 0, nil, err
+		return OID{}, "", 0, nil, err
 	}
 	data = data[:len(data)-1]
 	return oid, objectType, objectSize, data, nil
@@ -319,26 +332,26 @@ func NotFilter(filter ReferenceFilter) ReferenceFilter {
 
 // Parse a `cat-file --batch[-check]` output header line (including
 // the trailing LF). `spec`, if not "", is used in error messages.
-func parseBatchHeader(spec string, header string) (Oid, ObjectType, Count32, error) {
+func parseBatchHeader(spec string, header string) (OID, ObjectType, counts.Count32, error) {
 	header = header[:len(header)-1]
 	words := strings.Split(header, " ")
 	if words[len(words)-1] == "missing" {
 		if spec == "" {
 			spec = words[0]
 		}
-		return Oid{}, "missing", 0, errors.New(fmt.Sprintf("missing object %s", spec))
+		return OID{}, "missing", 0, errors.New(fmt.Sprintf("missing object %s", spec))
 	}
 
-	oid, err := NewOid(words[0])
+	oid, err := NewOID(words[0])
 	if err != nil {
-		return Oid{}, "missing", 0, err
+		return OID{}, "missing", 0, err
 	}
 
 	size, err := strconv.ParseUint(words[2], 10, 0)
 	if err != nil {
-		return Oid{}, "missing", 0, err
+		return OID{}, "missing", 0, err
 	}
-	return oid, ObjectType(words[1]), NewCount32(size), nil
+	return oid, ObjectType(words[1]), counts.NewCount32(size), nil
 }
 
 type ObjectIter struct {
@@ -440,11 +453,76 @@ func (repo *Repository) NewObjectIter(args ...string) (
 	}, in1, nil
 }
 
+// CreateObject creates a new Git object, of the specified type, in
+// `Repository`. `writer` is a function that writes the object in `git
+// hash-object` input format. This is used for testing only.
+func (repo *Repository) CreateObject(t ObjectType, writer func(io.Writer) error) (OID, error) {
+	cmd := exec.Command(
+		"git", "-C", repo.path,
+		"hash-object", "-w", "-t", string(t), "--stdin",
+	)
+	in, err := cmd.StdinPipe()
+	if err != nil {
+		return OID{}, err
+	}
+
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		return OID{}, err
+	}
+
+	cmd.Stderr = os.Stderr
+
+	err = cmd.Start()
+	if err != nil {
+		return OID{}, err
+	}
+
+	err = writer(in)
+	err2 := in.Close()
+	if err != nil {
+		cmd.Wait()
+		return OID{}, err
+	}
+	if err2 != nil {
+		cmd.Wait()
+		return OID{}, err2
+	}
+
+	output, err := ioutil.ReadAll(out)
+	err2 = cmd.Wait()
+	if err != nil {
+		return OID{}, err
+	}
+	if err2 != nil {
+		return OID{}, err2
+	}
+
+	return NewOID(string(bytes.TrimSpace(output)))
+}
+
+func (repo *Repository) UpdateRef(refname string, oid OID) error {
+	var cmd *exec.Cmd
+
+	if oid == NullOID {
+		cmd = exec.Command(
+			"git", "-C", repo.path,
+			"update-ref", "-d", refname,
+		)
+	} else {
+		cmd = exec.Command(
+			"git", "-C", repo.path,
+			"update-ref", refname, oid.String(),
+		)
+	}
+	return cmd.Run()
+}
+
 // Next returns the next object, or EOF when done.
-func (l *ObjectIter) Next() (Oid, ObjectType, Count32, error) {
+func (l *ObjectIter) Next() (OID, ObjectType, counts.Count32, error) {
 	line, err := l.f.ReadString('\n')
 	if err != nil {
-		return Oid{}, "", 0, err
+		return OID{}, "", 0, err
 	}
 
 	return parseBatchHeader("", line)
@@ -506,14 +584,14 @@ func (iter *ObjectHeaderIter) Next() (string, string, error) {
 }
 
 type Commit struct {
-	Size    Count32
-	Parents []Oid
-	Tree    Oid
+	Size    counts.Count32
+	Parents []OID
+	Tree    OID
 }
 
-func ParseCommit(oid Oid, data []byte) (*Commit, error) {
-	var parents []Oid
-	var tree Oid
+func ParseCommit(oid OID, data []byte) (*Commit, error) {
+	var parents []OID
+	var tree OID
 	var treeFound bool
 	iter, err := NewObjectHeaderIter(oid.String(), data)
 	if err != nil {
@@ -526,7 +604,7 @@ func ParseCommit(oid Oid, data []byte) (*Commit, error) {
 		}
 		switch key {
 		case "parent":
-			parent, err := NewOid(value)
+			parent, err := NewOID(value)
 			if err != nil {
 				return nil, fmt.Errorf("malformed parent header in commit %s", oid)
 			}
@@ -535,7 +613,7 @@ func ParseCommit(oid Oid, data []byte) (*Commit, error) {
 			if treeFound {
 				return nil, fmt.Errorf("multiple trees found in commit %s", oid)
 			}
-			tree, err = NewOid(value)
+			tree, err = NewOID(value)
 			if err != nil {
 				return nil, fmt.Errorf("malformed tree header in commit %s", oid)
 			}
@@ -546,7 +624,7 @@ func ParseCommit(oid Oid, data []byte) (*Commit, error) {
 		return nil, fmt.Errorf("no tree found in commit %s", oid)
 	}
 	return &Commit{
-		Size:    NewCount32(uint64(len(data))),
+		Size:    counts.NewCount32(uint64(len(data))),
 		Parents: parents,
 		Tree:    tree,
 	}, nil
@@ -556,8 +634,12 @@ type Tree struct {
 	data string
 }
 
-func ParseTree(oid Oid, data []byte) (*Tree, error) {
+func ParseTree(oid OID, data []byte) (*Tree, error) {
 	return &Tree{string(data)}, nil
+}
+
+func (tree Tree) Size() counts.Count32 {
+	return counts.NewCount32(uint64(len(tree.data)))
 }
 
 // Note that Name shares memory with the tree data that were
@@ -565,7 +647,7 @@ func ParseTree(oid Oid, data []byte) (*Tree, error) {
 // data reachable.
 type TreeEntry struct {
 	Name     string
-	Oid      Oid
+	OID      OID
 	Filemode uint
 }
 
@@ -610,20 +692,20 @@ func (iter *TreeIter) NextEntry() (TreeEntry, bool, error) {
 		return TreeEntry{}, false, errors.New("tree entry ends unexpectedly")
 	}
 
-	copy(entry.Oid.v[0:20], iter.data[0:20])
+	copy(entry.OID.v[0:20], iter.data[0:20])
 	iter.data = iter.data[20:]
 
 	return entry, true, nil
 }
 
 type Tag struct {
-	Size         Count32
-	Referent     Oid
+	Size         counts.Count32
+	Referent     OID
 	ReferentType ObjectType
 }
 
-func ParseTag(oid Oid, data []byte) (*Tag, error) {
-	var referent Oid
+func ParseTag(oid OID, data []byte) (*Tag, error) {
+	var referent OID
 	var referentFound bool
 	var referentType ObjectType
 	var referentTypeFound bool
@@ -641,7 +723,7 @@ func ParseTag(oid Oid, data []byte) (*Tag, error) {
 			if referentFound {
 				return nil, fmt.Errorf("multiple referents found in tag %s", oid)
 			}
-			referent, err = NewOid(value)
+			referent, err = NewOID(value)
 			if err != nil {
 				return nil, fmt.Errorf("malformed object header in tag %s", oid)
 			}
@@ -661,7 +743,7 @@ func ParseTag(oid Oid, data []byte) (*Tag, error) {
 		return nil, fmt.Errorf("no type found in tag %s", oid)
 	}
 	return &Tag{
-		Size:         NewCount32(uint64(len(data))),
+		Size:         counts.NewCount32(uint64(len(data))),
 		Referent:     referent,
 		ReferentType: referentType,
 	}, nil

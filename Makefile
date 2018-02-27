@@ -21,7 +21,7 @@ all: bin/git-sizer
 .PHONY: bin/git-sizer
 bin/git-sizer:
 	mkdir -p bin
-	$(GO) build $(GOFLAGS) -o $@ $(PACKAGE)
+	cd $(GOPATH)/src/$(PACKAGE) && $(GO) build $(GOFLAGS) -o $(ROOTDIR)/$@ $(PACKAGE)
 
 # Cross-compile for a bunch of common platforms. Note that this
 # doesn't work with USE_ISATTY:
@@ -43,7 +43,7 @@ define PLATFORM_template =
 .PHONY: bin/git-sizer-$(1)-$(2)$(3)
 bin/git-sizer-$(1)-$(2)$(3):
 	mkdir -p bin
-	GOOS=$(1) GOARCH=$(2) $$(GO) build $$(GOFLAGS) -o $$@ $$(PACKAGE)
+	cd $$(GOPATH)/src/$$(PACKAGE) && GOOS=$(1) GOARCH=$(2) $$(GO) build $$(GOFLAGS) -o $$(ROOTDIR)/$$@ $$(PACKAGE)
 endef
 
 $(eval $(call PLATFORM_template,linux,amd64))
@@ -60,7 +60,7 @@ test: bin/git-sizer gotest
 
 .PHONY: gotest
 gotest:
-	$(GO) test -timeout 60s $(GOFLAGS) ./...
+	cd $(GOPATH)/src/$(PACKAGE) && $(GO) test -timeout 60s $(GOFLAGS) ./...
 
 .PHONY: gofmt
 gofmt:

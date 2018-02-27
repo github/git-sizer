@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+
+	"github.com/github/git-sizer/git"
 )
 
 // PathResolver figures out a "reachability path" (i.e., Git
@@ -30,25 +32,25 @@ import (
 // it can call `ForgetPath()`. This might free up some resources that
 // would otherwise continue consuming memory.
 type PathResolver interface {
-	RequestPath(oid Oid, objectType string) *Path
+	RequestPath(oid git.OID, objectType string) *Path
 	ForgetPath(p *Path)
-	RecordReference(ref Reference)
-	RecordTreeEntry(oid Oid, name string, childOid Oid)
-	RecordCommit(oid, tree Oid)
-	RecordTag(oid Oid, tag *Tag)
+	RecordReference(ref git.Reference)
+	RecordTreeEntry(oid git.OID, name string, childOID git.OID)
+	RecordCommit(oid, tree git.OID)
+	RecordTag(oid git.OID, tag *git.Tag)
 }
 
 type NullPathResolver struct {
 	useHash bool
 }
 
-func (n NullPathResolver) RequestPath(oid Oid, objectType string) *Path {
+func (n NullPathResolver) RequestPath(oid git.OID, objectType string) *Path {
 	// The caller is the only one retaining a reference to this
 	// object. When it loses interest, the object will be GCed,
 	// without our having to do anything to manage its lifetime.
 	if n.useHash {
 		return &Path{
-			Oid:        oid,
+			OID:        oid,
 			objectType: objectType,
 		}
 	} else {
@@ -58,17 +60,17 @@ func (n NullPathResolver) RequestPath(oid Oid, objectType string) *Path {
 
 func (_ NullPathResolver) ForgetPath(p *Path) {}
 
-func (_ NullPathResolver) RecordReference(ref Reference) {}
+func (_ NullPathResolver) RecordReference(ref git.Reference) {}
 
-func (_ NullPathResolver) RecordTreeEntry(oid Oid, name string, childOid Oid) {}
+func (_ NullPathResolver) RecordTreeEntry(oid git.OID, name string, childOID git.OID) {}
 
-func (_ NullPathResolver) RecordCommit(oid, tree Oid) {}
+func (_ NullPathResolver) RecordCommit(oid, tree git.OID) {}
 
-func (_ NullPathResolver) RecordTag(oid Oid, tag *Tag) {}
+func (_ NullPathResolver) RecordTag(oid git.OID, tag *git.Tag) {}
 
 type InOrderPathResolver struct {
 	lock        sync.Mutex
-	soughtPaths map[Oid]*Path
+	soughtPaths map[git.OID]*Path
 }
 
 // Structure for keeping track of an object whose path we want to know
@@ -91,7 +93,7 @@ type InOrderPathResolver struct {
 type Path struct {
 	// The OID of the object whose path we seek. This member is always
 	// set.
-	Oid
+	git.OID
 
 	// The type of the object whose path we seek. This member is
 	// always set.
@@ -138,7 +140,7 @@ func (p *Path) TreePrefix() string {
 		} else if p.relativePath != "" {
 			return p.relativePath + ":"
 		} else {
-			return p.Oid.String() + ":"
+			return p.OID.String() + ":"
 		}
 	default:
 		return "???"
@@ -183,15 +185,15 @@ func (p *Path) BestPath() string {
 		return path
 	}
 
-	return p.Oid.String()
+	return p.OID.String()
 }
 
 func (p *Path) String() string {
 	path := p.Path()
 	if path == "" {
-		return p.Oid.String()
+		return p.OID.String()
 	} else {
-		return fmt.Sprintf("%s (%s)", p.Oid, path)
+		return fmt.Sprintf("%s (%s)", p.OID, path)
 	}
 }
 
@@ -207,7 +209,7 @@ func NewPathResolver(nameStyle NameStyle) PathResolver {
 		return NullPathResolver{true}
 	case NameStyleFull:
 		return &InOrderPathResolver{
-			soughtPaths: make(map[Oid]*Path),
+			soughtPaths: make(map[git.OID]*Path),
 		}
 	default:
 		panic("Unexpected NameStyle value")
@@ -215,14 +217,14 @@ func NewPathResolver(nameStyle NameStyle) PathResolver {
 }
 
 // Request that a path to the object named `oid` be computed.
-func (pr *InOrderPathResolver) RequestPath(oid Oid, objectType string) *Path {
+func (pr *InOrderPathResolver) RequestPath(oid git.OID, objectType string) *Path {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 	return pr.requestPathLocked(oid, objectType)
 }
 
 // Request that a path to the object named `oid` be computed.
-func (pr *InOrderPathResolver) requestPathLocked(oid Oid, objectType string) *Path {
+func (pr *InOrderPathResolver) requestPathLocked(oid git.OID, objectType string) *Path {
 	p, ok := pr.soughtPaths[oid]
 	if ok {
 		p.seekerCount++
@@ -230,7 +232,7 @@ func (pr *InOrderPathResolver) requestPathLocked(oid Oid, objectType string) *Pa
 	}
 
 	p = &Path{
-		Oid:         oid,
+		OID:         oid,
 		objectType:  objectType,
 		seekerCount: 1,
 	}
@@ -263,31 +265,31 @@ func (pr *InOrderPathResolver) forgetPathLocked(p *Path) {
 	} else if p.relativePath == "" {
 		// We were still looking for this object's parent. Stop doing
 		// so.
-		delete(pr.soughtPaths, p.Oid)
+		delete(pr.soughtPaths, p.OID)
 	}
 }
 
-func (pr *InOrderPathResolver) RecordReference(ref Reference) {
+func (pr *InOrderPathResolver) RecordReference(ref git.Reference) {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 
-	p, ok := pr.soughtPaths[ref.Oid]
+	p, ok := pr.soughtPaths[ref.OID]
 	if !ok {
 		// Nobody is looking for the path to the referent.
 		return
 	}
 
 	p.relativePath = ref.Refname
-	delete(pr.soughtPaths, ref.Oid)
+	delete(pr.soughtPaths, ref.OID)
 }
 
 // Record that the tree with OID `oid` has an entry with the specified
-// `name` and `childOid`.
-func (pr *InOrderPathResolver) RecordTreeEntry(oid Oid, name string, childOid Oid) {
+// `name` and `childOID`.
+func (pr *InOrderPathResolver) RecordTreeEntry(oid git.OID, name string, childOID git.OID) {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 
-	p, ok := pr.soughtPaths[childOid]
+	p, ok := pr.soughtPaths[childOID]
 	if !ok {
 		// Nobody is looking for the path to the child.
 		return
@@ -301,10 +303,10 @@ func (pr *InOrderPathResolver) RecordTreeEntry(oid Oid, name string, childOid Oi
 	p.relativePath = name
 
 	// We don't need to keep looking for the child anymore:
-	delete(pr.soughtPaths, childOid)
+	delete(pr.soughtPaths, childOID)
 }
 
-func (pr *InOrderPathResolver) RecordCommit(oid, tree Oid) {
+func (pr *InOrderPathResolver) RecordCommit(oid, tree git.OID) {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 
@@ -325,6 +327,6 @@ func (pr *InOrderPathResolver) RecordCommit(oid, tree Oid) {
 	delete(pr.soughtPaths, tree)
 }
 
-func (pr *InOrderPathResolver) RecordTag(oid Oid, tag *Tag) {
+func (pr *InOrderPathResolver) RecordTag(oid git.OID, tag *git.Tag) {
 	// Not implemented.
 }

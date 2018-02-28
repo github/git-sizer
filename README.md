@@ -79,36 +79,7 @@ Is your Git repository bursting at the seams?
 
         *   Move the executable file (`git-sizer` or `git-sizer.exe`) into your `PATH`.
 
-    b.  Install `git-sizer` using `go get`:
-
-        *   Make sure that you have a recent version of the [Go language toolchain](https://golang.org/doc/install) installed and that you have set `GOPATH`.
-
-        *   Get `git-sizer` using `go get`:
-
-                go get github.com/github/git-sizer
-
-            This should fetch and compile the source code and write the executable file to `$GOPATH/bin/`.
-
-        *   Either add `$GOPATH/bin` to your `PATH`, or copy the executable file (`git-sizer` or `git-sizer.exe`) to a directory that is already in your `PATH`.
-
-    c.  Build using `make` (for experts; works on Linux or OS X):
-
-        *   Clone the `git-sizer` Git repository and switch to that directory:
-
-                git clone https://github.com/github/git-sizer.git
-                cd git-sizer
-
-        *   Install Go if necessary and create and prepare a project-local `GOPATH`:
-
-                script/bootstrap
-
-        *   Build `git-sizer`:
-
-                make
-
-        *   Copy the resulting executable file (`bin/git-sizer`) to a directory in your `PATH`.
-
-    Assuming that you have installed the `git-sizer` executable to your `PATH`, you can run the program via Git by typing `git sizer`; otherwise, you need to type the full path and filename to run it; e.g., `/path/to/bin/git-sizer`.
+    b.  Build and install from source. See the instructions in [`docs/BUILDING.md`](docs/BUILDING.md).
 
 3.  Change to the directory containing the Git repository that you'd like to analyze, then run
 

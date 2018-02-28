@@ -6,14 +6,21 @@ export GOPATH
 GO := $(CURDIR)/script/go
 GOFMT := $(CURDIR)/script/gofmt
 
-GOFLAGS := \
-	-ldflags "-X main.BuildVersion=$(shell git rev-parse HEAD) -X main.BuildDescribe=$(shell git describe --tags --always --dirty)"
+GO_LDFLAGS := -X main.BuildVersion=$(shell git rev-parse HEAD)
+GO_LDFLAGS += -X main.BuildDescribe=$(shell git describe --tags --always --dirty)
+GOFLAGS := -ldflags "$(GO_LDFLAGS)"
 
 ifdef USE_ISATTY
 GOFLAGS := $(GOFLAGS) --tags isatty
 endif
 
-GO_SRCS := $(shell cd $(GOPATH)/src/$(PACKAGE) && $(GO) list -f '{{$$ip := .ImportPath}}{{range .GoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}{{range .CgoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}{{range .TestGoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}{{range .XTestGoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}}' ./...)
+GO_SRCS := $(sort $(shell cd $(GOPATH)/src/$(PACKAGE) && $(GO) list -f ' \
+	{{$$ip := .ImportPath}} \
+	{{range .GoFiles     }}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}} \
+	{{range .CgoFiles    }}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}} \
+	{{range .TestGoFiles }}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}} \
+	{{range .XTestGoFiles}}{{printf ".gopath/src/%s/%s\n" $$ip .}}{{end}} \
+	' ./...))
 
 .PHONY: all
 all: bin/git-sizer
@@ -94,6 +101,7 @@ govet:
 clean:
 	rm -rf bin
 
+# List all of this project's Go sources, excluding vendor, within .gopath:
 .PHONY: srcs
 srcs:
 	@printf "%s\n" $(GO_SRCS)

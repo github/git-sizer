@@ -67,36 +67,41 @@ Is your Git repository bursting at the seams?
 
 ## Getting started
 
-1.  [Install the Git command-line client](https://git-scm.com/) and put it in your `PATH`. (`git-sizer` invokes `git` commands to examine the contents of your repository.)
+1.  Make sure that you have the [Git command-line client](https://git-scm.com/) installed. NOTE: `git-sizer` invokes `git` commands to examine the contents of your repository, so **it is required that the `git` command be in your `PATH`** when you run `git-sizer`.
 
-2.  Build:
+2.  Install `git-sizer`. Either:
 
-    *   On Linux or OS X:
+    a.  Install a released version of `git-sizer` (recommended):
 
-            script/bootstrap
-            make
+        *   Go to [the releases page](https://github.com/github/git-sizer/releases) and download the ZIP file corresponding to your platform.
 
-        The executable file is written to `bin/git-sizer`. If you copy it to your `PATH`, you can run the program by typing `git sizer`; otherwise, you need to type the full path and filename to run it; e.g., `bin/git-sizer`.
+        *   Unzip the file.
 
-    *   On other platforms: TBD
+        *   Move the executable file (`git-sizer` or `git-sizer.exe`) into your `PATH`.
 
-3.  Change to the directory containing the Git repository, then run
+    b.  Build and install from source. See the instructions in [`docs/BUILDING.md`](docs/BUILDING.md).
 
-        git sizer [<opt>...]
+3.  Change to the directory containing the Git repository that you'd like to analyze, then run
 
-    To get a summary of the current repository, all you need is
+        git sizer [<option>...]
 
-        git sizer
+    No options are required. You can learn about available options by typing `git sizer -h` or by reading on.
 
-    Use the `--json` option to get output in JSON format, including the raw numbers.
+    (The above command assumes that you have added `git-sizer` to your `PATH`. If you don't add it to your `PATH`, you need to type its full path and filename to run it; e.g., `/path/to/bin/git-sizer`.)
 
 
 ## Usage
 
-By default, `git-sizer` outputs its results in tabular format. For example, let's use it to check [the Linux repository](https://github.com/torvalds/linux), using the `--verbose` option to cause all statistics to be output:
+By default, `git-sizer` outputs its results in tabular format. For example, let's use it to analyze [the Linux repository](https://github.com/torvalds/linux), using the `--verbose` option so that all statistics are output:
 
 ```
 $ git-sizer --verbose
+Processing blobs: 1652370
+Processing trees: 3396199
+Processing commits: 722647
+Matching commits to trees: 722647
+Processing annotated tags: 534
+Processing references: 539
 | Name                         | Value     | Level of concern               |
 | ---------------------------- | --------- | ------------------------------ |
 | Overall repository size      |           |                                |
@@ -149,9 +154,7 @@ $ git-sizer --verbose
 [10] f29a5ea76884ac37e1197bef1941f62fda3f7b99 (f5308d1b83eba20e69df5e0926ba7257c8dd9074^{tree})
 ```
 
-`git-sizer` has to traverse all of the history, so the analysis can take a while.
-
-The output is a table showing the thing that was measured, its numerical value, and a rough indication of which values might be a cause for concern.
+The output is a table showing the thing that was measured, its numerical value, and a rough indication of which values might be a cause for concern. In all cases, only objects that are reachable from references are included (i.e., not unreachable objects, nor objects that are reachable only from the reflogs).
 
 The "Overall repository size" section includes repository-wide statistics about distinct objects, not including repetition. "Total size" is the sum of the sizes of the corresponding objects in their uncompressed form, measured in bytes.
 
@@ -159,11 +162,11 @@ The "Biggest objects" section provides information about the biggest single obje
 
 In the "History structure" section, "maximum history depth" is the longest chain of commits in the history, and "maximum tag depth" reports the longest chain of annotated tags that point at other annotated tags.
 
-The "Biggest checkouts" section is about the sizes of commits as checked out into a working copy. "Maximum path depth" is the largest number of path components within the repository, and "maximum path length" is the longest path in terms of bytes. "Total size of files" is the sum of all file sizes in the single biggest commit, including multiplicities if the same file appears multiple times.
+The "Biggest checkouts" section is about the sizes of commits as checked out into a working copy. "Maximum path depth" is the largest number of path components for files in the working copy, and "maximum path length" is the longest path in terms of bytes. "Total size of files" is the sum of all file sizes in the single biggest commit, including multiplicities if the same file appears multiple times.
 
 The "Value" column displays counts, using units "k" (thousand), "M" (million), "G" (billion) etc., and sizes, using units "B" (bytes), "KiB" (1024 bytes), "MiB" (1024 KiB), etc. Note that if a value overflows its counter (which should only happen for malicious repositories), the corresponding value is displayed as `∞` in tabular form, or truncated to 2³²-1 or 2⁶⁴-1 (depending on the size of the counter) in JSON mode.
 
-The "Level of concern" column uses asterisks to indicate values that seem high compared with "typical" Git repositories. The more asterisks, the more inconvenience this value might be expected to cause. Exclamation points indicate values that are extremely high (i.e., equivalent to more than 30 asterisks).
+The "Level of concern" column uses asterisks to indicate values that seem high compared with "typical" Git repositories. The more asterisks, the more inconvenience this aspect of your repository might be expected to cause. Exclamation points indicate values that are extremely high (i.e., equivalent to more than 30 asterisks).
 
 The footnotes list the SHA-1s of the "biggest" objects referenced in the table, along with a more human-readable `<commit>:<path>` description of where that object is located in the repository's history. Given the name of a large object, you could, for example, type
 
@@ -173,16 +176,19 @@ at the command line to view the contents of the object. (Use `--names=none` if y
 
 By default, only statistics above a minimal level of concern are reported. Use `--verbose` (as above) to request that all statistics be output. Use `--threshold=<value>` to suppress the reporting of statistics below a specified level of concern. (`<value>` is interpreted as a numerical value corresponding to the number of asterisks.) Use `--critical` to report only statistics with a critical level of concern (equivalent to `--threshold=30`).
 
+If you'd like the output in machine-readable format, including exact numbers, use the `--json` option.
+
 To get a list of other options, run
 
-    git sizer --help
+    git sizer -h
 
-The Linux repository is large by most standards, and as you can see, it is pushing some of Git's limits. And indeed, some Git operations on the Linux repository (e.g., `git fsck`, `git gc`) take a while. But due to its sane structure, none of its dimensions are wildly out of proportion to the size of the code base, so it can be managed successfully using Git.
+The Linux repository is large by most standards. As you can see, it is pushing some of Git's limits. And indeed, some Git operations on the Linux repository (e.g., `git fsck`, `git gc`) do take a while. But due to its sane structure, none of its dimensions are wildly out of proportion to the size of the code base, so the kernel project is managed successfully using Git.
 
 Here is the non-verbose  output for one of the famous ["git bomb"](https://kate.io/blog/git-bomb/) repositories:
 
 ```
 $ git-sizer
+[...]
 | Name                         | Value     | Level of concern               |
 | ---------------------------- | --------- | ------------------------------ |
 | Biggest checkouts            |           |                                |

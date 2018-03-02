@@ -64,9 +64,9 @@ func mainImplementation() error {
 	pflag.BoolVar(&processTags, "tags", false, "process all tags")
 	pflag.BoolVar(&processRemotes, "remotes", false, "process all remote-tracking branches")
 
-	pflag.Var(
+	pflag.VarP(
 		sizes.NewThresholdFlagValue(&threshold, 0),
-		"verbose", "report all statistics, whether concerning or not",
+		"verbose", "v", "report all statistics, whether concerning or not",
 	)
 	pflag.Lookup("verbose").NoOptDefVal = "true"
 

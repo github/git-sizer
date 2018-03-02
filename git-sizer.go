@@ -63,21 +63,25 @@ func mainImplementation() error {
 	pflag.BoolVar(&processBranches, "branches", false, "process all branches")
 	pflag.BoolVar(&processTags, "tags", false, "process all tags")
 	pflag.BoolVar(&processRemotes, "remotes", false, "process all remote-tracking branches")
-	pflag.Var(
-		&threshold, "threshold",
-		"minimum level of concern (i.e., number of stars) that should be\n"+
-			"                              reported",
-	)
-	pflag.Var(
-		sizes.NewThresholdFlagValue(&threshold, 30),
-		"critical", "only report critical statistics",
-	)
-	pflag.Lookup("critical").NoOptDefVal = "true"
+
 	pflag.Var(
 		sizes.NewThresholdFlagValue(&threshold, 0),
 		"verbose", "report all statistics, whether concerning or not",
 	)
 	pflag.Lookup("verbose").NoOptDefVal = "true"
+
+	pflag.Var(
+		&threshold, "threshold",
+		"minimum level of concern (i.e., number of stars) that should be\n"+
+			"                              reported",
+	)
+
+	pflag.Var(
+		sizes.NewThresholdFlagValue(&threshold, 30),
+		"critical", "only report critical statistics",
+	)
+	pflag.Lookup("critical").NoOptDefVal = "true"
+
 	pflag.Var(
 		&nameStyle, "names",
 		"display names of large objects in the specified `style`:\n"+
@@ -85,18 +89,20 @@ func mainImplementation() error {
 			"        --names=hash            show only the SHA-1s of objects\n"+
 			"        --names=full            show full names",
 	)
+
 	pflag.BoolVarP(&jsonOutput, "json", "j", false, "output results in JSON format")
 
 	atty, err := isatty.Isatty(os.Stderr.Fd())
 	if err != nil {
 		atty = false
 	}
-
 	pflag.BoolVar(&progress, "progress", atty, "report progress to stderr")
 	pflag.Var(&NegatedBoolValue{&progress}, "no-progress", "suppress progress output")
 	pflag.Lookup("no-progress").NoOptDefVal = "true"
 
 	pflag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
+
+	pflag.CommandLine.SortFlags = false
 
 	pflag.Parse()
 

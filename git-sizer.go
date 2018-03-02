@@ -101,6 +101,7 @@ func mainImplementation() error {
 	pflag.Lookup("no-progress").NoOptDefVal = "true"
 
 	pflag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
+	pflag.CommandLine.MarkHidden("cpuprofile")
 
 	pflag.CommandLine.SortFlags = false
 

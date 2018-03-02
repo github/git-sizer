@@ -2,13 +2,14 @@ package sizes
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"io"
 	"strconv"
 
 	"github.com/github/git-sizer/counts"
 	"github.com/github/git-sizer/git"
+
+	"github.com/spf13/pflag"
 )
 
 func (s BlobSize) String() string {
@@ -200,7 +201,7 @@ func (l *item) levelOfConcern(t *table) (string, bool) {
 
 type Threshold float64
 
-// Methods to implement flag.Value:
+// Methods to implement pflag.Value:
 func (t *Threshold) String() string {
 	if t == nil {
 		return "UNSET"
@@ -227,10 +228,14 @@ func (t *Threshold) Set(s string) error {
 	return nil
 }
 
-// A `flag.Value` that can be used as a boolean option that sets a
+func (t *Threshold) Type() string {
+	return "threshold"
+}
+
+// A `pflag.Value` that can be used as a boolean option that sets a
 // `Threshold` variable to a fixed value. For example,
 //
-//		flag.Var(
+//		pflag.Var(
 //			sizes.NewThresholdFlagValue(&threshold, 30),
 //			"critical", "only report critical statistics",
 //		)
@@ -242,12 +247,8 @@ type thresholdFlagValue struct {
 	value     Threshold
 }
 
-func NewThresholdFlagValue(threshold *Threshold, value Threshold) flag.Value {
+func NewThresholdFlagValue(threshold *Threshold, value Threshold) pflag.Value {
 	return &thresholdFlagValue{false, threshold, value}
-}
-
-func (v *thresholdFlagValue) IsBoolFlag() bool {
-	return true
 }
 
 func (v *thresholdFlagValue) String() string {
@@ -268,6 +269,10 @@ func (v *thresholdFlagValue) Set(s string) error {
 	return nil
 }
 
+func (v *thresholdFlagValue) Type() string {
+	return "bool"
+}
+
 type NameStyle int
 
 const (
@@ -276,7 +281,7 @@ const (
 	NameStyleFull
 )
 
-// Methods to implement flag.Value:
+// Methods to implement pflag.Value:
 func (n *NameStyle) String() string {
 	if n == nil {
 		return "UNSET"
@@ -306,6 +311,10 @@ func (n *NameStyle) Set(s string) error {
 		return fmt.Errorf("not a valid name style: %v", s)
 	}
 	return nil
+}
+
+func (n *NameStyle) Type() string {
+	return "nameStyle"
 }
 
 type table struct {

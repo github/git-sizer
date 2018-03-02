@@ -63,6 +63,7 @@ releases/git-sizer-$$(VERSION)-$(1)-$(2).zip: bin/git-sizer-$(1)-$(2)$(3)
 	mkdir -p releases/tmp-$$(VERSION)-$(1)-$(2)
 	cp README.md LICENSE.md releases/tmp-$$(VERSION)-$(1)-$(2)
 	cp bin/git-sizer-$(1)-$(2)$(3) releases/tmp-$$(VERSION)-$(1)-$(2)/git-sizer$(3)
+	cp vendor/github.com/spf13/pflag/LICENSE releases/tmp-$$(VERSION)-$(1)-$(2)/LICENSE-spf13-pflag
 	rm -f $$@
 	zip -j $$@ releases/tmp-$$(VERSION)-$(1)-$(2)/*
 	rm -rf releases/tmp-$$(VERSION)-$(1)-$(2)

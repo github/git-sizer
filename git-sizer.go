@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +12,8 @@ import (
 	"github.com/github/git-sizer/git"
 	"github.com/github/git-sizer/isatty"
 	"github.com/github/git-sizer/sizes"
+
+	"github.com/spf13/pflag"
 )
 
 type NegatedBoolValue struct {
@@ -37,8 +38,8 @@ func (b *NegatedBoolValue) String() string {
 	}
 }
 
-func (v *NegatedBoolValue) IsBoolFlag() bool {
-	return true
+func (v *NegatedBoolValue) Type() string {
+	return "bool"
 }
 
 func main() {
@@ -59,43 +60,45 @@ func mainImplementation() error {
 	var threshold sizes.Threshold = 1
 	var progress bool
 
-	flag.BoolVar(&processBranches, "branches", false, "process all branches")
-	flag.BoolVar(&processTags, "tags", false, "process all tags")
-	flag.BoolVar(&processRemotes, "remotes", false, "process all remote-tracking branches")
-	flag.Var(
+	pflag.BoolVar(&processBranches, "branches", false, "process all branches")
+	pflag.BoolVar(&processTags, "tags", false, "process all tags")
+	pflag.BoolVar(&processRemotes, "remotes", false, "process all remote-tracking branches")
+	pflag.Var(
 		&threshold, "threshold",
 		"minimum level of concern (i.e., number of stars) that should be\n"+
-			"        reported",
+			"                              reported",
 	)
-	flag.Var(
+	pflag.Var(
 		sizes.NewThresholdFlagValue(&threshold, 30),
 		"critical", "only report critical statistics",
 	)
-	flag.Var(
+	pflag.Lookup("critical").NoOptDefVal = "true"
+	pflag.Var(
 		sizes.NewThresholdFlagValue(&threshold, 0),
 		"verbose", "report all statistics, whether concerning or not",
 	)
-	flag.Var(
+	pflag.Lookup("verbose").NoOptDefVal = "true"
+	pflag.Var(
 		&nameStyle, "names",
 		"display names of large objects in the specified `style`:\n"+
-			"            --names=none        omit footnotes entirely\n"+
-			"            --names=hash        show only the SHA-1s of objects\n"+
-			"            --names=full        show full names",
+			"        --names=none            omit footnotes entirely\n"+
+			"        --names=hash            show only the SHA-1s of objects\n"+
+			"        --names=full            show full names",
 	)
-	flag.BoolVar(&jsonOutput, "json", false, "output results in JSON format")
-	flag.BoolVar(&jsonOutput, "j", false, "output results in JSON format")
+	pflag.BoolVarP(&jsonOutput, "json", "j", false, "output results in JSON format")
 
 	atty, err := isatty.Isatty(os.Stderr.Fd())
 	if err != nil {
 		atty = false
 	}
 
-	flag.BoolVar(&progress, "progress", atty, "report progress to stderr")
-	flag.Var(&NegatedBoolValue{&progress}, "no-progress", "suppress progress output")
+	pflag.BoolVar(&progress, "progress", atty, "report progress to stderr")
+	pflag.Var(&NegatedBoolValue{&progress}, "no-progress", "suppress progress output")
+	pflag.Lookup("no-progress").NoOptDefVal = "true"
 
-	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
+	pflag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 
-	flag.Parse()
+	pflag.Parse()
 
 	if cpuprofile != "" {
 		f, err := os.Create(cpuprofile)
@@ -106,7 +109,7 @@ func mainImplementation() error {
 		defer pprof.StopCPUProfile()
 	}
 
-	args := flag.Args()
+	args := pflag.Args()
 
 	if len(args) != 0 {
 		return errors.New("excess arguments")

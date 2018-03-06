@@ -90,7 +90,10 @@ func NewRepository(path string) (*Repository, error) {
 			return nil, err
 		}
 	}
-	gitDir := filepath.Join(path, string(bytes.TrimSpace(out)))
+	gitDir := string(bytes.TrimSpace(out))
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(path, gitDir)
+	}
 	repo := &Repository{
 		path: gitDir,
 	}

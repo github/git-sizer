@@ -65,10 +65,7 @@ type Repository struct {
 }
 
 func NewRepository(path string) (*Repository, error) {
-	command := exec.Command(
-		"git", "-C", path,
-		"rev-parse", "--git-dir",
-	)
+	command := exec.Command("git", "-C", path, "rev-parse", "--git-dir")
 	out, err := command.Output()
 	if err != nil {
 		switch err := err.(type) {
@@ -100,6 +97,12 @@ func NewRepository(path string) (*Repository, error) {
 	return repo, nil
 }
 
+func (repo *Repository) gitCommand(args ...string) *exec.Cmd {
+	cmd := exec.Command("git", args...)
+	cmd.Env = append(os.Environ(), "GIT_DIR="+repo.path)
+	return cmd
+}
+
 func (repo *Repository) Path() string {
 	return repo.path
 }
@@ -125,8 +128,7 @@ type ReferenceIter struct {
 // NewReferenceIter returns an iterator that iterates over all of the
 // references in `repo`.
 func (repo *Repository) NewReferenceIter() (*ReferenceIter, error) {
-	command := exec.Command(
-		"git", "-C", repo.path,
+	command := repo.gitCommand(
 		"for-each-ref", "--format=%(objectname) %(objecttype) %(objectsize) %(refname)",
 	)
 
@@ -200,10 +202,7 @@ type BatchObjectIter struct {
 // fed into its stdin. The output is buffered, so it has to be closed
 // before you can be sure to read all of the objects.
 func (repo *Repository) NewBatchObjectIter() (*BatchObjectIter, io.WriteCloser, error) {
-	command := exec.Command(
-		"git", "-C", repo.path,
-		"cat-file", "--batch", "--buffer",
-	)
+	command := repo.gitCommand("cat-file", "--batch", "--buffer")
 
 	in, err := command.StdinPipe()
 	if err != nil {
@@ -374,9 +373,7 @@ type ObjectIter struct {
 func (repo *Repository) NewObjectIter(args ...string) (
 	*ObjectIter, io.WriteCloser, error,
 ) {
-	cmdArgs := []string{"-C", repo.path, "rev-list", "--objects"}
-	cmdArgs = append(cmdArgs, args...)
-	command1 := exec.Command("git", cmdArgs...)
+	command1 := repo.gitCommand(append([]string{"rev-list", "--objects"}, args...)...)
 	in1, err := command1.StdinPipe()
 	if err != nil {
 		return nil, nil, err
@@ -394,11 +391,7 @@ func (repo *Repository) NewObjectIter(args ...string) (
 		return nil, nil, err
 	}
 
-	command2 := exec.Command(
-		"git", "-C", repo.path,
-		"cat-file", "--batch-check", "--buffer",
-	)
-
+	command2 := repo.gitCommand("cat-file", "--batch-check", "--buffer")
 	in2, err := command2.StdinPipe()
 	if err != nil {
 		out1.Close()
@@ -460,10 +453,7 @@ func (repo *Repository) NewObjectIter(args ...string) (
 // `Repository`. `writer` is a function that writes the object in `git
 // hash-object` input format. This is used for testing only.
 func (repo *Repository) CreateObject(t ObjectType, writer func(io.Writer) error) (OID, error) {
-	cmd := exec.Command(
-		"git", "-C", repo.path,
-		"hash-object", "-w", "-t", string(t), "--stdin",
-	)
+	cmd := repo.gitCommand("hash-object", "-w", "-t", string(t), "--stdin")
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return OID{}, err
@@ -508,15 +498,9 @@ func (repo *Repository) UpdateRef(refname string, oid OID) error {
 	var cmd *exec.Cmd
 
 	if oid == NullOID {
-		cmd = exec.Command(
-			"git", "-C", repo.path,
-			"update-ref", "-d", refname,
-		)
+		cmd = repo.gitCommand("update-ref", "-d", refname)
 	} else {
-		cmd = exec.Command(
-			"git", "-C", repo.path,
-			"update-ref", refname, oid.String(),
-		)
+		cmd = repo.gitCommand("update-ref", refname, oid.String())
 	}
 	return cmd.Run()
 }

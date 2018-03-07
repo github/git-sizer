@@ -786,9 +786,7 @@ func (r *tagRecord) initialize(g *Graph, oid git.OID, tag *git.Tag) {
 	default:
 	}
 
-	if r.pending == 0 {
-		g.finalizeTagSize(r.oid, r.size, r.objectSize)
-	}
+	r.maybeFinalize(g)
 }
 
 func (r *tagRecord) maybeFinalize(g *Graph) {

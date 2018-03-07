@@ -67,7 +67,7 @@ Is your Git repository bursting at the seams?
 
 ## Getting started
 
-1.  Make sure that you have the [Git command-line client](https://git-scm.com/) installed. NOTE: `git-sizer` invokes `git` commands to examine the contents of your repository, so **it is required that the `git` command be in your `PATH`** when you run `git-sizer`.
+1.  Make sure that you have the [Git command-line client](https://git-scm.com/) installed, **version >= 2.6**. NOTE: `git-sizer` invokes `git` commands to examine the contents of your repository, so **it is required that the `git` command be in your `PATH`** when you run `git-sizer`. 
 
 2.  Install `git-sizer`. Either:
 

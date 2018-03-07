@@ -65,8 +65,8 @@ type Repository struct {
 }
 
 func NewRepository(path string) (*Repository, error) {
-	command := exec.Command("git", "-C", path, "rev-parse", "--git-dir")
-	out, err := command.Output()
+	cmd := exec.Command("git", "-C", path, "rev-parse", "--git-dir")
+	out, err := cmd.Output()
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.Error:
@@ -119,7 +119,7 @@ type Reference struct {
 }
 
 type ReferenceIter struct {
-	command *exec.Cmd
+	cmd     *exec.Cmd
 	out     io.ReadCloser
 	f       *bufio.Reader
 	errChan <-chan error
@@ -128,24 +128,24 @@ type ReferenceIter struct {
 // NewReferenceIter returns an iterator that iterates over all of the
 // references in `repo`.
 func (repo *Repository) NewReferenceIter() (*ReferenceIter, error) {
-	command := repo.gitCommand(
+	cmd := repo.gitCommand(
 		"for-each-ref", "--format=%(objectname) %(objecttype) %(objectsize) %(refname)",
 	)
 
-	out, err := command.StdoutPipe()
+	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
 
-	command.Stderr = os.Stderr
+	cmd.Stderr = os.Stderr
 
-	err = command.Start()
+	err = cmd.Start()
 	if err != nil {
 		return nil, err
 	}
 
 	return &ReferenceIter{
-		command: command,
+		cmd:     cmd,
 		out:     out,
 		f:       bufio.NewReader(out),
 		errChan: make(chan error, 1),
@@ -185,7 +185,7 @@ func (iter *ReferenceIter) Next() (Reference, bool, error) {
 
 func (l *ReferenceIter) Close() error {
 	err := l.out.Close()
-	err2 := l.command.Wait()
+	err2 := l.cmd.Wait()
 	if err == nil {
 		err = err2
 	}
@@ -193,38 +193,38 @@ func (l *ReferenceIter) Close() error {
 }
 
 type BatchObjectIter struct {
-	command *exec.Cmd
-	out     io.ReadCloser
-	f       *bufio.Reader
+	cmd *exec.Cmd
+	out io.ReadCloser
+	f   *bufio.Reader
 }
 
 // NewBatchObjectIter returns iterates over objects whose names are
 // fed into its stdin. The output is buffered, so it has to be closed
 // before you can be sure to read all of the objects.
 func (repo *Repository) NewBatchObjectIter() (*BatchObjectIter, io.WriteCloser, error) {
-	command := repo.gitCommand("cat-file", "--batch", "--buffer")
+	cmd := repo.gitCommand("cat-file", "--batch", "--buffer")
 
-	in, err := command.StdinPipe()
+	in, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	out, err := command.StdoutPipe()
+	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	command.Stderr = os.Stderr
+	cmd.Stderr = os.Stderr
 
-	err = command.Start()
+	err = cmd.Start()
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return &BatchObjectIter{
-		command: command,
-		out:     out,
-		f:       bufio.NewReader(out),
+		cmd: cmd,
+		out: out,
+		f:   bufio.NewReader(out),
 	}, in, nil
 }
 
@@ -249,7 +249,7 @@ func (iter *BatchObjectIter) Next() (OID, ObjectType, counts.Count32, []byte, er
 
 func (l *BatchObjectIter) Close() error {
 	err := l.out.Close()
-	err2 := l.command.Wait()
+	err2 := l.cmd.Wait()
 	if err == nil {
 		err = err2
 	}
@@ -357,13 +357,13 @@ func parseBatchHeader(spec string, header string) (OID, ObjectType, counts.Count
 }
 
 type ObjectIter struct {
-	command1 *exec.Cmd
-	command2 *exec.Cmd
-	in1      io.Writer
-	out1     io.ReadCloser
-	out2     io.ReadCloser
-	f        *bufio.Reader
-	errChan  <-chan error
+	cmd1    *exec.Cmd
+	cmd2    *exec.Cmd
+	in1     io.Writer
+	out1    io.ReadCloser
+	out2    io.ReadCloser
+	f       *bufio.Reader
+	errChan <-chan error
 }
 
 // NewObjectIter returns an iterator that iterates over objects in
@@ -373,43 +373,43 @@ type ObjectIter struct {
 func (repo *Repository) NewObjectIter(args ...string) (
 	*ObjectIter, io.WriteCloser, error,
 ) {
-	command1 := repo.gitCommand(append([]string{"rev-list", "--objects"}, args...)...)
-	in1, err := command1.StdinPipe()
+	cmd1 := repo.gitCommand(append([]string{"rev-list", "--objects"}, args...)...)
+	in1, err := cmd1.StdinPipe()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	out1, err := command1.StdoutPipe()
+	out1, err := cmd1.StdoutPipe()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	command1.Stderr = os.Stderr
+	cmd1.Stderr = os.Stderr
 
-	err = command1.Start()
+	err = cmd1.Start()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	command2 := repo.gitCommand("cat-file", "--batch-check", "--buffer")
-	in2, err := command2.StdinPipe()
+	cmd2 := repo.gitCommand("cat-file", "--batch-check", "--buffer")
+	in2, err := cmd2.StdinPipe()
 	if err != nil {
 		out1.Close()
-		command1.Wait()
+		cmd1.Wait()
 		return nil, nil, err
 	}
 
-	out2, err := command2.StdoutPipe()
+	out2, err := cmd2.StdoutPipe()
 	if err != nil {
 		in2.Close()
 		out1.Close()
-		command1.Wait()
+		cmd1.Wait()
 		return nil, nil, err
 	}
 
-	command2.Stderr = os.Stderr
+	cmd2.Stderr = os.Stderr
 
-	err = command2.Start()
+	err = cmd2.Start()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -440,12 +440,12 @@ func (repo *Repository) NewObjectIter(args ...string) (
 	}()
 
 	return &ObjectIter{
-		command1: command1,
-		command2: command2,
-		out1:     out1,
-		out2:     out2,
-		f:        bufio.NewReader(out2),
-		errChan:  errChan,
+		cmd1:    cmd1,
+		cmd2:    cmd2,
+		out1:    out1,
+		out2:    out2,
+		f:       bufio.NewReader(out2),
+		errChan: errChan,
 	}, in1, nil
 }
 
@@ -519,11 +519,11 @@ func (l *ObjectIter) Close() error {
 	l.out1.Close()
 	err := <-l.errChan
 	l.out2.Close()
-	err2 := l.command1.Wait()
+	err2 := l.cmd1.Wait()
 	if err == nil {
 		err = err2
 	}
-	err2 = l.command2.Wait()
+	err2 = l.cmd2.Wait()
 	if err == nil {
 		err = err2
 	}

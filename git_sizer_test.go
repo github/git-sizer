@@ -7,12 +7,14 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/github/git-sizer/counts"
 	"github.com/github/git-sizer/git"
 	"github.com/github/git-sizer/sizes"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Smoke test that the program runs.
@@ -22,6 +24,24 @@ func TestExec(t *testing.T) {
 	if err != nil {
 		t.Errorf("command failed (%s); output: %#v", err, string(output))
 	}
+}
+
+func gitCommand(t *testing.T, repo *git.Repository, args ...string) *exec.Cmd {
+	cmd := exec.Command("git", args...)
+	cmd.Env = append(os.Environ(), "GIT_DIR="+repo.Path())
+	return cmd
+}
+
+func addAuthorInfo(cmd *exec.Cmd, timestamp *time.Time) {
+	cmd.Env = append(cmd.Env,
+		"GIT_AUTHOR_NAME=Arthur",
+		"GIT_AUTHOR_EMAIL=arthur@example.com",
+		fmt.Sprintf("GIT_AUTHOR_DATE=%d -0700", timestamp.Unix()),
+		"GIT_COMMITTER_NAME=Constance",
+		"GIT_COMMITTER_EMAIL=constance@example.com",
+		fmt.Sprintf("GIT_COMMITTER_DATE=%d -0700", timestamp.Unix()),
+	)
+	*timestamp = timestamp.Add(60 * time.Second)
 }
 
 func newGitBomb(
@@ -113,6 +133,7 @@ func pow(x uint64, n int) uint64 {
 }
 
 func TestBomb(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 
 	repo, err := newGitBomb("bomb", 10, 10, "boom!\n")
@@ -156,4 +177,45 @@ func TestBomb(t *testing.T) {
 	assert.Equal(counts.Count64(6*pow(10, 10)), h.MaxExpandedBlobSize, "max expanded blob size")
 	assert.Equal(counts.Count32(0), h.MaxExpandedLinkCount, "max expanded link count")
 	assert.Equal(counts.Count32(0), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
+}
+
+func TestTaggedTags(t *testing.T) {
+	t.Parallel()
+	path, err := ioutil.TempDir("", "tagged-tags")
+	require.NoError(t, err, "creating temporary directory")
+
+	defer func() {
+		os.RemoveAll(path)
+	}()
+
+	cmd := exec.Command("git", "init", path)
+	require.NoError(t, cmd.Run(), "initializing repo")
+	repo, err := git.NewRepository(path)
+	require.NoError(t, err, "initializing Repository object")
+
+	timestamp := time.Unix(1112911993, 0)
+
+	cmd = gitCommand(t, repo, "commit", "-m", "initial", "--allow-empty")
+	addAuthorInfo(cmd, &timestamp)
+	require.NoError(t, cmd.Run(), "creating commit")
+
+	// The lexicographical order of these tags is important, hence
+	// their strange names.
+	cmd = gitCommand(t, repo, "tag", "-m", "tag 1", "tag", "master")
+	addAuthorInfo(cmd, &timestamp)
+	require.NoError(t, cmd.Run(), "creating tag 1")
+
+	cmd = gitCommand(t, repo, "tag", "-m", "tag 2", "bag", "tag")
+	addAuthorInfo(cmd, &timestamp)
+	require.NoError(t, cmd.Run(), "creating tag 2")
+
+	cmd = gitCommand(t, repo, "tag", "-m", "tag 3", "wag", "bag")
+	addAuthorInfo(cmd, &timestamp)
+	require.NoError(t, cmd.Run(), "creating tag 3")
+
+	h, err := sizes.ScanRepositoryUsingGraph(
+		repo, git.AllReferencesFilter, sizes.NameStyleNone, false,
+	)
+	require.NoError(t, err, "scanning repository")
+	assert.Equal(t, counts.Count32(3), h.MaxTagDepth, "tag depth")
 }

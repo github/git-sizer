@@ -1,3 +1,4 @@
 /.gopath
 /bin
 /releases
+/vendor/go1.*

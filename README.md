@@ -67,15 +67,15 @@ Is your Git repository bursting at the seams?
 
 ## Getting started
 
-1.  Make sure that you have the [Git command-line client](https://git-scm.com/) installed, **version >= 2.6**. NOTE: `git-sizer` invokes `git` commands to examine the contents of your repository, so **it is required that the `git` command be in your `PATH`** when you run `git-sizer`. 
+1.  Make sure that you have the [Git command-line client](https://git-scm.com/) installed, **version >= 2.6**. NOTE: `git-sizer` invokes `git` commands to examine the contents of your repository, so **it is required that the `git` command be in your `PATH`** when you run `git-sizer`.
 
 2.  Install `git-sizer`. Either:
 
     a. Install a released version of `git-sizer`(recommended):
-       1. Go to [the releases page](https://github.com/github/git-sizer/releases) and download the ZIP file corresponding to your platform. 
-       2. Unzip the file. 
-       3. Move the executable file (`git-sizer` or `git-sizer.exe`) into your `PATH`.   
-       
+       1. Go to [the releases page](https://github.com/github/git-sizer/releases) and download the ZIP file corresponding to your platform.
+       2. Unzip the file.
+       3. Move the executable file (`git-sizer` or `git-sizer.exe`) into your `PATH`.
+
     b. Build and install from source. See the instructions in [`docs/BUILDING.md`](docs/BUILDING.md).
 
 3.  Change to the directory containing the Git repository that you'd like to analyze, then run

@@ -139,8 +139,8 @@ Processing references: 539
 | * Number of symlinks    [10] |    40     |                                |
 | * Number of submodules       |     0     |                                |
 
-[1]  91cc53b0c78596a73fa708cceb7313e7168bb146 (91cc53b0c78596a73fa708cceb7313e7168bb146)
-[2]  2cde51fbd0f310c8a2c5f977e665c0ac3945b46d (2cde51fbd0f310c8a2c5f977e665c0ac3945b46d)
+[1]  91cc53b0c78596a73fa708cceb7313e7168bb146
+[2]  2cde51fbd0f310c8a2c5f977e665c0ac3945b46d
 [3]  4f86eed5893207aca2c2da86b35b38f2e1ec1fc8 (refs/heads/master:arch/arm/boot/dts)
 [4]  a02b6794337286bc12c907c33d5d75537c240bd0 (refs/heads/master:drivers/gpu/drm/amd/include/asic_reg/vega10/NBIO/nbio_6_1_sh_mask.h)
 [5]  5dc01c595e6c6ec9ccda4f6f69c131c0dd945f8c (refs/tags/v2.6.11)

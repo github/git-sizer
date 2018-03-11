@@ -190,7 +190,7 @@ func TestBomb(t *testing.T) {
 
 	assert.Equal(counts.Count32(1), h.ReferenceCount, "reference count")
 
-	assert.Equal(counts.Count32(11), h.MaxPathDepth, "max path depth")
+	assert.Equal(counts.Count32(10), h.MaxPathDepth, "max path depth")
 	assert.Equal("refs/heads/master^{tree}", h.MaxPathDepthTree.Path(), "max path depth tree")
 	assert.Equal(counts.Count32(29), h.MaxPathLength, "max path length")
 	assert.Equal("refs/heads/master^{tree}", h.MaxPathLengthTree.Path(), "max path length tree")
@@ -272,10 +272,11 @@ func TestFromSubdir(t *testing.T) {
 
 	repo2, err := git.NewRepository(filepath.Join(path, "subdir"))
 	require.NoError(t, err, "creating Repository object in subdirectory")
-	_, err = sizes.ScanRepositoryUsingGraph(
+	h, err := sizes.ScanRepositoryUsingGraph(
 		repo2, git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
+	assert.Equal(t, counts.Count32(2), h.MaxPathDepth, "max path depth")
 }
 
 func TestSubmodule(t *testing.T) {

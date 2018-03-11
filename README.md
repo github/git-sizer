@@ -132,7 +132,7 @@ Processing references: 539
 |                              |           |                                |
 | Biggest checkouts            |           |                                |
 | * Number of directories  [6] |  4.38 k   | **                             |
-| * Maximum path depth     [7] |    14     | *                              |
+| * Maximum path depth     [7] |    13     | *                              |
 | * Maximum path length    [8] |   134 B   | *                              |
 | * Number of files        [9] |  62.3 k   | *                              |
 | * Total size of files    [9] |   747 MiB |                                |

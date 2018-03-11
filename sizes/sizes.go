@@ -17,7 +17,7 @@ type BlobSize struct {
 
 type TreeSize struct {
 	// The maximum depth of trees and blobs starting at this object
-	// (including this object).
+	// (not including this object).
 	MaxPathDepth counts.Count32 `json:"max_path_depth"`
 
 	// The maximum length of any path relative to this object, in
@@ -41,7 +41,7 @@ type TreeSize struct {
 }
 
 func (s *TreeSize) addDescendent(filename string, s2 TreeSize) {
-	s.MaxPathDepth.AdjustMaxIfNecessary(s2.MaxPathDepth)
+	s.MaxPathDepth.AdjustMaxIfNecessary(s2.MaxPathDepth.Plus(1))
 	if s2.MaxPathLength > 0 {
 		s.MaxPathLength.AdjustMaxIfNecessary(
 			(counts.NewCount32(uint64(len(filename))) + 1).Plus(s2.MaxPathLength),
@@ -164,7 +164,7 @@ type HistorySize struct {
 	// attribute is maximized separately).
 
 	// The maximum depth of trees and blobs starting at this object
-	// (including this object).
+	// (not including this object).
 	MaxPathDepth counts.Count32 `json:"max_path_depth"`
 
 	// The tree with the maximum path depth.

@@ -67,15 +67,15 @@ Is your Git repository bursting at the seams?
 
 ## Getting started
 
-1.  Make sure that you have the [Git command-line client](https://git-scm.com/) installed, **version >= 2.6**. NOTE: `git-sizer` invokes `git` commands to examine the contents of your repository, so **it is required that the `git` command be in your `PATH`** when you run `git-sizer`. 
+1.  Make sure that you have the [Git command-line client](https://git-scm.com/) installed, **version >= 2.6**. NOTE: `git-sizer` invokes `git` commands to examine the contents of your repository, so **it is required that the `git` command be in your `PATH`** when you run `git-sizer`.
 
 2.  Install `git-sizer`. Either:
 
     a. Install a released version of `git-sizer`(recommended):
-       1. Go to [the releases page](https://github.com/github/git-sizer/releases) and download the ZIP file corresponding to your platform. 
-       2. Unzip the file. 
-       3. Move the executable file (`git-sizer` or `git-sizer.exe`) into your `PATH`.   
-       
+       1. Go to [the releases page](https://github.com/github/git-sizer/releases) and download the ZIP file corresponding to your platform.
+       2. Unzip the file.
+       3. Move the executable file (`git-sizer` or `git-sizer.exe`) into your `PATH`.
+
     b. Build and install from source. See the instructions in [`docs/BUILDING.md`](docs/BUILDING.md).
 
 3.  Change to the directory containing the Git repository that you'd like to analyze, then run
@@ -132,15 +132,15 @@ Processing references: 539
 |                              |           |                                |
 | Biggest checkouts            |           |                                |
 | * Number of directories  [6] |  4.38 k   | **                             |
-| * Maximum path depth     [7] |    14     | *                              |
+| * Maximum path depth     [7] |    13     | *                              |
 | * Maximum path length    [8] |   134 B   | *                              |
 | * Number of files        [9] |  62.3 k   | *                              |
 | * Total size of files    [9] |   747 MiB |                                |
 | * Number of symlinks    [10] |    40     |                                |
 | * Number of submodules       |     0     |                                |
 
-[1]  91cc53b0c78596a73fa708cceb7313e7168bb146 (91cc53b0c78596a73fa708cceb7313e7168bb146)
-[2]  2cde51fbd0f310c8a2c5f977e665c0ac3945b46d (2cde51fbd0f310c8a2c5f977e665c0ac3945b46d)
+[1]  91cc53b0c78596a73fa708cceb7313e7168bb146
+[2]  2cde51fbd0f310c8a2c5f977e665c0ac3945b46d
 [3]  4f86eed5893207aca2c2da86b35b38f2e1ec1fc8 (refs/heads/master:arch/arm/boot/dts)
 [4]  a02b6794337286bc12c907c33d5d75537c240bd0 (refs/heads/master:drivers/gpu/drm/amd/include/asic_reg/vega10/NBIO/nbio_6_1_sh_mask.h)
 [5]  5dc01c595e6c6ec9ccda4f6f69c131c0dd945f8c (refs/tags/v2.6.11)

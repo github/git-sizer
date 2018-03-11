@@ -3,7 +3,7 @@
 1.  Create a release tag and push it to GitHub:
 
         VERSION=1.2.3
-        git tag -a v$VERSION
+        git tag -as v$VERSION
         git push origin v$VERSION
 
 2.  Build the release for the major platforms:

@@ -21,9 +21,7 @@ import (
 func TestExec(t *testing.T) {
 	cmd := exec.Command("bin/git-sizer")
 	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Errorf("command failed (%s); output: %#v", err, string(output))
-	}
+	assert.NoErrorf(t, err, "command failed; output: %#v", string(output))
 }
 
 func gitCommand(t *testing.T, repo *git.Repository, args ...string) *exec.Cmd {

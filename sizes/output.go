@@ -194,9 +194,8 @@ func (l *item) levelOfConcern(t *table) (string, bool) {
 	}
 	if alert > 30 {
 		return "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", true
-	} else {
-		return stars[:int(alert)], true
 	}
+	return stars[:int(alert)], true
 }
 
 type Threshold float64

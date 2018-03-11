@@ -307,13 +307,18 @@ func TestSubmodule(t *testing.T) {
 	cmd.Dir = mainPath
 	require.NoError(t, cmd.Run(), "adding submodule")
 
+	cmd = gitCommand(t, mainRepo, "commit", "-m", "add submodule")
+	addAuthorInfo(cmd, &timestamp)
+	require.NoError(t, cmd.Run(), "committing submodule to main")
+
 	// Analyze the main repo:
 	h, err := sizes.ScanRepositoryUsingGraph(
 		mainRepo, git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
-	assert.Equal(t, counts.Count32(1), h.UniqueBlobCount, "unique blob count")
-	assert.Equal(t, counts.Count32(1), h.MaxExpandedBlobCount, "max expanded blob count")
+	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")
+	assert.Equal(t, counts.Count32(2), h.MaxExpandedBlobCount, "max expanded blob count")
+	assert.Equal(t, counts.Count32(1), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
 
 	// Analyze the submodule:
 	submRepo2, err := git.NewRepository(filepath.Join(mainPath, "sub"))

@@ -287,7 +287,7 @@ func TestSubmodule(t *testing.T) {
 	addFile(t, submPath, submRepo, "submfile2.txt", "Hello again, submodule!\n")
 	addFile(t, submPath, submRepo, "submfile3.txt", "Hello again, submodule!\n")
 
-	cmd = gitCommand(t, submRepo, "commit", "-m", "main initial")
+	cmd = gitCommand(t, submRepo, "commit", "-m", "subm initial")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating subm commit")
 
@@ -298,7 +298,7 @@ func TestSubmodule(t *testing.T) {
 	require.NoError(t, err, "initializing main Repository object")
 	addFile(t, mainPath, mainRepo, "mainfile.txt", "Hello, main!\n")
 
-	cmd = gitCommand(t, mainRepo, "commit", "-m", "subm initial")
+	cmd = gitCommand(t, mainRepo, "commit", "-m", "main initial")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating main commit")
 

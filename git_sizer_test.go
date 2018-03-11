@@ -160,7 +160,7 @@ func TestBomb(t *testing.T) {
 	defer os.RemoveAll(repo.Path())
 
 	h, err := sizes.ScanRepositoryUsingGraph(
-		repo, git.AllReferencesFilter, sizes.NameStyleNone, false,
+		repo, git.AllReferencesFilter, sizes.NameStyleFull, false,
 	)
 	if !assert.NoError(err) {
 		return
@@ -169,17 +169,21 @@ func TestBomb(t *testing.T) {
 	assert.Equal(counts.Count32(1), h.UniqueCommitCount, "unique commit count")
 	assert.Equal(counts.Count64(169), h.UniqueCommitSize, "unique commit size")
 	assert.Equal(counts.Count32(169), h.MaxCommitSize, "max commit size")
+	assert.Equal("refs/heads/master", h.MaxCommitSizeCommit.Path(), "max commit size commit")
 	assert.Equal(counts.Count32(1), h.MaxHistoryDepth, "max history depth")
 	assert.Equal(counts.Count32(0), h.MaxParentCount, "max parent count")
+	assert.Equal("refs/heads/master", h.MaxParentCountCommit.Path(), "max parent count commit")
 
 	assert.Equal(counts.Count32(10), h.UniqueTreeCount, "unique tree count")
 	assert.Equal(counts.Count64(2910), h.UniqueTreeSize, "unique tree size")
 	assert.Equal(counts.Count64(100), h.UniqueTreeEntries, "unique tree entries")
 	assert.Equal(counts.Count32(10), h.MaxTreeEntries, "max tree entries")
+	assert.Equal("refs/heads/master:d0/d0/d0/d0/d0/d0/d0/d0/d0", h.MaxTreeEntriesTree.Path(), "max tree entries tree")
 
 	assert.Equal(counts.Count32(1), h.UniqueBlobCount, "unique blob count")
 	assert.Equal(counts.Count64(6), h.UniqueBlobSize, "unique blob size")
 	assert.Equal(counts.Count32(6), h.MaxBlobSize, "max blob size")
+	assert.Equal("refs/heads/master:d0/d0/d0/d0/d0/d0/d0/d0/d0/f0", h.MaxBlobSizeBlob.Path(), "max blob size blob")
 
 	assert.Equal(counts.Count32(0), h.UniqueTagCount, "unique tag count")
 	assert.Equal(counts.Count32(0), h.MaxTagDepth, "max tag depth")
@@ -187,13 +191,20 @@ func TestBomb(t *testing.T) {
 	assert.Equal(counts.Count32(1), h.ReferenceCount, "reference count")
 
 	assert.Equal(counts.Count32(11), h.MaxPathDepth, "max path depth")
+	assert.Equal("refs/heads/master^{tree}", h.MaxPathDepthTree.Path(), "max path depth tree")
 	assert.Equal(counts.Count32(29), h.MaxPathLength, "max path length")
+	assert.Equal("refs/heads/master^{tree}", h.MaxPathLengthTree.Path(), "max path length tree")
 
 	assert.Equal(counts.Count32((pow(10, 10)-1)/(10-1)), h.MaxExpandedTreeCount, "max expanded tree count")
+	assert.Equal("refs/heads/master^{tree}", h.MaxExpandedTreeCountTree.Path(), "max expanded tree count tree")
 	assert.Equal(counts.Count32(0xffffffff), h.MaxExpandedBlobCount, "max expanded blob count")
+	assert.Equal("refs/heads/master^{tree}", h.MaxExpandedBlobCountTree.Path(), "max expanded blob count tree")
 	assert.Equal(counts.Count64(6*pow(10, 10)), h.MaxExpandedBlobSize, "max expanded blob size")
+	assert.Equal("refs/heads/master^{tree}", h.MaxExpandedBlobSizeTree.Path(), "max expanded blob size tree")
 	assert.Equal(counts.Count32(0), h.MaxExpandedLinkCount, "max expanded link count")
+	assert.Nil(h.MaxExpandedLinkCountTree, "max expanded link count tree")
 	assert.Equal(counts.Count32(0), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
+	assert.Nil(h.MaxExpandedSubmoduleCountTree, "max expanded submodule count tree")
 }
 
 func TestTaggedTags(t *testing.T) {
@@ -287,7 +298,7 @@ func TestSubmodule(t *testing.T) {
 	addFile(t, submPath, submRepo, "submfile2.txt", "Hello again, submodule!\n")
 	addFile(t, submPath, submRepo, "submfile3.txt", "Hello again, submodule!\n")
 
-	cmd = gitCommand(t, submRepo, "commit", "-m", "main initial")
+	cmd = gitCommand(t, submRepo, "commit", "-m", "subm initial")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating subm commit")
 
@@ -298,7 +309,7 @@ func TestSubmodule(t *testing.T) {
 	require.NoError(t, err, "initializing main Repository object")
 	addFile(t, mainPath, mainRepo, "mainfile.txt", "Hello, main!\n")
 
-	cmd = gitCommand(t, mainRepo, "commit", "-m", "subm initial")
+	cmd = gitCommand(t, mainRepo, "commit", "-m", "main initial")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating main commit")
 
@@ -307,13 +318,18 @@ func TestSubmodule(t *testing.T) {
 	cmd.Dir = mainPath
 	require.NoError(t, cmd.Run(), "adding submodule")
 
+	cmd = gitCommand(t, mainRepo, "commit", "-m", "add submodule")
+	addAuthorInfo(cmd, &timestamp)
+	require.NoError(t, cmd.Run(), "committing submodule to main")
+
 	// Analyze the main repo:
 	h, err := sizes.ScanRepositoryUsingGraph(
 		mainRepo, git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
-	assert.Equal(t, counts.Count32(1), h.UniqueBlobCount, "unique blob count")
-	assert.Equal(t, counts.Count32(1), h.MaxExpandedBlobCount, "max expanded blob count")
+	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")
+	assert.Equal(t, counts.Count32(2), h.MaxExpandedBlobCount, "max expanded blob count")
+	assert.Equal(t, counts.Count32(1), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
 
 	// Analyze the submodule:
 	submRepo2, err := git.NewRepository(filepath.Join(mainPath, "sub"))

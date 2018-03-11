@@ -266,3 +266,62 @@ func TestFromSubdir(t *testing.T) {
 	)
 	require.NoError(t, err, "scanning repository")
 }
+
+func TestSubmodule(t *testing.T) {
+	t.Parallel()
+	path, err := ioutil.TempDir("", "submodule")
+	require.NoError(t, err, "creating temporary directory")
+
+	defer func() {
+		os.RemoveAll(path)
+	}()
+
+	timestamp := time.Unix(1112911993, 0)
+
+	submPath := filepath.Join(path, "subm")
+	cmd := exec.Command("git", "init", submPath)
+	require.NoError(t, cmd.Run(), "initializing subm repo")
+	submRepo, err := git.NewRepository(submPath)
+	require.NoError(t, err, "initializing subm Repository object")
+	addFile(t, submPath, submRepo, "submfile1.txt", "Hello, submodule!\n")
+	addFile(t, submPath, submRepo, "submfile2.txt", "Hello again, submodule!\n")
+	addFile(t, submPath, submRepo, "submfile3.txt", "Hello again, submodule!\n")
+
+	cmd = gitCommand(t, submRepo, "commit", "-m", "main initial")
+	addAuthorInfo(cmd, &timestamp)
+	require.NoError(t, cmd.Run(), "creating subm commit")
+
+	mainPath := filepath.Join(path, "main")
+	cmd = exec.Command("git", "init", mainPath)
+	require.NoError(t, cmd.Run(), "initializing main repo")
+	mainRepo, err := git.NewRepository(mainPath)
+	require.NoError(t, err, "initializing main Repository object")
+	addFile(t, mainPath, mainRepo, "mainfile.txt", "Hello, main!\n")
+
+	cmd = gitCommand(t, mainRepo, "commit", "-m", "subm initial")
+	addAuthorInfo(cmd, &timestamp)
+	require.NoError(t, cmd.Run(), "creating main commit")
+
+	// Make subm a submodule of main:
+	cmd = gitCommand(t, mainRepo, "submodule", "add", submPath, "sub")
+	cmd.Dir = mainPath
+	require.NoError(t, cmd.Run(), "adding submodule")
+
+	// Analyze the main repo:
+	h, err := sizes.ScanRepositoryUsingGraph(
+		mainRepo, git.AllReferencesFilter, sizes.NameStyleNone, false,
+	)
+	require.NoError(t, err, "scanning repository")
+	assert.Equal(t, counts.Count32(1), h.UniqueBlobCount, "unique blob count")
+	assert.Equal(t, counts.Count32(1), h.MaxExpandedBlobCount, "max expanded blob count")
+
+	// Analyze the submodule:
+	submRepo2, err := git.NewRepository(filepath.Join(mainPath, "sub"))
+	require.NoError(t, err, "creating Repository object in submodule")
+	h, err = sizes.ScanRepositoryUsingGraph(
+		submRepo2, git.AllReferencesFilter, sizes.NameStyleNone, false,
+	)
+	require.NoError(t, err, "scanning repository")
+	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")
+	assert.Equal(t, counts.Count32(3), h.MaxExpandedBlobCount, "max expanded blob count")
+}

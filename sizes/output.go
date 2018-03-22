@@ -369,7 +369,7 @@ func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) strin
 				),
 
 				S("Trees",
-					I("Maximum entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, counts.MetricPrefixes, " ", 2.5e3),
+					I("Maximum entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, counts.MetricPrefixes, " ", 1000),
 				),
 
 				S("Blobs",

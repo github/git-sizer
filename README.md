@@ -122,7 +122,7 @@ Processing references: 539
 |   * Maximum size         [1] |  72.7 KiB | *                              |
 |   * Maximum parents      [2] |    66     | ******                         |
 | * Trees                      |           |                                |
-|   * Maximum entries      [3] |  1.68 k   |                                |
+|   * Maximum entries      [3] |  1.68 k   | *                              |
 | * Blobs                      |           |                                |
 |   * Maximum size         [4] |  13.5 MiB | *                              |
 |                              |           |                                |

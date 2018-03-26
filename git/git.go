@@ -99,10 +99,24 @@ func NewRepository(path string) (*Repository, error) {
 		}
 	}
 	gitDir := smartJoin(path, string(bytes.TrimSpace(out)))
-	repo := &Repository{
-		path: gitDir,
+
+	cmd = exec.Command("git", "rev-parse", "--git-path", "shallow")
+	cmd.Dir = gitDir
+	out, err = cmd.Output()
+	if err != nil {
+		return nil, errors.New(
+			fmt.Sprintf(
+				"could not run 'git rev-parse --git-path shallow': %s", err,
+			),
+		)
 	}
-	return repo, nil
+	shallow := smartJoin(gitDir, string(bytes.TrimSpace(out)))
+	_, err = os.Lstat(shallow)
+	if err == nil {
+		return nil, errors.New("this appears to be a shallow clone; full clone required")
+	}
+
+	return &Repository{path: gitDir}, nil
 }
 
 func (repo *Repository) gitCommand(callerArgs ...string) *exec.Cmd {

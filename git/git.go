@@ -97,9 +97,21 @@ func NewRepository(path string) (*Repository, error) {
 	return repo, nil
 }
 
-func (repo *Repository) gitCommand(args ...string) *exec.Cmd {
+func (repo *Repository) gitCommand(callerArgs ...string) *exec.Cmd {
+	// Disable replace references when running our commands:
+	args := []string{"--no-replace-objects"}
+
+	args = append(args, callerArgs...)
+
 	cmd := exec.Command("git", args...)
-	cmd.Env = append(os.Environ(), "GIT_DIR="+repo.path)
+
+	cmd.Env = append(
+		os.Environ(),
+		"GIT_DIR="+repo.path,
+		// Disable grafts when running our commands:
+		"GIT_GRAFT_FILE="+os.DevNull,
+	)
+
 	return cmd
 }
 

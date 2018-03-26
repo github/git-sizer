@@ -64,6 +64,17 @@ type Repository struct {
 	path string
 }
 
+// smartJoin returns the path that can be described as `relPath`
+// relative to `path`, given that `path` is either absolute or is
+// relative to the current directory.
+func smartJoin(path, relPath string) string {
+	if filepath.IsAbs(relPath) {
+		return relPath
+	} else {
+		return filepath.Join(path, relPath)
+	}
+}
+
 func NewRepository(path string) (*Repository, error) {
 	cmd := exec.Command("git", "-C", path, "rev-parse", "--git-dir")
 	out, err := cmd.Output()
@@ -87,10 +98,7 @@ func NewRepository(path string) (*Repository, error) {
 			return nil, err
 		}
 	}
-	gitDir := string(bytes.TrimSpace(out))
-	if !filepath.IsAbs(gitDir) {
-		gitDir = filepath.Join(path, gitDir)
-	}
+	gitDir := smartJoin(path, string(bytes.TrimSpace(out)))
 	repo := &Repository{
 		path: gitDir,
 	}

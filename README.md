@@ -78,7 +78,7 @@ Is your Git repository bursting at the seams?
 
     b. Build and install from source. See the instructions in [`docs/BUILDING.md`](docs/BUILDING.md).
 
-3.  Change to the directory containing the Git repository that you'd like to analyze, then run
+3.  Change to the directory containing a full, non-shallow clone of the Git repository that you'd like to analyze. Then run
 
         git sizer [<option>...]
 

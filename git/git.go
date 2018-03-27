@@ -64,6 +64,17 @@ type Repository struct {
 	path string
 }
 
+// smartJoin returns the path that can be described as `relPath`
+// relative to `path`, given that `path` is either absolute or is
+// relative to the current directory.
+func smartJoin(path, relPath string) string {
+	if filepath.IsAbs(relPath) {
+		return relPath
+	} else {
+		return filepath.Join(path, relPath)
+	}
+}
+
 func NewRepository(path string) (*Repository, error) {
 	cmd := exec.Command("git", "-C", path, "rev-parse", "--git-dir")
 	out, err := cmd.Output()
@@ -87,19 +98,42 @@ func NewRepository(path string) (*Repository, error) {
 			return nil, err
 		}
 	}
-	gitDir := string(bytes.TrimSpace(out))
-	if !filepath.IsAbs(gitDir) {
-		gitDir = filepath.Join(path, gitDir)
+	gitDir := smartJoin(path, string(bytes.TrimSpace(out)))
+
+	cmd = exec.Command("git", "rev-parse", "--git-path", "shallow")
+	cmd.Dir = gitDir
+	out, err = cmd.Output()
+	if err != nil {
+		return nil, errors.New(
+			fmt.Sprintf(
+				"could not run 'git rev-parse --git-path shallow': %s", err,
+			),
+		)
 	}
-	repo := &Repository{
-		path: gitDir,
+	shallow := smartJoin(gitDir, string(bytes.TrimSpace(out)))
+	_, err = os.Lstat(shallow)
+	if err == nil {
+		return nil, errors.New("this appears to be a shallow clone; full clone required")
 	}
-	return repo, nil
+
+	return &Repository{path: gitDir}, nil
 }
 
-func (repo *Repository) gitCommand(args ...string) *exec.Cmd {
+func (repo *Repository) gitCommand(callerArgs ...string) *exec.Cmd {
+	// Disable replace references when running our commands:
+	args := []string{"--no-replace-objects"}
+
+	args = append(args, callerArgs...)
+
 	cmd := exec.Command("git", args...)
-	cmd.Env = append(os.Environ(), "GIT_DIR="+repo.path)
+
+	cmd.Env = append(
+		os.Environ(),
+		"GIT_DIR="+repo.path,
+		// Disable grafts when running our commands:
+		"GIT_GRAFT_FILE="+os.DevNull,
+	)
+
 	return cmd
 }
 

@@ -84,12 +84,12 @@ Is your Git repository bursting at the seams?
 
     No options are required. You can learn about available options by typing `git sizer -h` or by reading on.
 
-    (The above command assumes that you have added `git-sizer` to your `PATH`. If you don't add it to your `PATH`, you need to type its full path and filename to run it; e.g., `/path/to/bin/git-sizer`.)
+    *Note*: The above command assumes that you have added `git-sizer` to your `$PATH`. If you don't add it to your `PATH`, you need to type its full path and filename to run it; e.g., `/path/to/bin/git-sizer`. From now on, we will use `git sizer` which is interchangeable with `git-sizer` anywhere (assuming you added `git-sizer` to your `$PATH` already, which is recommended).
 
 
 ## Usage
 
-By default, `git-sizer` outputs its results in tabular format. For example, let's use it to analyze [the Linux repository](https://github.com/torvalds/linux), using the `--verbose` option so that all statistics are output:
+By default, `git sizer` outputs its results in tabular format. For example, let's use it to analyze [the Linux repository](https://github.com/torvalds/linux), using the `--verbose` option so that all statistics are output:
 
 ```
 $ git-sizer --verbose
@@ -184,7 +184,7 @@ The Linux repository is large by most standards. As you can see, it is pushing s
 Here is the non-verbose  output for one of the famous ["git bomb"](https://kate.io/blog/git-bomb/) repositories:
 
 ```
-$ git-sizer
+$ git sizer
 [...]
 | Name                         | Value     | Level of concern               |
 | ---------------------------- | --------- | ------------------------------ |
@@ -198,9 +198,9 @@ $ git-sizer
 [2]  d9513477b01825130c48c4bebed114c4b2d50401 (18ed56cbc5012117e24a603e7c072cf65d36d469^{tree})
 ```
 
-This repository is mischievously constructed to have a pathological tree structure, with the same directories repeated over and over again. As a result, even though the entire repository is less than 20 kb in size, when checked out it would explode into over a billion directories containing over ten billion files. (`git-sizer` prints `∞` for the blob count because the true number has overflowed the 32-bit counter used for that field.)
+This repository is mischievously constructed to have a pathological tree structure, with the same directories repeated over and over again. As a result, even though the entire repository is less than 20 kb in size, when checked out it would explode into over a billion directories containing over ten billion files. (`git sizer` prints `∞` for the blob count because the true number has overflowed the 32-bit counter used for that field.)
 
 
 ## Contributing
 
-`git-sizer` is in regular use and is still under active development. If you would like to help out, please see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+`git sizer` is in regular use and is still under active development. If you would like to help out, please see [`CONTRIBUTING.md`](CONTRIBUTING.md).

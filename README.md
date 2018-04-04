@@ -10,7 +10,7 @@ Is your Git repository bursting at the seams?
 
     * Avoid storing generated files (e.g., compiler output, JAR files) in Git. It would be better to regenerate them when necessary, or store them in a package registry or even a fileserver.
 
-    * Avoid storing large media assets in Git. You might want to look into [Git-LFS](https://git-lfs.github.com/), which allows you to version your media assets in Git while actually storing them outside of your repository.
+    * Avoid storing large media assets in Git. You might want to look into [Git-LFS](https://git-lfs.github.com/) or [git-annex](http://git-annex.branchable.com/), which allow you to version your media assets in Git while actually storing them outside of your repository.
 
     * Avoid storing file archives (e.g., ZIP files, tarballs) in Git, especially if compressed. Different versions of such files don't delta well against each other, so Git can't store them efficiently. It would be better to store the individual files in your repository, or store the archive elsewhere.
 

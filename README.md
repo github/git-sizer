@@ -80,11 +80,11 @@ Is your Git repository bursting at the seams?
 
 3.  Change to the directory containing a full, non-shallow clone of the Git repository that you'd like to analyze. Then run
 
-        git sizer [<option>...]
+        git-sizer [<option>...]
 
-    No options are required. You can learn about available options by typing `git sizer -h` or by reading on.
+    No options are required. You can learn about available options by typing `git-sizer -h` or by reading on.
 
-    (The above command assumes that you have added `git-sizer` to your `PATH`. If you don't add it to your `PATH`, you need to type its full path and filename to run it; e.g., `/path/to/bin/git-sizer`.)
+**Pro tip**: If you add `git-sizer` to your `PATH`, then you can run it by typing either `git-sizer` or `git sizer`. In the latter case, it is found and run for you by Git, and you can add extra Git options between the two words, like `git -C /path/to/my/repo sizer`. If you don't add `git-sizer` to your `PATH`, then of course you need to type its full path and filename to run it; e.g., `/path/to/bin/git-sizer`. In either case, the `git` executable *must* be in your `PATH`.
 
 
 ## Usage
@@ -177,7 +177,7 @@ If you'd like the output in machine-readable format, including exact numbers, us
 
 To get a list of other options, run
 
-    git sizer -h
+    git-sizer -h
 
 The Linux repository is large by most standards. As you can see, it is pushing some of Git's limits. And indeed, some Git operations on the Linux repository (e.g., `git fsck`, `git gc`) do take a while. But due to its sane structure, none of its dimensions are wildly out of proportion to the size of the code base, so the kernel project is managed successfully using Git.
 

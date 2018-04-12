@@ -16,6 +16,9 @@ import (
 	"github.com/spf13/pflag"
 )
 
+var ReleaseVersion string
+var BuildVersion string
+
 type NegatedBoolValue struct {
 	value *bool
 }
@@ -59,6 +62,7 @@ func mainImplementation() error {
 	var jsonOutput bool
 	var threshold sizes.Threshold = 1
 	var progress bool
+	var version bool
 
 	pflag.BoolVar(&processBranches, "branches", false, "process all branches")
 	pflag.BoolVar(&processTags, "tags", false, "process all tags")
@@ -97,6 +101,7 @@ func mainImplementation() error {
 		atty = false
 	}
 	pflag.BoolVar(&progress, "progress", atty, "report progress to stderr")
+	pflag.BoolVar(&version, "version", false, "report the git-sizer version number")
 	pflag.Var(&NegatedBoolValue{&progress}, "no-progress", "suppress progress output")
 	pflag.Lookup("no-progress").NoOptDefVal = "true"
 
@@ -114,6 +119,15 @@ func mainImplementation() error {
 		}
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
+	}
+
+	if version {
+		if ReleaseVersion != "" {
+			fmt.Printf("git-sizer release %s\n", ReleaseVersion)
+		} else {
+			fmt.Printf("git-sizer build %s\n", BuildVersion)
+		}
+		return nil
 	}
 
 	args := pflag.Args()

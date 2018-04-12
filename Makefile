@@ -6,8 +6,7 @@ export GOPATH
 GO := $(CURDIR)/script/go
 GOFMT := $(CURDIR)/script/gofmt
 
-GO_LDFLAGS := -X main.BuildVersion=$(shell git rev-parse HEAD)
-GO_LDFLAGS += -X main.BuildDescribe=$(shell git describe --tags --always --dirty)
+GO_LDFLAGS := -X main.BuildVersion=$(shell git describe --tags --always --dirty || echo unknown)
 GOFLAGS := -ldflags "$(GO_LDFLAGS)"
 
 ifdef USE_ISATTY
@@ -52,7 +51,8 @@ define PLATFORM_template =
 .PHONY: bin/git-sizer-$(1)-$(2)$(3)
 bin/git-sizer-$(1)-$(2)$(3):
 	mkdir -p bin
-	cd $$(GOPATH)/src/$$(PACKAGE) && GOOS=$(1) GOARCH=$(2) $$(GO) build $$(GOFLAGS) -o $$(ROOTDIR)/$$@ $$(PACKAGE)
+	cd $$(GOPATH)/src/$$(PACKAGE) && \
+		GOOS=$(1) GOARCH=$(2) $$(GO) build $$(GOFLAGS) -ldflags "-X main.ReleaseVersion=$$(VERSION)" -o $$(ROOTDIR)/$$@ $$(PACKAGE)
 common-platforms: bin/git-sizer-$(1)-$(2)$(3)
 
 # Note that releases don't include code from vendor (they're only used

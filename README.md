@@ -128,7 +128,7 @@ Processing references: 539
 |                              |           |                                |
 | History structure            |           |                                |
 | * Maximum history depth      |   136 k   |                                |
-| * Maximum tag depth      [5] |     1     | *                              |
+| * Maximum tag depth      [5] |     1     |                                |
 |                              |           |                                |
 | Biggest checkouts            |           |                                |
 | * Number of directories  [6] |  4.38 k   | **                             |

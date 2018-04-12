@@ -379,7 +379,7 @@ func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) strin
 
 			S("History structure",
 				I("Maximum history depth", nil, s.MaxHistoryDepth, counts.MetricPrefixes, " ", 500e3),
-				I("Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, counts.MetricPrefixes, " ", 1),
+				I("Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, counts.MetricPrefixes, " ", 1.001),
 			),
 
 			S("Biggest checkouts",

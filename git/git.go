@@ -569,13 +569,24 @@ type ObjectHeaderIter struct {
 	data string
 }
 
-// Iterate over an object header. `data` should be the object's
-// contents, including the "\n\n" that separates the header from the
-// rest of the contents. `name` is used in error messages.
+// Iterate over a commit or tag object header. `data` should be the
+// object's contents, which is usually terminated by a blank line that
+// separates the header from the comment. However, annotated tags
+// don't always include comments, and Git even tolerates commits
+// without comments, so don't insist on a blank line. `name` is used
+// in error messages.
 func NewObjectHeaderIter(name string, data []byte) (ObjectHeaderIter, error) {
 	headerEnd := bytes.Index(data, []byte("\n\n"))
 	if headerEnd == -1 {
-		return ObjectHeaderIter{}, fmt.Errorf("%s has no header separator", name)
+		if len(data) == 0 {
+			return ObjectHeaderIter{}, fmt.Errorf("%s has zero length", name)
+		}
+
+		if data[len(data)-1] != '\n' {
+			return ObjectHeaderIter{}, fmt.Errorf("%s has no terminating LF", name)
+		}
+
+		return ObjectHeaderIter{name, string(data)}, nil
 	}
 	return ObjectHeaderIter{name, string(data[:headerEnd+1])}, nil
 }

@@ -119,7 +119,7 @@ func (s *section) Emit(t *table, buf io.Writer, indent int) {
 		// own header, but prints the table header:
 		fmt.Fprint(buf, t.generateHeader())
 	} else {
-		t.formatRow(buf, indent, s.name, "", "", "", "")
+		t.formatSectionHeader(buf, indent, s.name)
 	}
 
 	fmt.Fprint(buf, linesBuf.String())
@@ -423,6 +423,10 @@ func (t *table) generateLines() string {
 
 func (t *table) emitBlankRow(buf io.Writer) {
 	t.formatRow(buf, 0, "", "", "", "", "")
+}
+
+func (t *table) formatSectionHeader(buf io.Writer, indent int, name string) {
+	t.formatRow(buf, indent, name, "", "", "", "")
 }
 
 func (t *table) formatRow(

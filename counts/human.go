@@ -10,7 +10,8 @@ type Prefix struct {
 	Multiplier uint64
 }
 
-type Humaner interface {
+// A quantity that can be made human-readable using Human().
+type Humanable interface {
 	Human([]Prefix, string) (string, string)
 	ToUint64() uint64
 }

@@ -102,7 +102,7 @@ func (s *section) Emit(t *table) {
 type item struct {
 	name     string
 	path     *Path
-	value    counts.Humaner
+	value    counts.Humanable
 	prefixes []counts.Prefix
 	unit     string
 	scale    float64
@@ -111,7 +111,7 @@ type item struct {
 func newItem(
 	name string,
 	path *Path,
-	value counts.Humaner,
+	value counts.Humanable,
 	prefixes []counts.Prefix,
 	unit string,
 	scale float64,

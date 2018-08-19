@@ -330,11 +330,9 @@ func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) strin
 		footnotes: NewFootnotes(),
 	}
 
-	return t.String()
-}
-
-func (t *table) String() string {
-	linesString := t.generateLines()
+	buf := &bytes.Buffer{}
+	t.contents.Emit(&t, buf, -1)
+	linesString := buf.String()
 	return linesString + t.footnotes.String()
 }
 
@@ -342,12 +340,6 @@ func (t *table) generateHeader() string {
 	buf := &bytes.Buffer{}
 	fmt.Fprintln(buf, "| Name                         | Value     | Level of concern               |")
 	fmt.Fprintln(buf, "| ---------------------------- | --------- | ------------------------------ |")
-	return buf.String()
-}
-
-func (t *table) generateLines() string {
-	buf := &bytes.Buffer{}
-	t.contents.Emit(t, buf, -1)
 	return buf.String()
 }
 

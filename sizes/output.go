@@ -309,22 +309,20 @@ func (n *NameStyle) Type() string {
 }
 
 type table struct {
-	contents  tableContents
 	threshold Threshold
 	nameStyle NameStyle
 	footnotes *Footnotes
 }
 
-func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) string {
+func TableString(contents tableContents, threshold Threshold, nameStyle NameStyle) string {
 	t := table{
-		contents:  s.Contents(),
 		threshold: threshold,
 		nameStyle: nameStyle,
 		footnotes: NewFootnotes(),
 	}
 
 	buf := &bytes.Buffer{}
-	t.contents.Emit(&t, buf, -1)
+	contents.Emit(&t, buf, -1)
 
 	if buf.Len() == 0 {
 		return "No problems above the current threshold were found\n"

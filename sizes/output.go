@@ -114,11 +114,7 @@ func (s *section) Emit(t *table, buf io.Writer, indent int) {
 	}
 
 	// There's output, so emit the section header first:
-	if indent == -1 {
-		// As a special case, the top-level section doesn't have its
-		// own header, but prints the table header:
-		fmt.Fprint(buf, t.generateHeader())
-	} else {
+	if s.name != "" {
 		t.formatSectionHeader(buf, indent, s.name)
 	}
 
@@ -332,8 +328,12 @@ func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) strin
 
 	buf := &bytes.Buffer{}
 	t.contents.Emit(&t, buf, -1)
-	linesString := buf.String()
-	return linesString + t.footnotes.String()
+
+	if buf.Len() == 0 {
+		return ""
+	}
+
+	return t.generateHeader() + buf.String() + t.footnotes.String()
 }
 
 func (t *table) generateHeader() string {

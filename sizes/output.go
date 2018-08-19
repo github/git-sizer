@@ -327,6 +327,8 @@ type table struct {
 func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) string {
 	S := newSection
 	I := newItem
+	metric := counts.MetricPrefixes
+	binary := counts.BinaryPrefixes
 	t := &table{
 		contents: S(
 			"",
@@ -334,65 +336,65 @@ func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) strin
 				"Overall repository size",
 				S(
 					"Commits",
-					I("Count", nil, s.UniqueCommitCount, counts.MetricPrefixes, " ", 500e3),
-					I("Total size", nil, s.UniqueCommitSize, counts.BinaryPrefixes, "B", 250e6),
+					I("Count", nil, s.UniqueCommitCount, metric, " ", 500e3),
+					I("Total size", nil, s.UniqueCommitSize, binary, "B", 250e6),
 				),
 
 				S(
 					"Trees",
-					I("Count", nil, s.UniqueTreeCount, counts.MetricPrefixes, " ", 1.5e6),
-					I("Total size", nil, s.UniqueTreeSize, counts.BinaryPrefixes, "B", 2e9),
-					I("Total tree entries", nil, s.UniqueTreeEntries, counts.MetricPrefixes, " ", 50e6),
+					I("Count", nil, s.UniqueTreeCount, metric, " ", 1.5e6),
+					I("Total size", nil, s.UniqueTreeSize, binary, "B", 2e9),
+					I("Total tree entries", nil, s.UniqueTreeEntries, metric, " ", 50e6),
 				),
 
 				S(
 					"Blobs",
-					I("Count", nil, s.UniqueBlobCount, counts.MetricPrefixes, " ", 1.5e6),
-					I("Total size", nil, s.UniqueBlobSize, counts.BinaryPrefixes, "B", 10e9),
+					I("Count", nil, s.UniqueBlobCount, metric, " ", 1.5e6),
+					I("Total size", nil, s.UniqueBlobSize, binary, "B", 10e9),
 				),
 
 				S(
 					"Annotated tags",
-					I("Count", nil, s.UniqueTagCount, counts.MetricPrefixes, " ", 25e3),
+					I("Count", nil, s.UniqueTagCount, metric, " ", 25e3),
 				),
 
 				S(
 					"References",
-					I("Count", nil, s.ReferenceCount, counts.MetricPrefixes, " ", 25e3),
+					I("Count", nil, s.ReferenceCount, metric, " ", 25e3),
 				),
 			),
 
 			S("Biggest objects",
 				S("Commits",
-					I("Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, counts.BinaryPrefixes, "B", 50e3),
-					I("Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, counts.MetricPrefixes, " ", 10),
+					I("Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, binary, "B", 50e3),
+					I("Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, metric, " ", 10),
 				),
 
 				S("Trees",
-					I("Maximum entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, counts.MetricPrefixes, " ", 1000),
+					I("Maximum entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, metric, " ", 1000),
 				),
 
 				S("Blobs",
-					I("Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, counts.BinaryPrefixes, "B", 10e6),
+					I("Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, binary, "B", 10e6),
 				),
 			),
 
 			S("History structure",
-				I("Maximum history depth", nil, s.MaxHistoryDepth, counts.MetricPrefixes, " ", 500e3),
-				I("Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, counts.MetricPrefixes, " ", 1.001),
+				I("Maximum history depth", nil, s.MaxHistoryDepth, metric, " ", 500e3),
+				I("Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, metric, " ", 1.001),
 			),
 
 			S("Biggest checkouts",
-				I("Number of directories", s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, counts.MetricPrefixes, " ", 2000),
-				I("Maximum path depth", s.MaxPathDepthTree, s.MaxPathDepth, counts.MetricPrefixes, " ", 10),
-				I("Maximum path length", s.MaxPathLengthTree, s.MaxPathLength, counts.BinaryPrefixes, "B", 100),
+				I("Number of directories", s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, metric, " ", 2000),
+				I("Maximum path depth", s.MaxPathDepthTree, s.MaxPathDepth, metric, " ", 10),
+				I("Maximum path length", s.MaxPathLengthTree, s.MaxPathLength, binary, "B", 100),
 
-				I("Number of files", s.MaxExpandedBlobCountTree, s.MaxExpandedBlobCount, counts.MetricPrefixes, " ", 50e3),
-				I("Total size of files", s.MaxExpandedBlobSizeTree, s.MaxExpandedBlobSize, counts.BinaryPrefixes, "B", 1e9),
+				I("Number of files", s.MaxExpandedBlobCountTree, s.MaxExpandedBlobCount, metric, " ", 50e3),
+				I("Total size of files", s.MaxExpandedBlobSizeTree, s.MaxExpandedBlobSize, binary, "B", 1e9),
 
-				I("Number of symlinks", s.MaxExpandedLinkCountTree, s.MaxExpandedLinkCount, counts.MetricPrefixes, " ", 25e3),
+				I("Number of symlinks", s.MaxExpandedLinkCountTree, s.MaxExpandedLinkCount, metric, " ", 25e3),
 
-				I("Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, counts.MetricPrefixes, " ", 100),
+				I("Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, metric, " ", 100),
 			),
 		),
 		threshold:       threshold,

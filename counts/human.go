@@ -2,14 +2,10 @@ package counts
 
 import (
 	"fmt"
-	"math"
 )
 
 // A quantity that can be made human-readable using Human().
 type Humanable interface {
-	// Return the value and units as separate strings.
-	Human(Humaner, string) (string, string)
-
 	// Return the value as a uint64, and a boolean telling whether it
 	// overflowed.
 	ToUint64() (uint64, bool)
@@ -50,10 +46,11 @@ var Binary = Humaner{
 	},
 }
 
-// Format values, aligned, in `len(unit) + 10` or fewer characters
-// (except for extremely large numbers).
-func (h *Humaner) Format(n uint64, unit string) (string, string) {
+// Format n, aligned, in `len(unit) + 10` or fewer characters (except
+// for extremely large numbers).
+func (h *Humaner) FormatNumber(n uint64, unit string) (string, string) {
 	prefix := h.prefixes[0]
+
 	wholePart := n
 	for _, p := range h.prefixes {
 		w := n / p.Multiplier
@@ -81,18 +78,13 @@ func (h *Humaner) Format(n uint64, unit string) (string, string) {
 	}
 }
 
-func (n Count32) Human(humaner Humaner, unit string) (string, string) {
-	if n == math.MaxUint32 {
+// Format values, aligned, in `len(unit) + 10` or fewer characters
+// (except for extremely large numbers).
+func (h *Humaner) Format(value Humanable, unit string) (string, string) {
+	n, overflow := value.ToUint64()
+	if overflow {
 		return "∞", unit
-	} else {
-		return humaner.Format(uint64(n), unit)
 	}
-}
 
-func (n Count64) Human(humaner Humaner, unit string) (string, string) {
-	if n == math.MaxUint64 {
-		return "∞", unit
-	} else {
-		return humaner.Format(uint64(n), unit)
-	}
+	return h.FormatNumber(n, unit)
 }

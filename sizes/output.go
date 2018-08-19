@@ -131,7 +131,7 @@ func (l *item) Emit(t *table) {
 	if !interesting {
 		return
 	}
-	valueString, unitString := l.value.Human(l.humaner, l.unit)
+	valueString, unitString := l.humaner.Format(l.value, l.unit)
 	t.formatRow(
 		l.name, t.footnotes.CreateCitation(l.Footnote(t.nameStyle)),
 		valueString, unitString,

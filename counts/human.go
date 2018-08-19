@@ -7,8 +7,12 @@ import (
 
 // A quantity that can be made human-readable using Human().
 type Humanable interface {
+	// Return the value and units as separate strings.
 	Human(Humaner, string) (string, string)
-	ToUint64() uint64
+
+	// Return the value as a uint64, and a boolean telling whether it
+	// overflowed.
+	ToUint64() (uint64, bool)
 }
 
 // An object that can format a Humanable in human-readable format.

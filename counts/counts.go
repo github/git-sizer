@@ -14,8 +14,8 @@ func NewCount32(n uint64) Count32 {
 	return Count32(n)
 }
 
-func (n Count32) ToUint64() uint64 {
-	return uint64(n)
+func (n Count32) ToUint64() (uint64, bool) {
+	return uint64(n), n == math.MaxUint32
 }
 
 // Return the sum of two Count32s, capped at math.MaxUint32.
@@ -62,8 +62,8 @@ func NewCount64(n uint64) Count64 {
 	return Count64(n)
 }
 
-func (n Count64) ToUint64() uint64 {
-	return uint64(n)
+func (n Count64) ToUint64() (uint64, bool) {
+	return uint64(n), n == math.MaxUint64
 }
 
 // Return the sum of two Count64s, capped at math.MaxUint64.

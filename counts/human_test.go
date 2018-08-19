@@ -114,8 +114,8 @@ func TestLimits32(t *testing.T) {
 
 	c := counts.NewCount32(0xffffffff)
 	number, unit := c.Human(counts.Metric, "cd")
-	assert.Equalf("∞", number, "Number for Count32(%d) in metric", c.ToUint64())
-	assert.Equalf("cd", unit, "Unit for Count32(%d) in metric", c.ToUint64())
+	assert.Equalf("∞", number, "Number for Count32(0xffffffff) in metric")
+	assert.Equalf("cd", unit, "Unit for Count32(0xffffffff) in metric")
 }
 
 func TestLimits64(t *testing.T) {
@@ -123,6 +123,6 @@ func TestLimits64(t *testing.T) {
 
 	c := counts.NewCount64(0xffffffffffffffff)
 	number, unit := c.Human(counts.Metric, "B")
-	assert.Equalf("∞", number, "Number for Count64(%d) in metric", c.ToUint64())
-	assert.Equalf("B", unit, "Unit for Count64(%d) in metric", c.ToUint64())
+	assert.Equalf("∞", number, "Number for Count64(0xffffffffffffffff) in metric")
+	assert.Equalf("B", unit, "Unit for Count64(0xffffffffffffffff) in metric")
 }

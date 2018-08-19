@@ -107,9 +107,6 @@ func (s *section) Emit(t *table, buf io.Writer, indent int) {
 	}
 
 	if linesBuf.Len() == 0 {
-		if indent == -1 {
-			fmt.Fprintln(buf, "No problems above the current threshold were found")
-		}
 		return
 	}
 
@@ -330,7 +327,7 @@ func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) strin
 	t.contents.Emit(&t, buf, -1)
 
 	if buf.Len() == 0 {
-		return ""
+		return "No problems above the current threshold were found\n"
 	}
 
 	return t.generateHeader() + buf.String() + t.footnotes.String()

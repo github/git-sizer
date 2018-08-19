@@ -15,30 +15,22 @@ type Humaner interface {
 	ToUint64() uint64
 }
 
-var MetricPrefixes []Prefix
-
-func init() {
-	MetricPrefixes = []Prefix{
-		{"", 1},
-		{"k", 1e3},
-		{"M", 1e6},
-		{"G", 1e9},
-		{"T", 1e12},
-		{"P", 1e15},
-	}
+var MetricPrefixes []Prefix = []Prefix{
+	{"", 1},
+	{"k", 1e3},
+	{"M", 1e6},
+	{"G", 1e9},
+	{"T", 1e12},
+	{"P", 1e15},
 }
 
-var BinaryPrefixes []Prefix
-
-func init() {
-	BinaryPrefixes = []Prefix{
-		{"", 1 << (10 * 0)},
-		{"Ki", 1 << (10 * 1)},
-		{"Mi", 1 << (10 * 2)},
-		{"Gi", 1 << (10 * 3)},
-		{"Ti", 1 << (10 * 4)},
-		{"Pi", 1 << (10 * 5)},
-	}
+var BinaryPrefixes []Prefix = []Prefix{
+	{"", 1 << (10 * 0)},
+	{"Ki", 1 << (10 * 1)},
+	{"Mi", 1 << (10 * 2)},
+	{"Gi", 1 << (10 * 3)},
+	{"Ti", 1 << (10 * 4)},
+	{"Pi", 1 << (10 * 5)},
 }
 
 // Format values, aligned, in `len(unit) + 10` or fewer characters

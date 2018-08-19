@@ -310,16 +310,10 @@ func PrefixFilter(prefix string) ReferenceFilter {
 }
 
 var (
-	BranchesFilter ReferenceFilter
-	TagsFilter     ReferenceFilter
-	RemotesFilter  ReferenceFilter
+	BranchesFilter ReferenceFilter = PrefixFilter("refs/heads/")
+	TagsFilter     ReferenceFilter = PrefixFilter("refs/tags/")
+	RemotesFilter  ReferenceFilter = PrefixFilter("refs/remotes/")
 )
-
-func init() {
-	BranchesFilter = PrefixFilter("refs/heads/")
-	TagsFilter = PrefixFilter("refs/tags/")
-	RemotesFilter = PrefixFilter("refs/remotes/")
-}
 
 func notNilFilters(filters ...ReferenceFilter) []ReferenceFilter {
 	var ret []ReferenceFilter

@@ -91,28 +91,10 @@ func newSection(name string, contents ...tableContents) *section {
 }
 
 func (s *section) Emit(t *table) {
-	empty := true
-
 	for _, c := range s.contents {
-		subTable := t.subTable()
+		subTable := t.subTable(s.name)
 		c.Emit(subTable)
-
-		if subTable.buf.Len() > 0 {
-			if empty {
-				// Add the section title:
-				if s.name != "" {
-					t.formatSectionHeader(s.name)
-				}
-				empty = false
-			} else {
-				// The top-level section emits blank lines between its
-				// subsections:
-				if t.indent == -1 {
-					t.emitBlankRow()
-				}
-			}
-			fmt.Fprint(&t.buf, subTable.buf.String())
-		}
+		t.addSection(subTable)
 	}
 }
 
@@ -306,11 +288,12 @@ func (n *NameStyle) Type() string {
 }
 
 type table struct {
-	threshold Threshold
-	nameStyle NameStyle
-	footnotes *Footnotes
-	indent    int
-	buf       bytes.Buffer
+	threshold     Threshold
+	nameStyle     NameStyle
+	sectionHeader string
+	footnotes     *Footnotes
+	indent        int
+	buf           bytes.Buffer
 }
 
 func TableString(contents tableContents, threshold Threshold, nameStyle NameStyle) string {
@@ -330,12 +313,29 @@ func TableString(contents tableContents, threshold Threshold, nameStyle NameStyl
 	return t.generateHeader() + t.buf.String() + t.footnotes.String()
 }
 
-func (t *table) subTable() *table {
+func (t *table) subTable(sectionHeader string) *table {
 	return &table{
-		threshold: t.threshold,
-		nameStyle: t.nameStyle,
-		footnotes: t.footnotes,
-		indent:    t.indent + 1,
+		threshold:     t.threshold,
+		nameStyle:     t.nameStyle,
+		sectionHeader: sectionHeader,
+		footnotes:     t.footnotes,
+		indent:        t.indent + 1,
+	}
+}
+
+func (t *table) addSection(subTable *table) {
+	if subTable.buf.Len() > 0 {
+		if t.buf.Len() == 0 {
+			// Add the section title:
+			if subTable.sectionHeader != "" {
+				t.formatSectionHeader(subTable.sectionHeader)
+			}
+		} else if t.indent == -1 {
+			// The top-level section gets blank lines between its
+			// subsections:
+			t.emitBlankRow()
+		}
+		fmt.Fprint(&t.buf, subTable.buf.String())
 	}
 }
 

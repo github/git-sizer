@@ -72,7 +72,7 @@ const (
 
 // Zero or more lines in the tabular output.
 type tableContents interface {
-	Emit(t *table, buf io.Writer, indent int)
+	Emit(t *table, buf io.Writer)
 }
 
 // A section of lines in the tabular output, consisting of a header
@@ -91,16 +91,17 @@ func newSection(name string, contents ...tableContents) *section {
 	}
 }
 
-func (s *section) Emit(t *table, buf io.Writer, indent int) {
+func (s *section) Emit(t *table, buf io.Writer) {
 	var linesBuf bytes.Buffer
 	for _, c := range s.contents {
+		subTable := t.subTable()
 		var cBuf bytes.Buffer
-		c.Emit(t, &cBuf, indent+1)
+		c.Emit(subTable, &cBuf)
 
-		if indent == -1 && linesBuf.Len() > 0 && cBuf.Len() > 0 {
+		if t.indent == -1 && linesBuf.Len() > 0 && cBuf.Len() > 0 {
 			// The top-level section emits blank lines between its
 			// subsections:
-			t.emitBlankRow(&linesBuf)
+			subTable.emitBlankRow(&linesBuf)
 		}
 
 		fmt.Fprint(&linesBuf, cBuf.String())
@@ -112,7 +113,7 @@ func (s *section) Emit(t *table, buf io.Writer, indent int) {
 
 	// There's output, so emit the section header first:
 	if s.name != "" {
-		t.formatSectionHeader(buf, indent, s.name)
+		t.formatSectionHeader(buf, s.name)
 	}
 
 	fmt.Fprint(buf, linesBuf.String())
@@ -146,14 +147,14 @@ func newItem(
 	}
 }
 
-func (l *item) Emit(t *table, buf io.Writer, indent int) {
+func (l *item) Emit(t *table, buf io.Writer) {
 	levelOfConcern, interesting := l.levelOfConcern(t.threshold)
 	if !interesting {
 		return
 	}
 	valueString, unitString := l.value.Human(l.prefixes, l.unit)
 	t.formatRow(
-		buf, indent,
+		buf,
 		l.name, t.footnotes.CreateCitation(l.Footnote(t.nameStyle)),
 		valueString, unitString,
 		levelOfConcern,
@@ -312,6 +313,7 @@ type table struct {
 	threshold Threshold
 	nameStyle NameStyle
 	footnotes *Footnotes
+	indent    int
 }
 
 func TableString(contents tableContents, threshold Threshold, nameStyle NameStyle) string {
@@ -319,16 +321,26 @@ func TableString(contents tableContents, threshold Threshold, nameStyle NameStyl
 		threshold: threshold,
 		nameStyle: nameStyle,
 		footnotes: NewFootnotes(),
+		indent:    -1,
 	}
 
 	buf := &bytes.Buffer{}
-	contents.Emit(&t, buf, -1)
+	contents.Emit(&t, buf)
 
 	if buf.Len() == 0 {
 		return "No problems above the current threshold were found\n"
 	}
 
 	return t.generateHeader() + buf.String() + t.footnotes.String()
+}
+
+func (t *table) subTable() *table {
+	return &table{
+		threshold: t.threshold,
+		nameStyle: t.nameStyle,
+		footnotes: t.footnotes,
+		indent:    t.indent + 1,
+	}
 }
 
 func (t *table) generateHeader() string {
@@ -339,20 +351,20 @@ func (t *table) generateHeader() string {
 }
 
 func (t *table) emitBlankRow(buf io.Writer) {
-	t.formatRow(buf, 0, "", "", "", "", "")
+	fmt.Fprintln(buf, "|                              |           |                                |")
 }
 
-func (t *table) formatSectionHeader(buf io.Writer, indent int, name string) {
-	t.formatRow(buf, indent, name, "", "", "", "")
+func (t *table) formatSectionHeader(buf io.Writer, name string) {
+	t.formatRow(buf, name, "", "", "", "")
 }
 
 func (t *table) formatRow(
-	buf io.Writer, indent int,
+	buf io.Writer,
 	name, citation, valueString, unitString, levelOfConcern string,
 ) {
 	prefix := ""
-	if indent != 0 {
-		prefix = spaces[:2*(indent-1)] + "* "
+	if t.indent != 0 {
+		prefix = spaces[:2*(t.indent-1)] + "* "
 	}
 	spacer := ""
 	l := len(prefix) + len(name) + len(citation)

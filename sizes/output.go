@@ -160,9 +160,8 @@ func (l *item) Emit(t *table, buf io.Writer, indent int) {
 	}
 	valueString, unitString := l.value.Human(l.prefixes, l.unit)
 	t.formatRow(
-		buf,
-		indent,
-		l.name, l.Footnote(t.nameStyle),
+		buf, indent,
+		l.name, t.footnotes.CreateCitation(l.Footnote(t.nameStyle)),
 		valueString, unitString,
 		levelOfConcern,
 	)
@@ -428,13 +427,12 @@ func (t *table) emitBlankRow(buf io.Writer) {
 
 func (t *table) formatRow(
 	buf io.Writer, indent int,
-	name, footnote, valueString, unitString, levelOfConcern string,
+	name, citation, valueString, unitString, levelOfConcern string,
 ) {
 	prefix := ""
 	if indent != 0 {
 		prefix = spaces[:2*(indent-1)] + "* "
 	}
-	citation := t.footnotes.CreateCitation(footnote)
 	spacer := ""
 	l := len(prefix) + len(name) + len(citation)
 	if l < 28 {

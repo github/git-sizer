@@ -317,11 +317,10 @@ func (n *NameStyle) Type() string {
 }
 
 type table struct {
-	contents        tableContents
-	threshold       Threshold
-	nameStyle       NameStyle
-	footnotes       []string
-	footnoteIndexes map[string]int
+	contents  tableContents
+	threshold Threshold
+	nameStyle NameStyle
+	footnotes *Footnotes
 }
 
 func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) string {
@@ -397,18 +396,17 @@ func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) strin
 				I("Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, metric, " ", 100),
 			),
 		),
-		threshold:       threshold,
-		nameStyle:       nameStyle,
-		footnoteIndexes: make(map[string]int),
+		threshold: threshold,
+		nameStyle: nameStyle,
+		footnotes: NewFootnotes(),
 	}
 
 	return t.String()
 }
 
 func (t *table) String() string {
-	lines := t.generateLines()
-	footnotes := t.generateFootnotes()
-	return lines + footnotes
+	linesString := t.generateLines()
+	return linesString + t.footnotes.String()
 }
 
 func (t *table) generateHeader() string {
@@ -436,7 +434,7 @@ func (t *table) formatRow(
 	if indent != 0 {
 		prefix = spaces[:2*(indent-1)] + "* "
 	}
-	citation := t.createCitation(footnote)
+	citation := t.footnotes.CreateCitation(footnote)
 	spacer := ""
 	l := len(prefix) + len(name) + len(citation)
 	if l < 28 {
@@ -446,33 +444,4 @@ func (t *table) formatRow(
 		buf, "| %s%s%s%s | %5s %-3s | %-30s |\n",
 		prefix, name, spacer, citation, valueString, unitString, levelOfConcern,
 	)
-}
-
-func (t *table) createCitation(footnote string) string {
-	if footnote == "" {
-		return ""
-	}
-
-	index, ok := t.footnoteIndexes[footnote]
-	if !ok {
-		index = len(t.footnoteIndexes) + 1
-		t.footnotes = append(t.footnotes, footnote)
-		t.footnoteIndexes[footnote] = index
-	}
-	return fmt.Sprintf("[%d]", index)
-}
-
-func (t *table) generateFootnotes() string {
-	if len(t.footnotes) == 0 {
-		return ""
-	}
-
-	buf := &bytes.Buffer{}
-	buf.WriteByte('\n')
-	for i, footnote := range t.footnotes {
-		index := i + 1
-		citation := fmt.Sprintf("[%d]", index)
-		fmt.Fprintf(buf, "%-4s %s\n", citation, footnote)
-	}
-	return buf.String()
 }

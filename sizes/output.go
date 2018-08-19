@@ -154,7 +154,7 @@ func newItem(
 }
 
 func (l *item) Emit(t *table, buf io.Writer, indent int) {
-	levelOfConcern, interesting := l.levelOfConcern(t)
+	levelOfConcern, interesting := l.levelOfConcern(t.threshold)
 	if !interesting {
 		return
 	}
@@ -187,9 +187,9 @@ func (l *item) Footnote(nameStyle NameStyle) string {
 // If this item's alert level is at least as high as the threshold,
 // return the string that should be used as its "level of concern" and
 // `true`; otherwise, return `"", false`.
-func (l *item) levelOfConcern(t *table) (string, bool) {
+func (l *item) levelOfConcern(threshold Threshold) (string, bool) {
 	alert := Threshold(float64(l.value.ToUint64()) / l.scale)
-	if alert < t.threshold {
+	if alert < threshold {
 		return "", false
 	}
 	if alert > 30 {

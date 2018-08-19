@@ -100,29 +100,29 @@ func (s *section) Emit(t *table) {
 
 // A line containing data in the tabular output.
 type item struct {
-	name     string
-	path     *Path
-	value    counts.Humanable
-	prefixes []counts.Prefix
-	unit     string
-	scale    float64
+	name    string
+	path    *Path
+	value   counts.Humanable
+	humaner counts.Humaner
+	unit    string
+	scale   float64
 }
 
 func newItem(
 	name string,
 	path *Path,
 	value counts.Humanable,
-	prefixes []counts.Prefix,
+	humaner counts.Humaner,
 	unit string,
 	scale float64,
 ) *item {
 	return &item{
-		name:     name,
-		path:     path,
-		value:    value,
-		prefixes: prefixes,
-		unit:     unit,
-		scale:    scale,
+		name:    name,
+		path:    path,
+		value:   value,
+		humaner: humaner,
+		unit:    unit,
+		scale:   scale,
 	}
 }
 
@@ -131,7 +131,7 @@ func (l *item) Emit(t *table) {
 	if !interesting {
 		return
 	}
-	valueString, unitString := l.value.Human(l.prefixes, l.unit)
+	valueString, unitString := l.value.Human(l.humaner, l.unit)
 	t.formatRow(
 		l.name, t.footnotes.CreateCitation(l.Footnote(t.nameStyle)),
 		valueString, unitString,
@@ -375,8 +375,8 @@ func (t *table) formatRow(
 func (s HistorySize) Contents() tableContents {
 	S := newSection
 	I := newItem
-	metric := counts.MetricPrefixes
-	binary := counts.BinaryPrefixes
+	metric := counts.Metric
+	binary := counts.Binary
 	return S(
 		"",
 		S(

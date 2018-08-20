@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -167,11 +166,11 @@ func mainImplementation() error {
 	}
 
 	if jsonOutput {
-		s, err := json.MarshalIndent(historySize, "", "    ")
+		j, err := sizes.JSONString(historySize.Contents(), threshold, nameStyle)
 		if err != nil {
 			return fmt.Errorf("could not convert %v to json: %s", historySize, err)
 		}
-		fmt.Printf("%s\n", s)
+		fmt.Printf("%s\n", j)
 	} else {
 		io.WriteString(os.Stdout, sizes.TableString(historySize.Contents(), threshold, nameStyle))
 	}

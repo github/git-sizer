@@ -46,6 +46,10 @@ var Binary = Humaner{
 	},
 }
 
+func (h *Humaner) Name() string {
+	return h.name
+}
+
 // Format n, aligned, in `len(unit) + 10` or fewer characters (except
 // for extremely large numbers).
 func (h *Humaner) FormatNumber(n uint64, unit string) (string, string) {

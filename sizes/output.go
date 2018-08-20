@@ -2,6 +2,7 @@ package sizes
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -72,6 +73,7 @@ const (
 // Zero or more lines in the tabular output.
 type tableContents interface {
 	Emit(t *table)
+	CollectItems(items map[string]*item)
 }
 
 // A section of lines in the tabular output, consisting of a header
@@ -98,18 +100,28 @@ func (s *section) Emit(t *table) {
 	}
 }
 
+func (s *section) CollectItems(items map[string]*item) {
+	for _, c := range s.contents {
+		c.CollectItems(items)
+	}
+}
+
 // A line containing data in the tabular output.
 type item struct {
-	name    string
-	path    *Path
-	value   counts.Humanable
-	humaner counts.Humaner
-	unit    string
-	scale   float64
+	symbol      string
+	name        string
+	description string
+	path        *Path
+	value       counts.Humanable
+	humaner     counts.Humaner
+	unit        string
+	scale       float64
 }
 
 func newItem(
+	symbol string,
 	name string,
+	description string,
 	path *Path,
 	value counts.Humanable,
 	humaner counts.Humaner,
@@ -117,12 +129,14 @@ func newItem(
 	scale float64,
 ) *item {
 	return &item{
-		name:    name,
-		path:    path,
-		value:   value,
-		humaner: humaner,
-		unit:    unit,
-		scale:   scale,
+		symbol:      symbol,
+		name:        name,
+		description: description,
+		path:        path,
+		value:       value,
+		humaner:     humaner,
+		unit:        unit,
+		scale:       scale,
 	}
 }
 
@@ -168,6 +182,40 @@ func (l *item) levelOfConcern(threshold Threshold) (string, bool) {
 		return "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", true
 	}
 	return stars[:int(alert)], true
+}
+
+func (i *item) CollectItems(items map[string]*item) {
+	items[i.symbol] = i
+}
+
+func (i *item) MarshalJSON() ([]byte, error) {
+	// How we want to emit an item as JSON.
+	value, _ := i.value.ToUint64()
+
+	stat := struct {
+		Description       string
+		Value             uint64
+		Unit              string
+		Prefixes          string
+		ReferenceValue    float64
+		LevelOfConcern    float64
+		ObjectName        string `json:",omitempty"`
+		ObjectDescription string `json:",omitempty"`
+	}{
+		Description:    i.description,
+		Value:          value,
+		Unit:           i.unit,
+		Prefixes:       i.humaner.Name(),
+		ReferenceValue: i.scale,
+		LevelOfConcern: float64(value) / i.scale,
+	}
+
+	if i.path != nil && i.path.OID != git.NullOID {
+		stat.ObjectName = i.path.OID.String()
+		stat.ObjectDescription = i.path.Path()
+	}
+
+	return json.Marshal(stat)
 }
 
 type Threshold float64
@@ -373,6 +421,13 @@ func (t *table) formatRow(
 	)
 }
 
+func JSONString(contents tableContents, threshold Threshold, nameStyle NameStyle) (string, error) {
+	items := make(map[string]*item)
+	contents.CollectItems(items)
+	j, err := json.MarshalIndent(items, "", "    ")
+	return string(j), err
+}
+
 func (s HistorySize) Contents() tableContents {
 	S := newSection
 	I := newItem
@@ -384,65 +439,109 @@ func (s HistorySize) Contents() tableContents {
 			"Overall repository size",
 			S(
 				"Commits",
-				I("Count", nil, s.UniqueCommitCount, metric, "", 500e3),
-				I("Total size", nil, s.UniqueCommitSize, binary, "B", 250e6),
+				I("uniqueCommitCount", "Count",
+					"The total number of distinct commit objects",
+					nil, s.UniqueCommitCount, metric, "", 500e3),
+				I("uniqueCommitSize", "Total size",
+					"The total size of all commit objects",
+					nil, s.UniqueCommitSize, binary, "B", 250e6),
 			),
 
 			S(
 				"Trees",
-				I("Count", nil, s.UniqueTreeCount, metric, "", 1.5e6),
-				I("Total size", nil, s.UniqueTreeSize, binary, "B", 2e9),
-				I("Total tree entries", nil, s.UniqueTreeEntries, metric, "", 50e6),
+				I("uniqueTreeCount", "Count",
+					"The total number of distinct tree objects",
+					nil, s.UniqueTreeCount, metric, "", 1.5e6),
+				I("uniqueTreeSize", "Total size",
+					"The total size of all distinct tree objects",
+					nil, s.UniqueTreeSize, binary, "B", 2e9),
+				I("uniqueTreeEntries", "Total tree entries",
+					"The total number of entries in all distinct tree objects",
+					nil, s.UniqueTreeEntries, metric, "", 50e6),
 			),
 
 			S(
 				"Blobs",
-				I("Count", nil, s.UniqueBlobCount, metric, "", 1.5e6),
-				I("Total size", nil, s.UniqueBlobSize, binary, "B", 10e9),
+				I("uniqueBlobCount", "Count",
+					"The total number of distinct blob objects",
+					nil, s.UniqueBlobCount, metric, "", 1.5e6),
+				I("uniqueBlobSize", "Total size",
+					"The total size of all distinct blob objects",
+					nil, s.UniqueBlobSize, binary, "B", 10e9),
 			),
 
 			S(
 				"Annotated tags",
-				I("Count", nil, s.UniqueTagCount, metric, "", 25e3),
+				I("uniqueTagCount", "Count",
+					"The total number of annotated tags",
+					nil, s.UniqueTagCount, metric, "", 25e3),
 			),
 
 			S(
 				"References",
-				I("Count", nil, s.ReferenceCount, metric, "", 25e3),
+				I("referenceCount", "Count",
+					"The total number of references",
+					nil, s.ReferenceCount, metric, "", 25e3),
 			),
 		),
 
 		S("Biggest objects",
 			S("Commits",
-				I("Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, binary, "B", 50e3),
-				I("Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, metric, "", 10),
+				I("maxCommitSize", "Maximum size",
+					"The size of the largest single commit",
+					s.MaxCommitSizeCommit, s.MaxCommitSize, binary, "B", 50e3),
+				I("maxCommitParentCount", "Maximum parents",
+					"The most parents of any single commit",
+					s.MaxParentCountCommit, s.MaxParentCount, metric, "", 10),
 			),
 
 			S("Trees",
-				I("Maximum entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, metric, "", 1000),
+				I("maxTreeEntries", "Maximum entries",
+					"The most entries in any single tree",
+					s.MaxTreeEntriesTree, s.MaxTreeEntries, metric, "", 1000),
 			),
 
 			S("Blobs",
-				I("Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, binary, "B", 10e6),
+				I("maxBlobSize", "Maximum size",
+					"The size of the largest blob object",
+					s.MaxBlobSizeBlob, s.MaxBlobSize, binary, "B", 10e6),
 			),
 		),
 
 		S("History structure",
-			I("Maximum history depth", nil, s.MaxHistoryDepth, metric, "", 500e3),
-			I("Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, metric, "", 1.001),
+			I("maxHistoryDepth", "Maximum history depth",
+				"The longest chain of commits in history",
+				nil, s.MaxHistoryDepth, metric, "", 500e3),
+			I("maxTagDepth", "Maximum tag depth",
+				"The longest chain of annotated tags pointing at one another",
+				s.MaxTagDepthTag, s.MaxTagDepth, metric, "", 1.001),
 		),
 
 		S("Biggest checkouts",
-			I("Number of directories", s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, metric, "", 2000),
-			I("Maximum path depth", s.MaxPathDepthTree, s.MaxPathDepth, metric, "", 10),
-			I("Maximum path length", s.MaxPathLengthTree, s.MaxPathLength, binary, "B", 100),
+			I("maxCheckoutTreeCount", "Number of directories",
+				"The number of directories in the largest checkout",
+				s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, metric, "", 2000),
+			I("maxCheckoutPathDepth", "Maximum path depth",
+				"The maximum path depth in any checkout",
+				s.MaxPathDepthTree, s.MaxPathDepth, metric, "", 10),
+			I("maxCheckoutPathLength", "Maximum path length",
+				"The maximum path length in any checkout",
+				s.MaxPathLengthTree, s.MaxPathLength, binary, "B", 100),
 
-			I("Number of files", s.MaxExpandedBlobCountTree, s.MaxExpandedBlobCount, metric, "", 50e3),
-			I("Total size of files", s.MaxExpandedBlobSizeTree, s.MaxExpandedBlobSize, binary, "B", 1e9),
+			I("maxCheckoutBlobCount", "Number of files",
+				"The maximum number of files in any checkout",
+				s.MaxExpandedBlobCountTree, s.MaxExpandedBlobCount, metric, "", 50e3),
+			I("maxCheckoutBlobSize", "Total size of files",
+				"The maximum sum of file sizes in any checkout",
+				s.MaxExpandedBlobSizeTree, s.MaxExpandedBlobSize, binary, "B", 1e9),
 
-			I("Number of symlinks", s.MaxExpandedLinkCountTree, s.MaxExpandedLinkCount, metric, "", 25e3),
+			I("maxCheckoutLinkCount", "Number of symlinks",
+				"The maximum number of symlinks in any checkout",
+				s.MaxExpandedLinkCountTree, s.MaxExpandedLinkCount, metric, "", 25e3),
 
-			I("Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, metric, "", 100),
+			I("maxCheckoutSubmoduleCount", "Number of submodules",
+				"The maximum number of submodules in any checkout",
+				s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, metric, "", 100),
 		),
 	)
 }

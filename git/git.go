@@ -120,8 +120,15 @@ func NewRepository(path string) (*Repository, error) {
 }
 
 func (repo *Repository) gitCommand(callerArgs ...string) *exec.Cmd {
-	// Disable replace references when running our commands:
-	args := []string{"--no-replace-objects"}
+	args := []string{
+		// Disable replace references when running our commands:
+		"--no-replace-objects",
+
+		// Disable the warning that grafts are deprecated, since we
+		// want to set the grafts file to `/dev/null` below (to
+		// disable grafts even where they are supported):
+		"-c", "advice.graftFileDeprecated=false",
+	}
 
 	args = append(args, callerArgs...)
 

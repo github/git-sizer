@@ -346,7 +346,7 @@ type table struct {
 }
 
 func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) string {
-	contents := s.Contents()
+	contents := s.contents()
 	t := table{
 		threshold: threshold,
 		nameStyle: nameStyle,
@@ -423,14 +423,14 @@ func (t *table) formatRow(
 }
 
 func (s HistorySize) JSON(threshold Threshold, nameStyle NameStyle) ([]byte, error) {
-	contents := s.Contents()
+	contents := s.contents()
 	items := make(map[string]*item)
 	contents.CollectItems(items)
 	j, err := json.MarshalIndent(items, "", "    ")
 	return j, err
 }
 
-func (s HistorySize) Contents() tableContents {
+func (s HistorySize) contents() tableContents {
 	S := newSection
 	I := newItem
 	metric := counts.Metric

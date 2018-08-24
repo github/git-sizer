@@ -65,29 +65,31 @@ func mainImplementation() error {
 	var progress bool
 	var version bool
 
-	pflag.BoolVar(&processBranches, "branches", false, "process all branches")
-	pflag.BoolVar(&processTags, "tags", false, "process all tags")
-	pflag.BoolVar(&processRemotes, "remotes", false, "process all remote-tracking branches")
+	flags := pflag.NewFlagSet("", pflag.ContinueOnError)
 
-	pflag.VarP(
+	flags.BoolVar(&processBranches, "branches", false, "process all branches")
+	flags.BoolVar(&processTags, "tags", false, "process all tags")
+	flags.BoolVar(&processRemotes, "remotes", false, "process all remote-tracking branches")
+
+	flags.VarP(
 		sizes.NewThresholdFlagValue(&threshold, 0),
 		"verbose", "v", "report all statistics, whether concerning or not",
 	)
-	pflag.Lookup("verbose").NoOptDefVal = "true"
+	flags.Lookup("verbose").NoOptDefVal = "true"
 
-	pflag.Var(
+	flags.Var(
 		&threshold, "threshold",
 		"minimum level of concern (i.e., number of stars) that should be\n"+
 			"                              reported",
 	)
 
-	pflag.Var(
+	flags.Var(
 		sizes.NewThresholdFlagValue(&threshold, 30),
 		"critical", "only report critical statistics",
 	)
-	pflag.Lookup("critical").NoOptDefVal = "true"
+	flags.Lookup("critical").NoOptDefVal = "true"
 
-	pflag.Var(
+	flags.Var(
 		&nameStyle, "names",
 		"display names of large objects in the specified `style`:\n"+
 			"        --names=none            omit footnotes entirely\n"+
@@ -95,24 +97,27 @@ func mainImplementation() error {
 			"        --names=full            show full names",
 	)
 
-	pflag.BoolVarP(&jsonOutput, "json", "j", false, "output results in JSON format")
-	pflag.UintVar(&jsonVersion, "json-version", 1, "JSON format version to output (1 or 2)")
+	flags.BoolVarP(&jsonOutput, "json", "j", false, "output results in JSON format")
+	flags.UintVar(&jsonVersion, "json-version", 1, "JSON format version to output (1 or 2)")
 
 	atty, err := isatty.Isatty(os.Stderr.Fd())
 	if err != nil {
 		atty = false
 	}
-	pflag.BoolVar(&progress, "progress", atty, "report progress to stderr")
-	pflag.BoolVar(&version, "version", false, "report the git-sizer version number")
-	pflag.Var(&NegatedBoolValue{&progress}, "no-progress", "suppress progress output")
-	pflag.Lookup("no-progress").NoOptDefVal = "true"
+	flags.BoolVar(&progress, "progress", atty, "report progress to stderr")
+	flags.BoolVar(&version, "version", false, "report the git-sizer version number")
+	flags.Var(&NegatedBoolValue{&progress}, "no-progress", "suppress progress output")
+	flags.Lookup("no-progress").NoOptDefVal = "true"
 
-	pflag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
-	pflag.CommandLine.MarkHidden("cpuprofile")
+	flags.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
+	flags.MarkHidden("cpuprofile")
 
-	pflag.CommandLine.SortFlags = false
+	flags.SortFlags = false
 
-	pflag.Parse()
+	err = flags.Parse(os.Args[1:])
+	if err != nil {
+		return err
+	}
 
 	if jsonOutput && !(jsonVersion == 1 || jsonVersion == 2) {
 		return fmt.Errorf("JSON version must be 1 or 2")
@@ -136,7 +141,7 @@ func mainImplementation() error {
 		return nil
 	}
 
-	args := pflag.Args()
+	args := flags.Args()
 
 	if len(args) != 0 {
 		return errors.New("excess arguments")

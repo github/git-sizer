@@ -193,14 +193,14 @@ func (i *item) MarshalJSON() ([]byte, error) {
 	value, _ := i.value.ToUint64()
 
 	stat := struct {
-		Description       string
-		Value             uint64
-		Unit              string
-		Prefixes          string
-		ReferenceValue    float64
-		LevelOfConcern    float64
-		ObjectName        string `json:",omitempty"`
-		ObjectDescription string `json:",omitempty"`
+		Description       string  `json:"description"`
+		Value             uint64  `json:"value"`
+		Unit              string  `json:"unit"`
+		Prefixes          string  `json:"prefixes"`
+		ReferenceValue    float64 `json:"referenceValue"`
+		LevelOfConcern    float64 `json:"levelOfConcern"`
+		ObjectName        string  `json:"objectName,omitempty"`
+		ObjectDescription string  `json:"objectDescription,omitempty"`
 	}{
 		Description:    i.description,
 		Value:          value,

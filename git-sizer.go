@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -59,6 +60,7 @@ func mainImplementation() error {
 	var nameStyle sizes.NameStyle = sizes.NameStyleFull
 	var cpuprofile string
 	var jsonOutput bool
+	var jsonVersion uint
 	var threshold sizes.Threshold = 1
 	var progress bool
 	var version bool
@@ -94,6 +96,7 @@ func mainImplementation() error {
 	)
 
 	pflag.BoolVarP(&jsonOutput, "json", "j", false, "output results in JSON format")
+	pflag.UintVar(&jsonVersion, "json-version", 1, "JSON format version to output (1 or 2)")
 
 	atty, err := isatty.Isatty(os.Stderr.Fd())
 	if err != nil {
@@ -110,6 +113,10 @@ func mainImplementation() error {
 	pflag.CommandLine.SortFlags = false
 
 	pflag.Parse()
+
+	if jsonOutput && !(jsonVersion == 1 || jsonVersion == 2) {
+		return fmt.Errorf("JSON version must be 1 or 2")
+	}
 
 	if cpuprofile != "" {
 		f, err := os.Create(cpuprofile)
@@ -166,7 +173,16 @@ func mainImplementation() error {
 	}
 
 	if jsonOutput {
-		j, err := historySize.JSON(threshold, nameStyle)
+		var j []byte
+		var err error
+		switch jsonVersion {
+		case 1:
+			j, err = json.MarshalIndent(historySize, "", "    ")
+		case 2:
+			j, err = historySize.JSON(threshold, nameStyle)
+		default:
+			return fmt.Errorf("JSON version must be 1 or 2")
+		}
 		if err != nil {
 			return fmt.Errorf("could not convert %v to json: %s", historySize, err)
 		}

@@ -173,7 +173,7 @@ at the command line to view the contents of the object. (Use `--names=none` if y
 
 By default, only statistics above a minimal level of concern are reported. Use `--verbose` (as above) to request that all statistics be output. Use `--threshold=<value>` to suppress the reporting of statistics below a specified level of concern. (`<value>` is interpreted as a numerical value corresponding to the number of asterisks.) Use `--critical` to report only statistics with a critical level of concern (equivalent to `--threshold=30`).
 
-If you'd like the output in machine-readable format, including exact numbers, use the `--json` option.
+If you'd like the output in machine-readable format, including exact numbers, use the `--json` option. You can use `--json-version=1` or `--json-version=2` to choose between old and new style JSON output.
 
 To get a list of other options, run
 

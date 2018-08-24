@@ -345,7 +345,8 @@ type table struct {
 	buf           bytes.Buffer
 }
 
-func TableString(contents tableContents, threshold Threshold, nameStyle NameStyle) string {
+func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) string {
+	contents := s.Contents()
 	t := table{
 		threshold: threshold,
 		nameStyle: nameStyle,

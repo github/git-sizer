@@ -172,7 +172,7 @@ func mainImplementation() error {
 		}
 		fmt.Printf("%s\n", j)
 	} else {
-		io.WriteString(os.Stdout, sizes.TableString(historySize.Contents(), threshold, nameStyle))
+		io.WriteString(os.Stdout, historySize.TableString(threshold, nameStyle))
 	}
 
 	return nil

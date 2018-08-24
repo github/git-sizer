@@ -166,7 +166,7 @@ func mainImplementation() error {
 	}
 
 	if jsonOutput {
-		j, err := sizes.JSONString(historySize.Contents(), threshold, nameStyle)
+		j, err := historySize.JSON(threshold, nameStyle)
 		if err != nil {
 			return fmt.Errorf("could not convert %v to json: %s", historySize, err)
 		}

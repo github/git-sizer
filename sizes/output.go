@@ -421,11 +421,12 @@ func (t *table) formatRow(
 	)
 }
 
-func JSONString(contents tableContents, threshold Threshold, nameStyle NameStyle) (string, error) {
+func (s HistorySize) JSON(threshold Threshold, nameStyle NameStyle) ([]byte, error) {
+	contents := s.Contents()
 	items := make(map[string]*item)
 	contents.CollectItems(items)
 	j, err := json.MarshalIndent(items, "", "    ")
-	return string(j), err
+	return j, err
 }
 
 func (s HistorySize) Contents() tableContents {

@@ -52,18 +52,18 @@ func TestMetric(t *testing.T) {
 		{12345678900000000000, "12346", "Pcd"}, // Not ideal, but ok
 		{0xffffffffffffffff, "18447", "Pcd"},   // Not ideal, but ok
 	} {
-		number, unit := counts.Human(ht.n, counts.MetricPrefixes, "cd")
+		number, unit := counts.Metric.FormatNumber(ht.n, "cd")
 		assert.Equalf(ht.number, number, "Number for %d in metric", ht.n)
 		assert.Equalf(ht.unit, unit, "Unit for %d in metric", ht.n)
 		if ht.n < 0xffffffff {
 			c := counts.NewCount32(ht.n)
-			number, unit := c.Human(counts.MetricPrefixes, "cd")
+			number, unit := counts.Metric.Format(c, "cd")
 			assert.Equalf(ht.number, number, "Number for Count32(%d) in metric", ht.n)
 			assert.Equalf(ht.unit, unit, "Unit for Count32(%d) in metric", ht.n)
 		}
 		if ht.n < 0xffffffffffffffff {
 			c := counts.NewCount64(ht.n)
-			number, unit := c.Human(counts.MetricPrefixes, "cd")
+			number, unit := counts.Metric.Format(c, "cd")
 			assert.Equalf(ht.number, number, "Number for Count64(%d) in metric", ht.n)
 			assert.Equalf(ht.unit, unit, "Unit for Count64(%d) in metric", ht.n)
 		}
@@ -91,18 +91,18 @@ func TestBinary(t *testing.T) {
 		{1152921504606846976, "1024", "PiB"},
 		{0xffffffffffffffff, "16384", "PiB"},
 	} {
-		number, unit := counts.Human(ht.n, counts.BinaryPrefixes, "B")
+		number, unit := counts.Binary.FormatNumber(ht.n, "B")
 		assert.Equalf(ht.number, number, "Number for %d in binary", ht.n)
 		assert.Equalf(ht.unit, unit, "Unit for %d in binary", ht.n)
 		if ht.n < 0xffffffff {
 			c := counts.NewCount32(ht.n)
-			number, unit := c.Human(counts.BinaryPrefixes, "B")
+			number, unit := counts.Binary.Format(c, "B")
 			assert.Equalf(ht.number, number, "Number for Count32(%d) in binary", ht.n)
 			assert.Equalf(ht.unit, unit, "Unit for Count32(%d) in binary", ht.n)
 		}
 		if ht.n < 0xffffffffffffffff {
 			c := counts.NewCount64(ht.n)
-			number, unit := c.Human(counts.BinaryPrefixes, "B")
+			number, unit := counts.Binary.Format(c, "B")
 			assert.Equalf(ht.number, number, "Number for Count64(%d) in binary", ht.n)
 			assert.Equalf(ht.unit, unit, "Unit for Count64(%d) in binary", ht.n)
 		}
@@ -113,16 +113,16 @@ func TestLimits32(t *testing.T) {
 	assert := assert.New(t)
 
 	c := counts.NewCount32(0xffffffff)
-	number, unit := c.Human(counts.MetricPrefixes, "cd")
-	assert.Equalf("∞", number, "Number for Count32(%d) in metric", c.ToUint64())
-	assert.Equalf("cd", unit, "Unit for Count32(%d) in metric", c.ToUint64())
+	number, unit := counts.Metric.Format(c, "cd")
+	assert.Equalf("∞", number, "Number for Count32(0xffffffff) in metric")
+	assert.Equalf("cd", unit, "Unit for Count32(0xffffffff) in metric")
 }
 
 func TestLimits64(t *testing.T) {
 	assert := assert.New(t)
 
 	c := counts.NewCount64(0xffffffffffffffff)
-	number, unit := c.Human(counts.MetricPrefixes, "B")
-	assert.Equalf("∞", number, "Number for Count64(%d) in metric", c.ToUint64())
-	assert.Equalf("B", unit, "Unit for Count64(%d) in metric", c.ToUint64())
+	number, unit := counts.Metric.Format(c, "B")
+	assert.Equalf("∞", number, "Number for Count64(0xffffffffffffffff) in metric")
+	assert.Equalf("B", unit, "Unit for Count64(0xffffffffffffffff) in metric")
 }

@@ -2,8 +2,8 @@ package sizes
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/github/git-sizer/counts"
@@ -72,7 +72,8 @@ const (
 
 // Zero or more lines in the tabular output.
 type tableContents interface {
-	Emit(t *table, buf io.Writer, indent int)
+	Emit(t *table)
+	CollectItems(items map[string]*item)
 }
 
 // A section of lines in the tabular output, consisting of a header
@@ -91,78 +92,62 @@ func newSection(name string, contents ...tableContents) *section {
 	}
 }
 
-func (s *section) Emit(t *table, buf io.Writer, indent int) {
-	var linesBuf bytes.Buffer
+func (s *section) Emit(t *table) {
 	for _, c := range s.contents {
-		var cBuf bytes.Buffer
-		c.Emit(t, &cBuf, indent+1)
-
-		if indent == -1 && linesBuf.Len() > 0 && cBuf.Len() > 0 {
-			// The top-level section emits blank lines between its
-			// subsections:
-			t.emitBlankRow(&linesBuf)
-		}
-
-		fmt.Fprint(&linesBuf, cBuf.String())
+		subTable := t.subTable(s.name)
+		c.Emit(subTable)
+		t.addSection(subTable)
 	}
+}
 
-	if linesBuf.Len() == 0 {
-		if indent == -1 {
-			fmt.Fprintln(buf, "No problems above the current threshold were found")
-		}
-		return
+func (s *section) CollectItems(items map[string]*item) {
+	for _, c := range s.contents {
+		c.CollectItems(items)
 	}
-
-	// There's output, so emit the section header first:
-	if indent == -1 {
-		// As a special case, the top-level section doesn't have its
-		// own header, but prints the table header:
-		fmt.Fprint(buf, t.generateHeader())
-	} else {
-		t.formatRow(buf, indent, s.name, "", "", "", "")
-	}
-
-	fmt.Fprint(buf, linesBuf.String())
 }
 
 // A line containing data in the tabular output.
 type item struct {
-	name     string
-	path     *Path
-	value    counts.Humaner
-	prefixes []counts.Prefix
-	unit     string
-	scale    float64
+	symbol      string
+	name        string
+	description string
+	path        *Path
+	value       counts.Humanable
+	humaner     counts.Humaner
+	unit        string
+	scale       float64
 }
 
 func newItem(
+	symbol string,
 	name string,
+	description string,
 	path *Path,
-	value counts.Humaner,
-	prefixes []counts.Prefix,
+	value counts.Humanable,
+	humaner counts.Humaner,
 	unit string,
 	scale float64,
 ) *item {
 	return &item{
-		name:     name,
-		path:     path,
-		value:    value,
-		prefixes: prefixes,
-		unit:     unit,
-		scale:    scale,
+		symbol:      symbol,
+		name:        name,
+		description: description,
+		path:        path,
+		value:       value,
+		humaner:     humaner,
+		unit:        unit,
+		scale:       scale,
 	}
 }
 
-func (l *item) Emit(t *table, buf io.Writer, indent int) {
-	levelOfConcern, interesting := l.levelOfConcern(t)
+func (l *item) Emit(t *table) {
+	levelOfConcern, interesting := l.levelOfConcern(t.threshold)
 	if !interesting {
 		return
 	}
-	valueString, unitString := l.value.Human(l.prefixes, l.unit)
+	valueString, unitString := l.humaner.Format(l.value, l.unit)
 	t.formatRow(
-		buf,
-		indent,
-		l.name, l.Footnote(t.nameStyle),
+		l.name, t.footnotes.CreateCitation(l.Footnote(t.nameStyle)),
 		valueString, unitString,
 		levelOfConcern,
 	)
@@ -187,15 +172,50 @@ func (l *item) Footnote(nameStyle NameStyle) string {
 // If this item's alert level is at least as high as the threshold,
 // return the string that should be used as its "level of concern" and
 // `true`; otherwise, return `"", false`.
-func (l *item) levelOfConcern(t *table) (string, bool) {
-	alert := Threshold(float64(l.value.ToUint64()) / l.scale)
-	if alert < t.threshold {
+func (l *item) levelOfConcern(threshold Threshold) (string, bool) {
+	value, _ := l.value.ToUint64()
+	alert := Threshold(float64(value) / l.scale)
+	if alert < threshold {
 		return "", false
 	}
 	if alert > 30 {
 		return "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", true
 	}
 	return stars[:int(alert)], true
+}
+
+func (i *item) CollectItems(items map[string]*item) {
+	items[i.symbol] = i
+}
+
+func (i *item) MarshalJSON() ([]byte, error) {
+	// How we want to emit an item as JSON.
+	value, _ := i.value.ToUint64()
+
+	stat := struct {
+		Description       string  `json:"description"`
+		Value             uint64  `json:"value"`
+		Unit              string  `json:"unit"`
+		Prefixes          string  `json:"prefixes"`
+		ReferenceValue    float64 `json:"referenceValue"`
+		LevelOfConcern    float64 `json:"levelOfConcern"`
+		ObjectName        string  `json:"objectName,omitempty"`
+		ObjectDescription string  `json:"objectDescription,omitempty"`
+	}{
+		Description:    i.description,
+		Value:          value,
+		Unit:           i.unit,
+		Prefixes:       i.humaner.Name(),
+		ReferenceValue: i.scale,
+		LevelOfConcern: float64(value) / i.scale,
+	}
+
+	if i.path != nil && i.path.OID != git.NullOID {
+		stat.ObjectName = i.path.OID.String()
+		stat.ObjectDescription = i.path.Path()
+	}
+
+	return json.Marshal(stat)
 }
 
 type Threshold float64
@@ -317,96 +337,56 @@ func (n *NameStyle) Type() string {
 }
 
 type table struct {
-	contents        tableContents
-	threshold       Threshold
-	nameStyle       NameStyle
-	footnotes       []string
-	footnoteIndexes map[string]int
+	threshold     Threshold
+	nameStyle     NameStyle
+	sectionHeader string
+	footnotes     *Footnotes
+	indent        int
+	buf           bytes.Buffer
 }
 
 func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) string {
-	S := newSection
-	I := newItem
-	t := &table{
-		contents: S(
-			"",
-			S(
-				"Overall repository size",
-				S(
-					"Commits",
-					I("Count", nil, s.UniqueCommitCount, counts.MetricPrefixes, " ", 500e3),
-					I("Total size", nil, s.UniqueCommitSize, counts.BinaryPrefixes, "B", 250e6),
-				),
-
-				S(
-					"Trees",
-					I("Count", nil, s.UniqueTreeCount, counts.MetricPrefixes, " ", 1.5e6),
-					I("Total size", nil, s.UniqueTreeSize, counts.BinaryPrefixes, "B", 2e9),
-					I("Total tree entries", nil, s.UniqueTreeEntries, counts.MetricPrefixes, " ", 50e6),
-				),
-
-				S(
-					"Blobs",
-					I("Count", nil, s.UniqueBlobCount, counts.MetricPrefixes, " ", 1.5e6),
-					I("Total size", nil, s.UniqueBlobSize, counts.BinaryPrefixes, "B", 10e9),
-				),
-
-				S(
-					"Annotated tags",
-					I("Count", nil, s.UniqueTagCount, counts.MetricPrefixes, " ", 25e3),
-				),
-
-				S(
-					"References",
-					I("Count", nil, s.ReferenceCount, counts.MetricPrefixes, " ", 25e3),
-				),
-			),
-
-			S("Biggest objects",
-				S("Commits",
-					I("Maximum size", s.MaxCommitSizeCommit, s.MaxCommitSize, counts.BinaryPrefixes, "B", 50e3),
-					I("Maximum parents", s.MaxParentCountCommit, s.MaxParentCount, counts.MetricPrefixes, " ", 10),
-				),
-
-				S("Trees",
-					I("Maximum entries", s.MaxTreeEntriesTree, s.MaxTreeEntries, counts.MetricPrefixes, " ", 1000),
-				),
-
-				S("Blobs",
-					I("Maximum size", s.MaxBlobSizeBlob, s.MaxBlobSize, counts.BinaryPrefixes, "B", 10e6),
-				),
-			),
-
-			S("History structure",
-				I("Maximum history depth", nil, s.MaxHistoryDepth, counts.MetricPrefixes, " ", 500e3),
-				I("Maximum tag depth", s.MaxTagDepthTag, s.MaxTagDepth, counts.MetricPrefixes, " ", 1.001),
-			),
-
-			S("Biggest checkouts",
-				I("Number of directories", s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, counts.MetricPrefixes, " ", 2000),
-				I("Maximum path depth", s.MaxPathDepthTree, s.MaxPathDepth, counts.MetricPrefixes, " ", 10),
-				I("Maximum path length", s.MaxPathLengthTree, s.MaxPathLength, counts.BinaryPrefixes, "B", 100),
-
-				I("Number of files", s.MaxExpandedBlobCountTree, s.MaxExpandedBlobCount, counts.MetricPrefixes, " ", 50e3),
-				I("Total size of files", s.MaxExpandedBlobSizeTree, s.MaxExpandedBlobSize, counts.BinaryPrefixes, "B", 1e9),
-
-				I("Number of symlinks", s.MaxExpandedLinkCountTree, s.MaxExpandedLinkCount, counts.MetricPrefixes, " ", 25e3),
-
-				I("Number of submodules", s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, counts.MetricPrefixes, " ", 100),
-			),
-		),
-		threshold:       threshold,
-		nameStyle:       nameStyle,
-		footnoteIndexes: make(map[string]int),
+	contents := s.contents()
+	t := table{
+		threshold: threshold,
+		nameStyle: nameStyle,
+		footnotes: NewFootnotes(),
+		indent:    -1,
 	}
 
-	return t.String()
+	contents.Emit(&t)
+
+	if t.buf.Len() == 0 {
+		return "No problems above the current threshold were found\n"
+	}
+
+	return t.generateHeader() + t.buf.String() + t.footnotes.String()
 }
 
-func (t *table) String() string {
-	lines := t.generateLines()
-	footnotes := t.generateFootnotes()
-	return lines + footnotes
+func (t *table) subTable(sectionHeader string) *table {
+	return &table{
+		threshold:     t.threshold,
+		nameStyle:     t.nameStyle,
+		sectionHeader: sectionHeader,
+		footnotes:     t.footnotes,
+		indent:        t.indent + 1,
+	}
+}
+
+func (t *table) addSection(subTable *table) {
+	if subTable.buf.Len() > 0 {
+		if t.buf.Len() == 0 {
+			// Add the section title:
+			if subTable.sectionHeader != "" {
+				t.formatSectionHeader(subTable.sectionHeader)
+			}
+		} else if t.indent == -1 {
+			// The top-level section gets blank lines between its
+			// subsections:
+			t.emitBlankRow()
+		}
+		fmt.Fprint(&t.buf, subTable.buf.String())
+	}
 }
 
 func (t *table) generateHeader() string {
@@ -416,61 +396,154 @@ func (t *table) generateHeader() string {
 	return buf.String()
 }
 
-func (t *table) generateLines() string {
-	buf := &bytes.Buffer{}
-	t.contents.Emit(t, buf, -1)
-	return buf.String()
+func (t *table) emitBlankRow() {
+	fmt.Fprintln(&t.buf, "|                              |           |                                |")
 }
 
-func (t *table) emitBlankRow(buf io.Writer) {
-	t.formatRow(buf, 0, "", "", "", "", "")
+func (t *table) formatSectionHeader(name string) {
+	t.formatRow(name, "", "", "", "")
 }
 
 func (t *table) formatRow(
-	buf io.Writer, indent int,
-	name, footnote, valueString, unitString, levelOfConcern string,
+	name, citation, valueString, unitString, levelOfConcern string,
 ) {
 	prefix := ""
-	if indent != 0 {
-		prefix = spaces[:2*(indent-1)] + "* "
+	if t.indent != 0 {
+		prefix = spaces[:2*(t.indent-1)] + "* "
 	}
-	citation := t.createCitation(footnote)
 	spacer := ""
 	l := len(prefix) + len(name) + len(citation)
 	if l < 28 {
 		spacer = spaces[:28-l]
 	}
 	fmt.Fprintf(
-		buf, "| %s%s%s%s | %5s %-3s | %-30s |\n",
+		&t.buf, "| %s%s%s%s | %5s %-3s | %-30s |\n",
 		prefix, name, spacer, citation, valueString, unitString, levelOfConcern,
 	)
 }
 
-func (t *table) createCitation(footnote string) string {
-	if footnote == "" {
-		return ""
-	}
-
-	index, ok := t.footnoteIndexes[footnote]
-	if !ok {
-		index = len(t.footnoteIndexes) + 1
-		t.footnotes = append(t.footnotes, footnote)
-		t.footnoteIndexes[footnote] = index
-	}
-	return fmt.Sprintf("[%d]", index)
+func (s HistorySize) JSON(threshold Threshold, nameStyle NameStyle) ([]byte, error) {
+	contents := s.contents()
+	items := make(map[string]*item)
+	contents.CollectItems(items)
+	j, err := json.MarshalIndent(items, "", "    ")
+	return j, err
 }
 
-func (t *table) generateFootnotes() string {
-	if len(t.footnotes) == 0 {
-		return ""
-	}
+func (s HistorySize) contents() tableContents {
+	S := newSection
+	I := newItem
+	metric := counts.Metric
+	binary := counts.Binary
+	return S(
+		"",
+		S(
+			"Overall repository size",
+			S(
+				"Commits",
+				I("uniqueCommitCount", "Count",
+					"The total number of distinct commit objects",
+					nil, s.UniqueCommitCount, metric, "", 500e3),
+				I("uniqueCommitSize", "Total size",
+					"The total size of all commit objects",
+					nil, s.UniqueCommitSize, binary, "B", 250e6),
+			),
 
-	buf := &bytes.Buffer{}
-	buf.WriteByte('\n')
-	for i, footnote := range t.footnotes {
-		index := i + 1
-		citation := fmt.Sprintf("[%d]", index)
-		fmt.Fprintf(buf, "%-4s %s\n", citation, footnote)
-	}
-	return buf.String()
+			S(
+				"Trees",
+				I("uniqueTreeCount", "Count",
+					"The total number of distinct tree objects",
+					nil, s.UniqueTreeCount, metric, "", 1.5e6),
+				I("uniqueTreeSize", "Total size",
+					"The total size of all distinct tree objects",
+					nil, s.UniqueTreeSize, binary, "B", 2e9),
+				I("uniqueTreeEntries", "Total tree entries",
+					"The total number of entries in all distinct tree objects",
+					nil, s.UniqueTreeEntries, metric, "", 50e6),
+			),
+
+			S(
+				"Blobs",
+				I("uniqueBlobCount", "Count",
+					"The total number of distinct blob objects",
+					nil, s.UniqueBlobCount, metric, "", 1.5e6),
+				I("uniqueBlobSize", "Total size",
+					"The total size of all distinct blob objects",
+					nil, s.UniqueBlobSize, binary, "B", 10e9),
+			),
+
+			S(
+				"Annotated tags",
+				I("uniqueTagCount", "Count",
+					"The total number of annotated tags",
+					nil, s.UniqueTagCount, metric, "", 25e3),
+			),
+
+			S(
+				"References",
+				I("referenceCount", "Count",
+					"The total number of references",
+					nil, s.ReferenceCount, metric, "", 25e3),
+			),
+		),
+
+		S("Biggest objects",
+			S("Commits",
+				I("maxCommitSize", "Maximum size",
+					"The size of the largest single commit",
+					s.MaxCommitSizeCommit, s.MaxCommitSize, binary, "B", 50e3),
+				I("maxCommitParentCount", "Maximum parents",
+					"The most parents of any single commit",
+					s.MaxParentCountCommit, s.MaxParentCount, metric, "", 10),
+			),
+
+			S("Trees",
+				I("maxTreeEntries", "Maximum entries",
+					"The most entries in any single tree",
+					s.MaxTreeEntriesTree, s.MaxTreeEntries, metric, "", 1000),
+			),
+
+			S("Blobs",
+				I("maxBlobSize", "Maximum size",
+					"The size of the largest blob object",
+					s.MaxBlobSizeBlob, s.MaxBlobSize, binary, "B", 10e6),
+			),
+		),
+
+		S("History structure",
+			I("maxHistoryDepth", "Maximum history depth",
+				"The longest chain of commits in history",
+				nil, s.MaxHistoryDepth, metric, "", 500e3),
+			I("maxTagDepth", "Maximum tag depth",
+				"The longest chain of annotated tags pointing at one another",
+				s.MaxTagDepthTag, s.MaxTagDepth, metric, "", 1.001),
+		),
+
+		S("Biggest checkouts",
+			I("maxCheckoutTreeCount", "Number of directories",
+				"The number of directories in the largest checkout",
+				s.MaxExpandedTreeCountTree, s.MaxExpandedTreeCount, metric, "", 2000),
+			I("maxCheckoutPathDepth", "Maximum path depth",
+				"The maximum path depth in any checkout",
+				s.MaxPathDepthTree, s.MaxPathDepth, metric, "", 10),
+			I("maxCheckoutPathLength", "Maximum path length",
+				"The maximum path length in any checkout",
+				s.MaxPathLengthTree, s.MaxPathLength, binary, "B", 100),
+
+			I("maxCheckoutBlobCount", "Number of files",
+				"The maximum number of files in any checkout",
+				s.MaxExpandedBlobCountTree, s.MaxExpandedBlobCount, metric, "", 50e3),
+			I("maxCheckoutBlobSize", "Total size of files",
+				"The maximum sum of file sizes in any checkout",
+				s.MaxExpandedBlobSizeTree, s.MaxExpandedBlobSize, binary, "B", 1e9),
+
+			I("maxCheckoutLinkCount", "Number of symlinks",
+				"The maximum number of symlinks in any checkout",
+				s.MaxExpandedLinkCountTree, s.MaxExpandedLinkCount, metric, "", 25e3),
+
+			I("maxCheckoutSubmoduleCount", "Number of submodules",
+				"The maximum number of submodules in any checkout",
+				s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, metric, "", 100),
+		),
+	)
 }

@@ -153,13 +153,13 @@ Processing references: 539
 
 The output is a table showing the thing that was measured, its numerical value, and a rough indication of which values might be a cause for concern. In all cases, only objects that are reachable from references are included (i.e., not unreachable objects, nor objects that are reachable only from the reflogs).
 
-The "Overall repository size" section includes repository-wide statistics about distinct objects, not including repetition. "Total size" is the sum of the sizes of the corresponding objects in their uncompressed form, measured in bytes.
+The "Overall repository size" section includes repository-wide statistics about distinct objects, not including repetition. "Total size" is the sum of the sizes of the corresponding objects in their uncompressed form, measured in bytes. When the uncompressed size is much larger than the on-disk size, that is an indication that things are compressing very well or that there are large blobs or large trees that are getting modified incrementally many times. The overall uncompressed size of all objects is a good indication of how expensive commands like `git gc --aggressive` (and `git repack [-f|-F]` and `git pack-objects --no-reuse-delta`), `git fsck`, and `git log [-G|-S]` will likely be.
 
 The "Biggest objects" section provides information about the biggest single objects of each type, anywhere in the history.
 
 In the "History structure" section, "maximum history depth" is the longest chain of commits in the history, and "maximum tag depth" reports the longest chain of annotated tags that point at other annotated tags.
 
-The "Biggest checkouts" section is about the sizes of commits as checked out into a working copy. "Maximum path depth" is the largest number of path components for files in the working copy, and "maximum path length" is the longest path in terms of bytes. "Total size of files" is the sum of all file sizes in the single biggest commit, including multiplicities if the same file appears multiple times.
+The "Biggest checkouts" section is about the sizes of commits as checked out into a working copy. "Maximum path depth" is the largest number of path components for files in the working copy, and "maximum path length" is the longest path in terms of bytes. "Total size of files" is the sum of all file sizes in the single biggest commit, including multiplicities if the same file appears multiple times. The uncompressed size of trees and commits is a good indication of how expensive reachability traversals will be, including clones and fetches and `git gc`.
 
 The "Value" column displays counts, using units "k" (thousand), "M" (million), "G" (billion) etc., and sizes, using units "B" (bytes), "KiB" (1024 bytes), "MiB" (1024 KiB), etc. Note that if a value overflows its counter (which should only happen for malicious repositories), the corresponding value is displayed as `∞` in tabular form, or truncated to 2³²-1 or 2⁶⁴-1 (depending on the size of the counter) in JSON mode.
 

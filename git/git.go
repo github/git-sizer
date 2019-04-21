@@ -70,9 +70,8 @@ type Repository struct {
 func smartJoin(path, relPath string) string {
 	if filepath.IsAbs(relPath) {
 		return relPath
-	} else {
-		return filepath.Join(path, relPath)
 	}
+	return filepath.Join(path, relPath)
 }
 
 func NewRepository(path string) (*Repository, error) {
@@ -81,18 +80,14 @@ func NewRepository(path string) (*Repository, error) {
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.Error:
-			return nil, errors.New(
-				fmt.Sprintf(
-					"could not run git (is it in your PATH?): %s",
-					err.Err,
-				),
+			return nil, fmt.Errorf(
+				"could not run git (is it in your PATH?): %s",
+				err.Err,
 			)
 		case *exec.ExitError:
-			return nil, errors.New(
-				fmt.Sprintf(
-					"git rev-parse failed: %s",
-					err.Stderr,
-				),
+			return nil, fmt.Errorf(
+				"git rev-parse failed: %s",
+				err.Stderr,
 			)
 		default:
 			return nil, err
@@ -104,10 +99,8 @@ func NewRepository(path string) (*Repository, error) {
 	cmd.Dir = gitDir
 	out, err = cmd.Output()
 	if err != nil {
-		return nil, errors.New(
-			fmt.Sprintf(
-				"could not run 'git rev-parse --git-path shallow': %s", err,
-			),
+		return nil, fmt.Errorf(
+			"could not run 'git rev-parse --git-path shallow': %s", err,
 		)
 	}
 	shallow := smartJoin(gitDir, string(bytes.TrimSpace(out)))
@@ -376,7 +369,7 @@ func parseBatchHeader(spec string, header string) (OID, ObjectType, counts.Count
 		if spec == "" {
 			spec = words[0]
 		}
-		return OID{}, "missing", 0, errors.New(fmt.Sprintf("missing object %s", spec))
+		return OID{}, "missing", 0, fmt.Errorf("missing object %s", spec)
 	}
 
 	oid, err := NewOID(words[0])

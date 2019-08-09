@@ -4,7 +4,7 @@ _Happy Git repositories are all alike; every unhappy Git repository is unhappy i
 
 Is your Git repository bursting at the seams?
 
-`git-sizer` computes various size metrics for a Git repository, flagging those that might cause you problems or inconvenience. For example:
+`git-sizer` computes various size metrics for a local Git repository, flagging those that might cause you problems or inconvenience. For example:
 
 * Is the repository too big overall? Ideally, Git repositories should be under 1 GiB, and (without special handling) they start to get unwieldy over 5 GiB. Big repositories take a long time to clone and repack, and take a lot of disk space. Suggestions:
 

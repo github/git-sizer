@@ -153,7 +153,7 @@ Processing references: 539
 
 The output is a table showing the thing that was measured, its numerical value, and a rough indication of which values might be a cause for concern. In all cases, only objects that are reachable from references are included (i.e., not unreachable objects, nor objects that are reachable only from the reflogs).
 
-The "Overall repository size" section includes repository-wide statistics about distinct objects, not including repetition. "Total size" is the sum of the sizes of the corresponding objects in their uncompressed form, measured in bytes.
+The "Overall repository size" section includes repository-wide statistics about distinct objects, not including repetition. "Total size" is the sum of the sizes of the corresponding objects in their uncompressed form, measured in bytes. The overall uncompressed size of all objects is a good indication of how expensive commands like `git gc --aggressive` (and `git repack [-f|-F]` and `git pack-objects --no-reuse-delta`), `git fsck`, and `git log [-G|-S]` will be.  The uncompressed size of trees and commits is a good indication of how expensive reachability traversals will be, including clones and fetches and `git gc`.
 
 The "Biggest objects" section provides information about the biggest single objects of each type, anywhere in the history.
 

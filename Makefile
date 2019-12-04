@@ -1,5 +1,4 @@
 PACKAGE := github.com/github/git-sizer
-ROOTDIR := $(abspath $(CURDIR))
 GO111MODULES := 1
 export GO111MODULES
 
@@ -27,7 +26,7 @@ all: bin/git-sizer
 .PHONY: bin/git-sizer
 bin/git-sizer:
 	mkdir -p bin
-	$(GO) build $(GOFLAGS) -o $(ROOTDIR)/$@ $(PACKAGE)
+	$(GO) build $(GOFLAGS) -o $@ $(PACKAGE)
 
 # Cross-compile for a bunch of common platforms. Note that this
 # doesn't work with USE_ISATTY:
@@ -51,7 +50,7 @@ define PLATFORM_template =
 .PHONY: bin/git-sizer-$(1)-$(2)$(3)
 bin/git-sizer-$(1)-$(2)$(3):
 	mkdir -p bin
-	GOOS=$(1) GOARCH=$(2) $$(GO) build $$(GOFLAGS) -ldflags "-X main.ReleaseVersion=$$(VERSION)" -o $$(ROOTDIR)/$$@ $$(PACKAGE)
+	GOOS=$(1) GOARCH=$(2) $$(GO) build $$(GOFLAGS) -ldflags "-X main.ReleaseVersion=$$(VERSION)" -o $$@ $$(PACKAGE)
 common-platforms: bin/git-sizer-$(1)-$(2)$(3)
 
 # Note that releases don't include code from vendor (they're only used

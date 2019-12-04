@@ -5,14 +5,8 @@ set -e
 cd "$(dirname "$0")/.."
 
 export ROOTDIR="$(pwd)"
-export GOPATH="$ROOTDIR/.gopath"
 
 if [[ "$(uname -s)" = "Darwin" ]]; then
     brew bundle
 fi
 . script/ensure-go-installed.sh
-
-BASE="$GOPATH/src/github.com/github/git-sizer"
-rm -f "$BASE"
-mkdir -p $(dirname "$BASE")
-ln -s "$(pwd)" "$BASE"

@@ -1,14 +1,14 @@
 #!/bin/sh
 
 # The checksums below must correspond to the downloads for this version.
-GO_VERSION=go1.9.2
+GO_VERSION=go1.13.4
 
 if [ $(uname -s) = "Darwin" ]; then
     GO_PKG=${GO_VERSION}.darwin-amd64.tar.gz
-    GO_PKG_SHA=8b4f6ae6deae1150d2e341d02c247fd18a99af387516540eeb84702ffd76d3a1
+    GO_PKG_SHA=9f0721551a24a1eb43d2005cd58bd7b17574e50384b8da8896b0754259790752
 elif [ $(uname -s) = "Linux" ]; then
     GO_PKG=${GO_VERSION}.linux-amd64.tar.gz
-    GO_PKG_SHA=de874549d9a8d8d8062be05808509c09a88a248e77ec14eb77453530829ac02b
+    GO_PKG_SHA=692d17071736f74be04a72a06dab9cac1cd759377bd85316e52b2227604c004c
 else
     echo 1>&2 "I don't know how to install Go on your platform."
     echo 1>&2 "Please install $GO_VERSION or later and add it to your PATH."

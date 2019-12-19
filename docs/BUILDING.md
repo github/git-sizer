@@ -45,14 +45,6 @@ This procedure is intended for experts and people who want to help develop `git-
 
 It is also possible to cross-compile for other platforms that are supported by Go. See the comments in the `Makefile` for more information.
 
-Note that this procedure uses a project-local `GOPATH`. This means that you can clone the repository anywhere. The disadvantage is that Go tools need to know about this `GOPATH`. The `Makefile` and the scripts under `scripts/` take care of this automatically. But if you want to run `go` commands by hand, either first set your `GOPATH`:
-
-    export GOPATH="$(pwd)/.gopath"
-
-Or use `script/go` and `script/gofmt` rather than `go` and `gofmt`, respectively.
-
-Unfortunately, some Go tools get confused by the symlink that is used to make the project-local `GOPATH` work. If you have this problem, it sometimes helps to run such commands from `.gopath/src/github.com/github/git-sizer/`. Alternatively, clone the project into the traditional place in your normal `GOPATH`.
-
 
 ## Making a release
 

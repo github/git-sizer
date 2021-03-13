@@ -150,14 +150,14 @@ func (v *filterValue) Type() string {
 }
 
 func main() {
-	err := mainImplementation()
+	err := mainImplementation(os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
 	}
 }
 
-func mainImplementation() error {
+func mainImplementation(args []string) error {
 	var nameStyle sizes.NameStyle = sizes.NameStyleFull
 	var cpuprofile string
 	var jsonOutput bool
@@ -250,7 +250,7 @@ func mainImplementation() error {
 
 	flags.SortFlags = false
 
-	err = flags.Parse(os.Args[1:])
+	err = flags.Parse(args)
 	if err != nil {
 		if err == pflag.ErrHelp {
 			return nil
@@ -280,9 +280,7 @@ func mainImplementation() error {
 		return nil
 	}
 
-	args := flags.Args()
-
-	if len(args) != 0 {
+	if len(flags.Args()) != 0 {
 		return errors.New("excess arguments")
 	}
 

@@ -16,6 +16,26 @@ import (
 	"github.com/spf13/pflag"
 )
 
+const Usage = `usage: git-sizer [OPTS]
+      --branches               process all branches
+      --tags                   process all tags
+      --remotes                process all remotes
+  -v, --verbose                report all statistics, whether concerning or not
+      --threshold threshold    minimum level of concern (i.e., number of stars)
+                               that should be reported. Default:
+                               '--threshold=1'.
+      --critical               only report critical statistics
+      --names=[none|hash|full] display names of large objects in the specified
+                               style: 'none' (omit footnotes entirely), 'hash'
+                               (show only the SHA-1s of objects), or 'full'
+                               (show full names). Default is '--names=full'.
+  -j, --json                   output results in JSON format
+      --json-version=[1|2]     choose which JSON format version to output.
+                               Default: --json-version=1.
+      --[no-]progress          report (don't report) progress to stderr.
+      --version                only report the git-sizer version number
+`
+
 var ReleaseVersion string
 var BuildVersion string
 
@@ -65,7 +85,10 @@ func mainImplementation() error {
 	var progress bool
 	var version bool
 
-	flags := pflag.NewFlagSet("", pflag.ContinueOnError)
+	flags := pflag.NewFlagSet("git-sizer", pflag.ContinueOnError)
+	flags.Usage = func() {
+		fmt.Print(Usage)
+	}
 
 	flags.BoolVar(&processBranches, "branches", false, "process all branches")
 	flags.BoolVar(&processTags, "tags", false, "process all tags")
@@ -116,6 +139,9 @@ func mainImplementation() error {
 
 	err = flags.Parse(os.Args[1:])
 	if err != nil {
+		if err == pflag.ErrHelp {
+			return nil
+		}
 		return err
 	}
 

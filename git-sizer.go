@@ -155,24 +155,20 @@ func mainImplementation() error {
 
 	var historySize sizes.HistorySize
 
-	var filter git.ReferenceFilter
+	var filter git.IncludeExcludeFilter
 	if processBranches || processTags || processRemotes {
-		var filters []git.ReferenceFilter
 		if processBranches {
-			filters = append(filters, git.BranchesFilter)
+			filter.Include(git.BranchesFilter)
 		}
 		if processTags {
-			filters = append(filters, git.TagsFilter)
+			filter.Include(git.TagsFilter)
 		}
 		if processRemotes {
-			filters = append(filters, git.RemotesFilter)
+			filter.Include(git.RemotesFilter)
 		}
-		filter = git.OrFilter(filters...)
-	} else {
-		filter = git.AllReferencesFilter
 	}
 
-	historySize, err = sizes.ScanRepositoryUsingGraph(repo, filter, nameStyle, progress)
+	historySize, err = sizes.ScanRepositoryUsingGraph(repo, filter.Filter, nameStyle, progress)
 	if err != nil {
 		return fmt.Errorf("error scanning repository: %s", err)
 	}

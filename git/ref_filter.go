@@ -10,6 +10,50 @@ func AllReferencesFilter(_ Reference) bool {
 	return true
 }
 
+type Polarity uint8
+
+const (
+	Include Polarity = iota
+	Exclude
+)
+
+// polarizedFilter is a filter that might match, in which case it
+// includes or excludes the reference (according to its polarity). If
+// it doesn't match, then it doesn't say anything about the reference.
+type polarizedFilter struct {
+	polarity Polarity
+	filter   ReferenceFilter
+}
+
+// IncludeExcludeFilter is a filter based on a bunch of
+// `polarizedFilter`s. The last one that matches a reference wins. If
+// none match, then the result is based on the polarity of the first
+// polarizedFilter: if it is `Include`, then return `false`; if it is
+// `Exclude`, then return `true`.
+type IncludeExcludeFilter struct {
+	filters []polarizedFilter
+}
+
+func (ief *IncludeExcludeFilter) Include(f ReferenceFilter) {
+	ief.filters = append(ief.filters, polarizedFilter{Include, f})
+}
+
+func (ief *IncludeExcludeFilter) Exclude(f ReferenceFilter) {
+	ief.filters = append(ief.filters, polarizedFilter{Exclude, f})
+}
+
+func (ief *IncludeExcludeFilter) Filter(r Reference) bool {
+	for i := len(ief.filters); i > 0; i-- {
+		f := ief.filters[i-1]
+		if !f.filter(r) {
+			continue
+		}
+		return f.polarity == Include
+	}
+
+	return len(ief.filters) == 0 || ief.filters[0].polarity == Exclude
+}
+
 // PrefixFilter returns a `ReferenceFilter` that matches references
 // whose names start with the specified `prefix`, which must match at
 // a component boundary. For example,
@@ -33,59 +77,7 @@ func PrefixFilter(prefix string) ReferenceFilter {
 }
 
 var (
-	BranchesFilter ReferenceFilter = PrefixFilter("refs/heads/")
-	TagsFilter     ReferenceFilter = PrefixFilter("refs/tags/")
-	RemotesFilter  ReferenceFilter = PrefixFilter("refs/remotes/")
+	BranchesFilter = PrefixFilter("refs/heads/")
+	TagsFilter     = PrefixFilter("refs/tags/")
+	RemotesFilter  = PrefixFilter("refs/remotes/")
 )
-
-func notNilFilters(filters ...ReferenceFilter) []ReferenceFilter {
-	var ret []ReferenceFilter
-	for _, filter := range filters {
-		if filter != nil {
-			ret = append(ret, filter)
-		}
-	}
-	return ret
-}
-
-func OrFilter(filters ...ReferenceFilter) ReferenceFilter {
-	filters = notNilFilters(filters...)
-	if len(filters) == 0 {
-		return AllReferencesFilter
-	} else if len(filters) == 1 {
-		return filters[0]
-	} else {
-		return func(r Reference) bool {
-			for _, filter := range filters {
-				if filter(r) {
-					return true
-				}
-			}
-			return false
-		}
-	}
-}
-
-func AndFilter(filters ...ReferenceFilter) ReferenceFilter {
-	filters = notNilFilters(filters...)
-	if len(filters) == 0 {
-		return AllReferencesFilter
-	} else if len(filters) == 1 {
-		return filters[0]
-	} else {
-		return func(r Reference) bool {
-			for _, filter := range filters {
-				if !filter(r) {
-					return false
-				}
-			}
-			return true
-		}
-	}
-}
-
-func NotFilter(filter ReferenceFilter) ReferenceFilter {
-	return func(r Reference) bool {
-		return !filter(r)
-	}
-}

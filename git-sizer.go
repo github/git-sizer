@@ -52,6 +52,7 @@ const Usage = `usage: git-sizer [OPTS]
                                prefix (e.g., '--exclude=refs/notes')
       --exclude-regexp pattern don't process references matching the specified
                                regular expression
+      --show-refs              show which refs are being included/excluded
 
  Regular expression patterns must match the full reference name.
 
@@ -166,6 +167,7 @@ func mainImplementation(args []string) error {
 	var progress bool
 	var version bool
 	var filter git.IncludeExcludeFilter
+	var showRefs bool
 
 	flags := pflag.NewFlagSet("git-sizer", pflag.ContinueOnError)
 	flags.Usage = func() {
@@ -241,6 +243,7 @@ func mainImplementation(args []string) error {
 		atty = false
 	}
 	flags.BoolVar(&progress, "progress", atty, "report progress to stderr")
+	flags.BoolVar(&showRefs, "show-refs", false, "list the references being processed")
 	flags.BoolVar(&version, "version", false, "report the git-sizer version number")
 	flags.Var(&NegatedBoolValue{&progress}, "no-progress", "suppress progress output")
 	flags.Lookup("no-progress").NoOptDefVal = "true"
@@ -292,7 +295,23 @@ func mainImplementation(args []string) error {
 
 	var historySize sizes.HistorySize
 
-	historySize, err = sizes.ScanRepositoryUsingGraph(repo, filter.Filter, nameStyle, progress)
+	var refFilter git.ReferenceFilter = filter.Filter
+
+	if showRefs {
+		oldRefFilter := refFilter
+		fmt.Fprintf(os.Stderr, "References (included references marked with '+'):\n")
+		refFilter = func(ref git.Reference) bool {
+			b := oldRefFilter(ref)
+			if b {
+				fmt.Fprintf(os.Stderr, "+ %s\n", ref.Refname)
+			} else {
+				fmt.Fprintf(os.Stderr, "  %s\n", ref.Refname)
+			}
+			return b
+		}
+	}
+
+	historySize, err = sizes.ScanRepositoryUsingGraph(repo, refFilter, nameStyle, progress)
 	if err != nil {
 		return fmt.Errorf("error scanning repository: %s", err)
 	}

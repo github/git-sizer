@@ -10,9 +10,25 @@ func AllReferencesFilter(_ Reference) bool {
 	return true
 }
 
+// PrefixFilter returns a `ReferenceFilter` that matches references
+// whose names start with the specified `prefix`, which must match at
+// a component boundary. For example,
+//
+// * Prefix "refs/foo" matches "refs/foo" and "refs/foo/bar" but not
+//   "refs/foobar".
+//
+// * Prefix "refs/foo/" matches "refs/foo/bar" but not "refs/foo" or
+//   "refs/foobar".
 func PrefixFilter(prefix string) ReferenceFilter {
+	if strings.HasSuffix(prefix, "/") {
+		return func(r Reference) bool {
+			return strings.HasPrefix(r.Refname, prefix)
+		}
+	}
+
 	return func(r Reference) bool {
-		return strings.HasPrefix(r.Refname, prefix)
+		return strings.HasPrefix(r.Refname, prefix) &&
+			(len(r.Refname) == len(prefix) || r.Refname[len(prefix)] == '/')
 	}
 }
 

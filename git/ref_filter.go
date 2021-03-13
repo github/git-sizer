@@ -1,6 +1,7 @@
 package git
 
 import (
+	"regexp"
 	"strings"
 )
 
@@ -74,4 +75,19 @@ func PrefixFilter(prefix string) ReferenceFilter {
 		return strings.HasPrefix(r.Refname, prefix) &&
 			(len(r.Refname) == len(prefix) || r.Refname[len(prefix)] == '/')
 	}
+}
+
+// RegexpFilter returns a `ReferenceFilter` that matches references
+// whose names match the specified `prefix`, which must match the
+// whole reference name.
+func RegexpFilter(pattern string) (ReferenceFilter, error) {
+	pattern = "^" + pattern + "$"
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+
+	return func(r Reference) bool {
+		return re.MatchString(r.Refname)
+	}, nil
 }

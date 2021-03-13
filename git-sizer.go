@@ -23,21 +23,21 @@ type NegatedBoolValue struct {
 	value *bool
 }
 
-func (b *NegatedBoolValue) Set(s string) error {
-	v, err := strconv.ParseBool(s)
-	*b.value = !v
+func (v *NegatedBoolValue) Set(s string) error {
+	b, err := strconv.ParseBool(s)
+	*v.value = !b
 	return err
 }
 
-func (b *NegatedBoolValue) Get() interface{} {
-	return !*b.value
+func (v *NegatedBoolValue) Get() interface{} {
+	return !*v.value
 }
 
-func (b *NegatedBoolValue) String() string {
-	if b == nil || b.value == nil {
+func (v *NegatedBoolValue) String() string {
+	if v == nil || v.value == nil {
 		return "true"
 	} else {
-		return strconv.FormatBool(!*b.value)
+		return strconv.FormatBool(!*v.value)
 	}
 }
 

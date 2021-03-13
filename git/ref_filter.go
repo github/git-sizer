@@ -75,9 +75,3 @@ func PrefixFilter(prefix string) ReferenceFilter {
 			(len(r.Refname) == len(prefix) || r.Refname[len(prefix)] == '/')
 	}
 }
-
-var (
-	BranchesFilter = PrefixFilter("refs/heads/")
-	TagsFilter     = PrefixFilter("refs/tags/")
-	RemotesFilter  = PrefixFilter("refs/remotes/")
-)

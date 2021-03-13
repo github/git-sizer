@@ -17,9 +17,7 @@ import (
 )
 
 const Usage = `usage: git-sizer [OPTS]
-      --branches               process all branches
-      --tags                   process all tags
-      --remotes                process all remotes
+
   -v, --verbose                report all statistics, whether concerning or not
       --threshold threshold    minimum level of concern (i.e., number of stars)
                                that should be reported. Default:
@@ -34,6 +32,22 @@ const Usage = `usage: git-sizer [OPTS]
                                Default: --json-version=1.
       --[no-]progress          report (don't report) progress to stderr.
       --version                only report the git-sizer version number
+
+ Reference selection:
+
+ By default, git-sizer processes all Git objects that are reachable from any
+ reference. The following options can be used to limit which references to
+ include. The last rule matching a reference determines whether that reference
+ is processed:
+
+      --branches               process branches
+      --tags                   process tags
+      --remotes                process remote refs
+      --include prefix         process references with the specified prefix
+                               (e.g., '--include=refs/remotes/origin')
+      --exclude prefix         don't process references with the specified
+                               prefix (e.g., '--exclude=refs/notes')
+
 `
 
 var ReleaseVersion string
@@ -65,6 +79,59 @@ func (v *NegatedBoolValue) Type() string {
 	return "bool"
 }
 
+type filterValue struct {
+	filter   *git.IncludeExcludeFilter
+	polarity git.Polarity
+	prefix   string
+}
+
+func (v *filterValue) Set(s string) error {
+	var prefix string
+	var polarity git.Polarity
+
+	if v.prefix == "" {
+		prefix = s
+		polarity = v.polarity
+	} else {
+		prefix = v.prefix
+		// Allow a boolean value to alter the polarity:
+		b, err := strconv.ParseBool(s)
+		if err != nil {
+			return err
+		}
+		if b {
+			polarity = git.Include
+		} else {
+			polarity = git.Exclude
+		}
+	}
+
+	switch polarity {
+	case git.Include:
+		v.filter.Include(git.PrefixFilter(prefix))
+	case git.Exclude:
+		v.filter.Exclude(git.PrefixFilter(prefix))
+	}
+
+	return nil
+}
+
+func (v *filterValue) Get() interface{} {
+	return nil
+}
+
+func (v *filterValue) String() string {
+	return ""
+}
+
+func (v *filterValue) Type() string {
+	if v.prefix == "" {
+		return "prefix"
+	} else {
+		return ""
+	}
+}
+
 func main() {
 	err := mainImplementation()
 	if err != nil {
@@ -74,9 +141,6 @@ func main() {
 }
 
 func mainImplementation() error {
-	var processBranches bool
-	var processTags bool
-	var processRemotes bool
 	var nameStyle sizes.NameStyle = sizes.NameStyleFull
 	var cpuprofile string
 	var jsonOutput bool
@@ -84,15 +148,33 @@ func mainImplementation() error {
 	var threshold sizes.Threshold = 1
 	var progress bool
 	var version bool
+	var filter git.IncludeExcludeFilter
 
 	flags := pflag.NewFlagSet("git-sizer", pflag.ContinueOnError)
 	flags.Usage = func() {
 		fmt.Print(Usage)
 	}
 
-	flags.BoolVar(&processBranches, "branches", false, "process all branches")
-	flags.BoolVar(&processTags, "tags", false, "process all tags")
-	flags.BoolVar(&processRemotes, "remotes", false, "process all remote-tracking branches")
+	flags.Var(&filterValue{&filter, git.Include, ""}, "include", "include specified references")
+	flags.Var(&filterValue{&filter, git.Exclude, ""}, "exclude", "exclude specified references")
+
+	flag := flags.VarPF(
+		&filterValue{&filter, git.Include, "refs/heads/"}, "branches", "",
+		"process all branches",
+	)
+	flag.NoOptDefVal = "true"
+
+	flag = flags.VarPF(
+		&filterValue{&filter, git.Include, "refs/tags/"}, "tags", "",
+		"process all tags",
+	)
+	flag.NoOptDefVal = "true"
+
+	flag = flags.VarPF(
+		&filterValue{&filter, git.Include, "refs/remotes/"}, "remotes", "",
+		"process all remotes",
+	)
+	flag.NoOptDefVal = "true"
 
 	flags.VarP(
 		sizes.NewThresholdFlagValue(&threshold, 0),
@@ -180,19 +262,6 @@ func mainImplementation() error {
 	defer repo.Close()
 
 	var historySize sizes.HistorySize
-
-	var filter git.IncludeExcludeFilter
-	if processBranches || processTags || processRemotes {
-		if processBranches {
-			filter.Include(git.BranchesFilter)
-		}
-		if processTags {
-			filter.Include(git.TagsFilter)
-		}
-		if processRemotes {
-			filter.Include(git.RemotesFilter)
-		}
-	}
 
 	historySize, err = sizes.ScanRepositoryUsingGraph(repo, filter.Filter, nameStyle, progress)
 	if err != nil {

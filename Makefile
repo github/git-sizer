@@ -72,7 +72,6 @@ endef
 $(eval $(call PLATFORM_template,linux,amd64))
 $(eval $(call PLATFORM_template,linux,386))
 
-$(eval $(call PLATFORM_template,darwin,386))
 $(eval $(call PLATFORM_template,darwin,amd64))
 $(eval $(call PLATFORM_template,darwin,arm64))
 

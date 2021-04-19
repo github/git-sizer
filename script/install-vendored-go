@@ -12,6 +12,10 @@ Darwin:x86_64)
     GO_PKG=${GO_VERSION}.darwin-amd64.tar.gz
     GO_PKG_SHA=6bb1cf421f8abc2a9a4e39140b7397cdae6aca3e8d36dcff39a1a77f4f1170ac
     ;;
+Darwin:arm64)
+    GO_PKG=${GO_VERSION}.darwin-arm64.tar.gz
+    GO_PKG_SHA=f4e96bbcd5d2d1942f5b55d9e4ab19564da4fad192012f6d7b0b9b055ba4208f
+    ;;
 *)
     echo 1>&2 "I don't know how to install Go on your platform."
     echo 1>&2 "Please install $GO_VERSION or later and add it to your PATH."

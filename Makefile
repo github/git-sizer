@@ -74,6 +74,7 @@ $(eval $(call PLATFORM_template,linux,386))
 
 $(eval $(call PLATFORM_template,darwin,386))
 $(eval $(call PLATFORM_template,darwin,amd64))
+$(eval $(call PLATFORM_template,darwin,arm64))
 
 $(eval $(call PLATFORM_template,windows,amd64,.exe))
 $(eval $(call PLATFORM_template,windows,386,.exe))

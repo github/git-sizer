@@ -3,17 +3,21 @@
 # The checksums below must correspond to the downloads for this version.
 GO_VERSION=go1.16.3
 
-if [ $(uname -s) = "Darwin" ]; then
-    GO_PKG=${GO_VERSION}.darwin-amd64.tar.gz
-    GO_PKG_SHA=f4e96bbcd5d2d1942f5b55d9e4ab19564da4fad192012f6d7b0b9b055ba4208f
-elif [ $(uname -s) = "Linux" ]; then
+case "$(uname -s):$(uname -m)" in
+Linux:x86_64)
     GO_PKG=${GO_VERSION}.linux-amd64.tar.gz
     GO_PKG_SHA=951a3c7c6ce4e56ad883f97d9db74d3d6d80d5fec77455c6ada6c1f7ac4776d2
-else
+    ;;
+Darwin:x86_64)
+    GO_PKG=${GO_VERSION}.darwin-amd64.tar.gz
+    GO_PKG_SHA=6bb1cf421f8abc2a9a4e39140b7397cdae6aca3e8d36dcff39a1a77f4f1170ac
+    ;;
+*)
     echo 1>&2 "I don't know how to install Go on your platform."
     echo 1>&2 "Please install $GO_VERSION or later and add it to your PATH."
     exit 1
-fi
+    ;;
+esac
 
 archivesum() {
     shasum -a256 "$ARCHIVE"

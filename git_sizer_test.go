@@ -110,7 +110,7 @@ func newGitBomb(
 				"author Example <example@example.com> 1112911993 -0700\n"+
 				"committer Example <example@example.com> 1112911993 -0700\n"+
 				"\n"+
-				"Mwahahaha!\n",
+				"Test git bomb\n",
 			oid,
 		)
 		return err
@@ -152,8 +152,8 @@ func TestBomb(t *testing.T) {
 	}
 
 	assert.Equal(counts.Count32(1), h.UniqueCommitCount, "unique commit count")
-	assert.Equal(counts.Count64(169), h.UniqueCommitSize, "unique commit size")
-	assert.Equal(counts.Count32(169), h.MaxCommitSize, "max commit size")
+	assert.Equal(counts.Count64(172), h.UniqueCommitSize, "unique commit size")
+	assert.Equal(counts.Count32(172), h.MaxCommitSize, "max commit size")
 	assert.Equal("refs/heads/master", h.MaxCommitSizeCommit.Path(), "max commit size commit")
 	assert.Equal(counts.Count32(1), h.MaxHistoryDepth, "max history depth")
 	assert.Equal(counts.Count32(0), h.MaxParentCount, "max parent count")

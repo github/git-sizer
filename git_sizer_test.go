@@ -62,21 +62,12 @@ func addAuthorInfo(cmd *exec.Cmd, timestamp *time.Time) {
 }
 
 func newGitBomb(
-	t *testing.T, repoName string, depth, breadth int, body string,
+	t *testing.T, path string, depth, breadth int, body string,
 ) (repo *git.Repository) {
 	t.Helper()
 
-	path, err := ioutil.TempDir("", repoName)
-	require.NoError(t, err)
-
-	defer func() {
-		if err != nil {
-			os.RemoveAll(path)
-		}
-	}()
-
 	cmd := exec.Command("git", "init", "--bare", path)
-	err = cmd.Run()
+	err := cmd.Run()
 	require.NoError(t, err)
 
 	repo, err = git.NewRepository(path)
@@ -144,8 +135,14 @@ func TestBomb(t *testing.T) {
 	t.Parallel()
 	assert := assert.New(t)
 
-	repo := newGitBomb(t, "bomb", 10, 10, "boom!\n")
-	defer os.RemoveAll(repo.Path())
+	path, err := ioutil.TempDir("", "bomb")
+	require.NoError(t, err)
+
+	defer func() {
+		os.RemoveAll(path)
+	}()
+
+	repo := newGitBomb(t, path, 10, 10, "boom!\n")
 
 	h, err := sizes.ScanRepositoryUsingGraph(
 		repo, git.AllReferencesFilter, sizes.NameStyleFull, false,

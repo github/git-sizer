@@ -522,17 +522,6 @@ func (repo *Repository) CreateObject(t ObjectType, writer func(io.Writer) error)
 	return NewOID(string(bytes.TrimSpace(output)))
 }
 
-func (repo *Repository) UpdateRef(refname string, oid OID) error {
-	var cmd *exec.Cmd
-
-	if oid == NullOID {
-		cmd = repo.gitCommand("update-ref", "-d", refname)
-	} else {
-		cmd = repo.gitCommand("update-ref", refname, oid.String())
-	}
-	return cmd.Run()
-}
-
 // Next returns the next object, or EOF when done.
 func (l *ObjectIter) Next() (OID, ObjectType, counts.Count32, error) {
 	line, err := l.f.ReadString('\n')

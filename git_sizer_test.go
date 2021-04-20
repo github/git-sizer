@@ -33,6 +33,19 @@ func gitCommand(t *testing.T, repoPath string, args ...string) *exec.Cmd {
 	return cmd
 }
 
+func updateRef(t *testing.T, repoPath string, refname string, oid git.OID) error {
+	t.Helper()
+
+	var cmd *exec.Cmd
+
+	if oid == git.NullOID {
+		cmd = gitCommand(t, repoPath, "update-ref", "-d", refname)
+	} else {
+		cmd = gitCommand(t, repoPath, "update-ref", refname, oid.String())
+	}
+	return cmd.Run()
+}
+
 func addFile(t *testing.T, repoPath string, repo *git.Repository, relativePath, contents string) {
 	dirPath := filepath.Dir(relativePath)
 	if dirPath != "." {
@@ -119,7 +132,7 @@ func newGitBomb(
 	})
 	require.NoError(t, err)
 
-	err = repo.UpdateRef("refs/heads/master", oid)
+	err = updateRef(t, repo.Path(), "refs/heads/master", oid)
 	require.NoError(t, err)
 
 	return repo

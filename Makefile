@@ -5,7 +5,7 @@ export GO111MODULES
 GO := $(CURDIR)/script/go
 
 GO_LDFLAGS := -X main.BuildVersion=$(shell git describe --tags --always --dirty || echo unknown)
-GOFLAGS := -ldflags "$(GO_LDFLAGS)"
+GOFLAGS := -mod=readonly -ldflags "$(GO_LDFLAGS)"
 
 ifdef USE_ISATTY
 GOFLAGS := $(GOFLAGS) --tags isatty

@@ -1,6 +1,7 @@
 package main_test
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,12 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/github/git-sizer/counts"
 	"github.com/github/git-sizer/git"
 	"github.com/github/git-sizer/sizes"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // Smoke test that the program runs.
@@ -44,6 +45,45 @@ func updateRef(t *testing.T, repoPath string, refname string, oid git.OID) error
 		cmd = gitCommand(t, repoPath, "update-ref", refname, oid.String())
 	}
 	return cmd.Run()
+}
+
+// CreateObject creates a new Git object, of the specified type, in
+// `Repository`. `writer` is a function that writes the object in `git
+// hash-object` input format. This is used for testing only.
+func createObject(
+	t *testing.T, repoPath string, otype git.ObjectType, writer func(io.Writer) error,
+) git.OID {
+	t.Helper()
+
+	cmd := gitCommand(t, repoPath, "hash-object", "-w", "-t", string(otype), "--stdin")
+	in, err := cmd.StdinPipe()
+	require.NoError(t, err)
+
+	out, err := cmd.StdoutPipe()
+	cmd.Stderr = os.Stderr
+
+	err = cmd.Start()
+	require.NoError(t, err)
+
+	err = writer(in)
+	err2 := in.Close()
+	if err != nil {
+		cmd.Wait()
+		require.NoError(t, err)
+	}
+	if err2 != nil {
+		cmd.Wait()
+		require.NoError(t, err2)
+	}
+
+	output, err := ioutil.ReadAll(out)
+	err2 = cmd.Wait()
+	require.NoError(t, err)
+	require.NoError(t, err2)
+
+	oid, err := git.NewOID(string(bytes.TrimSpace(output)))
+	require.NoError(t, err)
+	return oid
 }
 
 func addFile(t *testing.T, repoPath string, repo *git.Repository, relativePath, contents string) {
@@ -88,11 +128,10 @@ func newGitBomb(
 	repo, err = git.NewRepository(path)
 	require.NoError(t, err)
 
-	oid, err := repo.CreateObject("blob", func(w io.Writer) error {
+	oid := createObject(t, repo.Path(), "blob", func(w io.Writer) error {
 		_, err := io.WriteString(w, body)
 		return err
 	})
-	require.NoError(t, err)
 
 	digits := len(fmt.Sprintf("%d", breadth-1))
 
@@ -100,7 +139,7 @@ func newGitBomb(
 	prefix := "f"
 
 	for ; depth > 0; depth-- {
-		oid, err = repo.CreateObject("tree", func(w io.Writer) error {
+		oid = createObject(t, repo.Path(), "tree", func(w io.Writer) error {
 			for i := 0; i < breadth; i++ {
 				_, err = fmt.Fprintf(
 					w, "%s %s%0*d\x00%s",
@@ -112,13 +151,12 @@ func newGitBomb(
 			}
 			return nil
 		})
-		require.NoError(t, err)
 
 		mode = "40000"
 		prefix = "d"
 	}
 
-	oid, err = repo.CreateObject("commit", func(w io.Writer) error {
+	oid = createObject(t, repo.Path(), "commit", func(w io.Writer) error {
 		_, err := fmt.Fprintf(
 			w,
 			"tree %s\n"+
@@ -130,7 +168,6 @@ func newGitBomb(
 		)
 		return err
 	})
-	require.NoError(t, err)
 
 	err = updateRef(t, repo.Path(), "refs/heads/master", oid)
 	require.NoError(t, err)

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -475,51 +474,6 @@ func (repo *Repository) NewObjectIter(args ...string) (
 		f:       bufio.NewReader(out2),
 		errChan: errChan,
 	}, in1, nil
-}
-
-// CreateObject creates a new Git object, of the specified type, in
-// `Repository`. `writer` is a function that writes the object in `git
-// hash-object` input format. This is used for testing only.
-func (repo *Repository) CreateObject(t ObjectType, writer func(io.Writer) error) (OID, error) {
-	cmd := repo.gitCommand("hash-object", "-w", "-t", string(t), "--stdin")
-	in, err := cmd.StdinPipe()
-	if err != nil {
-		return OID{}, err
-	}
-
-	out, err := cmd.StdoutPipe()
-	if err != nil {
-		return OID{}, err
-	}
-
-	cmd.Stderr = os.Stderr
-
-	err = cmd.Start()
-	if err != nil {
-		return OID{}, err
-	}
-
-	err = writer(in)
-	err2 := in.Close()
-	if err != nil {
-		cmd.Wait()
-		return OID{}, err
-	}
-	if err2 != nil {
-		cmd.Wait()
-		return OID{}, err2
-	}
-
-	output, err := ioutil.ReadAll(out)
-	err2 = cmd.Wait()
-	if err != nil {
-		return OID{}, err
-	}
-	if err2 != nil {
-		return OID{}, err2
-	}
-
-	return NewOID(string(bytes.TrimSpace(output)))
 }
 
 // Next returns the next object, or EOF when done.

@@ -26,6 +26,8 @@ func TestExec(t *testing.T) {
 }
 
 func gitCommand(t *testing.T, repo *git.Repository, args ...string) *exec.Cmd {
+	t.Helper()
+
 	cmd := exec.Command("git", args...)
 	cmd.Env = append(os.Environ(), "GIT_DIR="+repo.Path())
 	return cmd

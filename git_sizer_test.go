@@ -62,12 +62,12 @@ func addAuthorInfo(cmd *exec.Cmd, timestamp *time.Time) {
 }
 
 func newGitBomb(
-	repoName string, depth, breadth int, body string,
-) (repo *git.Repository, err error) {
+	t *testing.T, repoName string, depth, breadth int, body string,
+) (repo *git.Repository) {
+	t.Helper()
+
 	path, err := ioutil.TempDir("", repoName)
-	if err != nil {
-		return nil, err
-	}
+	require.NoError(t, err)
 
 	defer func() {
 		if err != nil {
@@ -77,19 +77,16 @@ func newGitBomb(
 
 	cmd := exec.Command("git", "init", "--bare", path)
 	err = cmd.Run()
-	if err != nil {
-		return nil, err
-	}
+	require.NoError(t, err)
 
 	repo, err = git.NewRepository(path)
-	if err != nil {
-		return nil, err
-	}
+	require.NoError(t, err)
 
 	oid, err := repo.CreateObject("blob", func(w io.Writer) error {
 		_, err := io.WriteString(w, body)
 		return err
 	})
+	require.NoError(t, err)
 
 	digits := len(fmt.Sprintf("%d", breadth-1))
 
@@ -109,9 +106,7 @@ func newGitBomb(
 			}
 			return nil
 		})
-		if err != nil {
-			return nil, err
-		}
+		require.NoError(t, err)
 
 		mode = "40000"
 		prefix = "d"
@@ -129,16 +124,12 @@ func newGitBomb(
 		)
 		return err
 	})
-	if err != nil {
-		return nil, err
-	}
+	require.NoError(t, err)
 
 	err = repo.UpdateRef("refs/heads/master", oid)
-	if err != nil {
-		return nil, err
-	}
+	require.NoError(t, err)
 
-	return repo, nil
+	return repo
 }
 
 func pow(x uint64, n int) uint64 {
@@ -153,10 +144,7 @@ func TestBomb(t *testing.T) {
 	t.Parallel()
 	assert := assert.New(t)
 
-	repo, err := newGitBomb("bomb", 10, 10, "boom!\n")
-	if err != nil {
-		t.Errorf("failed to create bomb: %s", err)
-	}
+	repo := newGitBomb(t, "bomb", 10, 10, "boom!\n")
 	defer os.RemoveAll(repo.Path())
 
 	h, err := sizes.ScanRepositoryUsingGraph(

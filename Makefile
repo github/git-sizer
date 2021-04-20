@@ -3,7 +3,6 @@ GO111MODULES := 1
 export GO111MODULES
 
 GO := $(CURDIR)/script/go
-GOFMT := $(CURDIR)/script/gofmt
 
 GO_LDFLAGS := -X main.BuildVersion=$(shell git describe --tags --always --dirty || echo unknown)
 GOFLAGS := -ldflags "$(GO_LDFLAGS)"
@@ -11,14 +10,6 @@ GOFLAGS := -ldflags "$(GO_LDFLAGS)"
 ifdef USE_ISATTY
 GOFLAGS := $(GOFLAGS) --tags isatty
 endif
-
-GO_SRCS := $(sort $(shell $(GO) list -f ' \
-	{{$$ip := .Dir}} \
-	{{range .GoFiles     }}{{printf "%s/%s\n" $$ip .}}{{end}} \
-	{{range .CgoFiles    }}{{printf "%s/%s\n" $$ip .}}{{end}} \
-	{{range .TestGoFiles }}{{printf "%s/%s\n" $$ip .}}{{end}} \
-	{{range .XTestGoFiles}}{{printf "%s/%s\n" $$ip .}}{{end}} \
-	' ./...))
 
 .PHONY: all
 all: bin/git-sizer
@@ -85,23 +76,6 @@ test: bin/git-sizer gotest
 gotest:
 	$(GO) test -timeout 60s $(GOFLAGS) ./...
 
-.PHONY: gofmt
-gofmt:
-	$(GOFMT) -l -w $(GO_SRCS) | sed -e 's/^/Fixing /'
-
-.PHONY: goimports
-goimports:
-	goimports -l -w -e $(GO_SRCS)
-
-.PHONY: govet
-govet:
-	$(GO) vet ./...
-
 .PHONY: clean
 clean:
 	rm -rf bin
-
-# List all of this project's Go sources:
-.PHONY: srcs
-srcs:
-	@printf "%s\n" $(GO_SRCS)

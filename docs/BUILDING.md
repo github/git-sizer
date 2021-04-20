@@ -25,7 +25,7 @@ This procedure is intended for experts and people who want to help develop `git-
         git clone https://github.com/github/git-sizer.git
         cd git-sizer
 
-2.  Install Go if necessary and create and prepare a project-local `GOPATH`:
+2.  Install Go if necessary:
 
         script/bootstrap
 

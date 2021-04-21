@@ -3,22 +3,13 @@ GO111MODULES := 1
 export GO111MODULES
 
 GO := $(CURDIR)/script/go
-GOFMT := $(CURDIR)/script/gofmt
 
 GO_LDFLAGS := -X main.BuildVersion=$(shell git describe --tags --always --dirty || echo unknown)
-GOFLAGS := -ldflags "$(GO_LDFLAGS)"
+GOFLAGS := -mod=readonly -ldflags "$(GO_LDFLAGS)"
 
 ifdef USE_ISATTY
 GOFLAGS := $(GOFLAGS) --tags isatty
 endif
-
-GO_SRCS := $(sort $(shell $(GO) list -f ' \
-	{{$$ip := .Dir}} \
-	{{range .GoFiles     }}{{printf "%s/%s\n" $$ip .}}{{end}} \
-	{{range .CgoFiles    }}{{printf "%s/%s\n" $$ip .}}{{end}} \
-	{{range .TestGoFiles }}{{printf "%s/%s\n" $$ip .}}{{end}} \
-	{{range .XTestGoFiles}}{{printf "%s/%s\n" $$ip .}}{{end}} \
-	' ./...))
 
 .PHONY: all
 all: bin/git-sizer
@@ -26,7 +17,7 @@ all: bin/git-sizer
 .PHONY: bin/git-sizer
 bin/git-sizer:
 	mkdir -p bin
-	$(GO) build $(GOFLAGS) -o $@ $(PACKAGE)
+	$(GO) build $(GOFLAGS) -o $@ .
 
 # Cross-compile for a bunch of common platforms. Note that this
 # doesn't work with USE_ISATTY:
@@ -50,7 +41,7 @@ define PLATFORM_template =
 .PHONY: bin/git-sizer-$(1)-$(2)$(3)
 bin/git-sizer-$(1)-$(2)$(3):
 	mkdir -p bin
-	GOOS=$(1) GOARCH=$(2) $$(GO) build $$(GOFLAGS) -ldflags "-X main.ReleaseVersion=$$(VERSION)" -o $$@ $$(PACKAGE)
+	GOOS=$(1) GOARCH=$(2) $$(GO) build $$(GOFLAGS) -ldflags "-X main.ReleaseVersion=$$(VERSION)" -o $$@ .
 common-platforms: bin/git-sizer-$(1)-$(2)$(3)
 
 # Note that releases don't include code from vendor (they're only used
@@ -72,8 +63,8 @@ endef
 $(eval $(call PLATFORM_template,linux,amd64))
 $(eval $(call PLATFORM_template,linux,386))
 
-$(eval $(call PLATFORM_template,darwin,386))
 $(eval $(call PLATFORM_template,darwin,amd64))
+$(eval $(call PLATFORM_template,darwin,arm64))
 
 $(eval $(call PLATFORM_template,windows,amd64,.exe))
 $(eval $(call PLATFORM_template,windows,386,.exe))
@@ -85,23 +76,6 @@ test: bin/git-sizer gotest
 gotest:
 	$(GO) test -timeout 60s $(GOFLAGS) ./...
 
-.PHONY: gofmt
-gofmt:
-	$(GOFMT) -l -w $(GO_SRCS) | sed -e 's/^/Fixing /'
-
-.PHONY: goimports
-goimports:
-	goimports -l -w -e $(GO_SRCS)
-
-.PHONY: govet
-govet:
-	$(GO) vet ./...
-
 .PHONY: clean
 clean:
 	rm -rf bin
-
-# List all of this project's Go sources:
-.PHONY: srcs
-srcs:
-	@printf "%s\n" $(GO_SRCS)

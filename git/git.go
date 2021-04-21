@@ -62,6 +62,10 @@ func (oid OID) MarshalJSON() ([]byte, error) {
 
 type Repository struct {
 	path string
+
+	// gitBin is the path of the `git` executable that should be used
+	// when running commands in this repository.
+	gitBin string
 }
 
 // smartJoin returns the path that can be described as `relPath`
@@ -74,20 +78,28 @@ func smartJoin(path, relPath string) string {
 	return filepath.Join(path, relPath)
 }
 
+// NewRepository creates a new repository object that can be used for
+// running `git` commands within that repository.
 func NewRepository(path string) (*Repository, error) {
-	cmd := exec.Command("git", "-C", path, "rev-parse", "--git-dir")
+	// Find the `git` executable to be used:
+	gitBin, err := findGitBin()
+	if err != nil {
+		return nil, fmt.Errorf(
+			"could not find 'git' executable (is it in your PATH?): %v", err,
+		)
+	}
+
+	cmd := exec.Command(gitBin, "-C", path, "rev-parse", "--git-dir")
 	out, err := cmd.Output()
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.Error:
 			return nil, fmt.Errorf(
-				"could not run git (is it in your PATH?): %s",
-				err.Err,
+				"could not run '%s': %v", gitBin, err.Err,
 			)
 		case *exec.ExitError:
 			return nil, fmt.Errorf(
-				"git rev-parse failed: %s",
-				err.Stderr,
+				"git rev-parse failed: %s", err.Stderr,
 			)
 		default:
 			return nil, err
@@ -95,7 +107,7 @@ func NewRepository(path string) (*Repository, error) {
 	}
 	gitDir := smartJoin(path, string(bytes.TrimSpace(out)))
 
-	cmd = exec.Command("git", "rev-parse", "--git-path", "shallow")
+	cmd = exec.Command(gitBin, "rev-parse", "--git-path", "shallow")
 	cmd.Dir = gitDir
 	out, err = cmd.Output()
 	if err != nil {
@@ -109,7 +121,10 @@ func NewRepository(path string) (*Repository, error) {
 		return nil, errors.New("this appears to be a shallow clone; full clone required")
 	}
 
-	return &Repository{path: gitDir}, nil
+	return &Repository{
+		path:   gitDir,
+		gitBin: gitBin,
+	}, nil
 }
 
 func (repo *Repository) gitCommand(callerArgs ...string) *exec.Cmd {
@@ -125,7 +140,7 @@ func (repo *Repository) gitCommand(callerArgs ...string) *exec.Cmd {
 
 	args = append(args, callerArgs...)
 
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command(repo.gitBin, args...)
 
 	cmd.Env = append(
 		os.Environ(),

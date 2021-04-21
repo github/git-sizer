@@ -29,9 +29,9 @@ func TestExec(t *testing.T) {
 func gitCommand(t *testing.T, repoPath string, args ...string) *exec.Cmd {
 	t.Helper()
 
-	cmd := exec.Command("git", args...)
-	cmd.Env = append(os.Environ(), "GIT_DIR="+repoPath)
-	return cmd
+	gitArgs := []string{"-C", repoPath}
+	gitArgs = append(gitArgs, args...)
+	return exec.Command("git", gitArgs...)
 }
 
 func updateRef(t *testing.T, repoPath string, refname string, oid git.OID) error {
@@ -99,8 +99,7 @@ func addFile(t *testing.T, repoPath string, repo *git.Repository, relativePath, 
 	require.NoErrorf(t, err, "writing to file %q", filename)
 	require.NoErrorf(t, f.Close(), "closing file %q", filename)
 
-	cmd := gitCommand(t, repo.Path(), "add", relativePath)
-	cmd.Dir = repoPath
+	cmd := gitCommand(t, repoPath, "add", relativePath)
 	require.NoErrorf(t, cmd.Run(), "adding file %q", relativePath)
 }
 
@@ -257,21 +256,21 @@ func TestTaggedTags(t *testing.T) {
 
 	timestamp := time.Unix(1112911993, 0)
 
-	cmd = gitCommand(t, repo.Path(), "commit", "-m", "initial", "--allow-empty")
+	cmd = gitCommand(t, path, "commit", "-m", "initial", "--allow-empty")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating commit")
 
 	// The lexicographical order of these tags is important, hence
 	// their strange names.
-	cmd = gitCommand(t, repo.Path(), "tag", "-m", "tag 1", "tag", "master")
+	cmd = gitCommand(t, path, "tag", "-m", "tag 1", "tag", "master")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 1")
 
-	cmd = gitCommand(t, repo.Path(), "tag", "-m", "tag 2", "bag", "tag")
+	cmd = gitCommand(t, path, "tag", "-m", "tag 2", "bag", "tag")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 2")
 
-	cmd = gitCommand(t, repo.Path(), "tag", "-m", "tag 3", "wag", "bag")
+	cmd = gitCommand(t, path, "tag", "-m", "tag 3", "wag", "bag")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 3")
 
@@ -300,7 +299,7 @@ func TestFromSubdir(t *testing.T) {
 
 	addFile(t, path, repo, "subdir/file.txt", "Hello, world!\n")
 
-	cmd = gitCommand(t, repo.Path(), "commit", "-m", "initial")
+	cmd = gitCommand(t, path, "commit", "-m", "initial")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating commit")
 
@@ -333,7 +332,7 @@ func TestSubmodule(t *testing.T) {
 	addFile(t, submPath, submRepo, "submfile2.txt", "Hello again, submodule!\n")
 	addFile(t, submPath, submRepo, "submfile3.txt", "Hello again, submodule!\n")
 
-	cmd = gitCommand(t, submRepo.Path(), "commit", "-m", "subm initial")
+	cmd = gitCommand(t, submPath, "commit", "-m", "subm initial")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating subm commit")
 
@@ -344,16 +343,16 @@ func TestSubmodule(t *testing.T) {
 	require.NoError(t, err, "initializing main Repository object")
 	addFile(t, mainPath, mainRepo, "mainfile.txt", "Hello, main!\n")
 
-	cmd = gitCommand(t, mainRepo.Path(), "commit", "-m", "main initial")
+	cmd = gitCommand(t, mainPath, "commit", "-m", "main initial")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating main commit")
 
 	// Make subm a submodule of main:
-	cmd = gitCommand(t, mainRepo.Path(), "submodule", "add", submPath, "sub")
+	cmd = gitCommand(t, mainPath, "submodule", "add", submPath, "sub")
 	cmd.Dir = mainPath
 	require.NoError(t, cmd.Run(), "adding submodule")
 
-	cmd = gitCommand(t, mainRepo.Path(), "commit", "-m", "add submodule")
+	cmd = gitCommand(t, mainPath, "commit", "-m", "add submodule")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "committing submodule to main")
 

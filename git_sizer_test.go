@@ -26,6 +26,14 @@ func TestExec(t *testing.T) {
 	assert.NoErrorf(t, err, "command failed; output: %#v", string(output))
 }
 
+func newRepository(t *testing.T, repoPath string) *git.Repository {
+	t.Helper()
+
+	repo, err := git.NewRepository(repoPath)
+	require.NoError(t, err)
+	return repo
+}
+
 func gitCommand(t *testing.T, repoPath string, args ...string) *exec.Cmd {
 	t.Helper()
 
@@ -118,14 +126,11 @@ func addAuthorInfo(cmd *exec.Cmd, timestamp *time.Time) {
 
 func newGitBomb(
 	t *testing.T, path string, depth, breadth int, body string,
-) (repo *git.Repository) {
+) {
 	t.Helper()
 
 	cmd := exec.Command("git", "init", "--bare", path)
 	err := cmd.Run()
-	require.NoError(t, err)
-
-	repo, err = git.NewRepository(path)
 	require.NoError(t, err)
 
 	oid := createObject(t, path, "blob", func(w io.Writer) error {
@@ -171,8 +176,6 @@ func newGitBomb(
 
 	err = updateRef(t, path, "refs/heads/master", oid)
 	require.NoError(t, err)
-
-	return repo
 }
 
 func pow(x uint64, n int) uint64 {
@@ -193,10 +196,10 @@ func TestBomb(t *testing.T) {
 		os.RemoveAll(path)
 	}()
 
-	repo := newGitBomb(t, path, 10, 10, "boom!\n")
+	newGitBomb(t, path, 10, 10, "boom!\n")
 
 	h, err := sizes.ScanRepositoryUsingGraph(
-		repo, git.AllReferencesFilter, sizes.NameStyleFull, false,
+		newRepository(t, path), git.AllReferencesFilter, sizes.NameStyleFull, false,
 	)
 	require.NoError(t, err)
 
@@ -252,8 +255,6 @@ func TestTaggedTags(t *testing.T) {
 
 	cmd := exec.Command("git", "init", path)
 	require.NoError(t, cmd.Run(), "initializing repo")
-	repo, err := git.NewRepository(path)
-	require.NoError(t, err, "initializing Repository object")
 
 	timestamp := time.Unix(1112911993, 0)
 
@@ -276,7 +277,7 @@ func TestTaggedTags(t *testing.T) {
 	require.NoError(t, cmd.Run(), "creating tag 3")
 
 	h, err := sizes.ScanRepositoryUsingGraph(
-		repo, git.AllReferencesFilter, sizes.NameStyleNone, false,
+		newRepository(t, path), git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(3), h.MaxTagDepth, "tag depth")
@@ -302,10 +303,9 @@ func TestFromSubdir(t *testing.T) {
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating commit")
 
-	repo2, err := git.NewRepository(filepath.Join(path, "subdir"))
-	require.NoError(t, err, "creating Repository object in subdirectory")
 	h, err := sizes.ScanRepositoryUsingGraph(
-		repo2, git.AllReferencesFilter, sizes.NameStyleNone, false,
+		newRepository(t, filepath.Join(path, "subdir")),
+		git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.MaxPathDepth, "max path depth")
@@ -336,8 +336,7 @@ func TestSubmodule(t *testing.T) {
 	mainPath := filepath.Join(path, "main")
 	cmd = exec.Command("git", "init", mainPath)
 	require.NoError(t, cmd.Run(), "initializing main repo")
-	mainRepo, err := git.NewRepository(mainPath)
-	require.NoError(t, err, "initializing main Repository object")
+
 	addFile(t, mainPath, "mainfile.txt", "Hello, main!\n")
 
 	cmd = gitCommand(t, mainPath, "commit", "-m", "main initial")
@@ -355,7 +354,7 @@ func TestSubmodule(t *testing.T) {
 
 	// Analyze the main repo:
 	h, err := sizes.ScanRepositoryUsingGraph(
-		mainRepo, git.AllReferencesFilter, sizes.NameStyleNone, false,
+		newRepository(t, mainPath), git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")
@@ -363,10 +362,9 @@ func TestSubmodule(t *testing.T) {
 	assert.Equal(t, counts.Count32(1), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
 
 	// Analyze the submodule:
-	submRepo2, err := git.NewRepository(filepath.Join(mainPath, "sub"))
-	require.NoError(t, err, "creating Repository object in submodule")
 	h, err = sizes.ScanRepositoryUsingGraph(
-		submRepo2, git.AllReferencesFilter, sizes.NameStyleNone, false,
+		newRepository(t, filepath.Join(mainPath, "sub")),
+		git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")

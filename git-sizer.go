@@ -116,6 +116,9 @@ func mainImplementation() error {
 
 	err = flags.Parse(os.Args[1:])
 	if err != nil {
+		if err == pflag.ErrHelp {
+			return nil
+		}
 		return err
 	}
 

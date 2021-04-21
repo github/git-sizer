@@ -48,8 +48,9 @@ func updateRef(t *testing.T, repoPath string, refname string, oid git.OID) error
 }
 
 // CreateObject creates a new Git object, of the specified type, in
-// `Repository`. `writer` is a function that writes the object in `git
-// hash-object` input format. This is used for testing only.
+// the repository at `repoPath`. `writer` is a function that writes
+// the object in `git hash-object` input format. This is used for
+// testing only.
 func createObject(
 	t *testing.T, repoPath string, otype git.ObjectType, writer func(io.Writer) error,
 ) git.OID {
@@ -86,7 +87,7 @@ func createObject(
 	return oid
 }
 
-func addFile(t *testing.T, repoPath string, repo *git.Repository, relativePath, contents string) {
+func addFile(t *testing.T, repoPath string, relativePath, contents string) {
 	dirPath := filepath.Dir(relativePath)
 	if dirPath != "." {
 		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, dirPath), 0777), "creating subdir")
@@ -292,12 +293,10 @@ func TestFromSubdir(t *testing.T) {
 
 	cmd := exec.Command("git", "init", path)
 	require.NoError(t, cmd.Run(), "initializing repo")
-	repo, err := git.NewRepository(path)
-	require.NoError(t, err, "initializing Repository object")
 
 	timestamp := time.Unix(1112911993, 0)
 
-	addFile(t, path, repo, "subdir/file.txt", "Hello, world!\n")
+	addFile(t, path, "subdir/file.txt", "Hello, world!\n")
 
 	cmd = gitCommand(t, path, "commit", "-m", "initial")
 	addAuthorInfo(cmd, &timestamp)
@@ -326,11 +325,9 @@ func TestSubmodule(t *testing.T) {
 	submPath := filepath.Join(path, "subm")
 	cmd := exec.Command("git", "init", submPath)
 	require.NoError(t, cmd.Run(), "initializing subm repo")
-	submRepo, err := git.NewRepository(submPath)
-	require.NoError(t, err, "initializing subm Repository object")
-	addFile(t, submPath, submRepo, "submfile1.txt", "Hello, submodule!\n")
-	addFile(t, submPath, submRepo, "submfile2.txt", "Hello again, submodule!\n")
-	addFile(t, submPath, submRepo, "submfile3.txt", "Hello again, submodule!\n")
+	addFile(t, submPath, "submfile1.txt", "Hello, submodule!\n")
+	addFile(t, submPath, "submfile2.txt", "Hello again, submodule!\n")
+	addFile(t, submPath, "submfile3.txt", "Hello again, submodule!\n")
 
 	cmd = gitCommand(t, submPath, "commit", "-m", "subm initial")
 	addAuthorInfo(cmd, &timestamp)
@@ -341,7 +338,7 @@ func TestSubmodule(t *testing.T) {
 	require.NoError(t, cmd.Run(), "initializing main repo")
 	mainRepo, err := git.NewRepository(mainPath)
 	require.NoError(t, err, "initializing main Repository object")
-	addFile(t, mainPath, mainRepo, "mainfile.txt", "Hello, main!\n")
+	addFile(t, mainPath, "mainfile.txt", "Hello, main!\n")
 
 	cmd = gitCommand(t, mainPath, "commit", "-m", "main initial")
 	addAuthorInfo(cmd, &timestamp)

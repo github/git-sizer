@@ -128,7 +128,7 @@ func newGitBomb(
 	repo, err = git.NewRepository(path)
 	require.NoError(t, err)
 
-	oid := createObject(t, repo.Path(), "blob", func(w io.Writer) error {
+	oid := createObject(t, path, "blob", func(w io.Writer) error {
 		_, err := io.WriteString(w, body)
 		return err
 	})
@@ -139,7 +139,7 @@ func newGitBomb(
 	prefix := "f"
 
 	for ; depth > 0; depth-- {
-		oid = createObject(t, repo.Path(), "tree", func(w io.Writer) error {
+		oid = createObject(t, path, "tree", func(w io.Writer) error {
 			for i := 0; i < breadth; i++ {
 				_, err = fmt.Fprintf(
 					w, "%s %s%0*d\x00%s",
@@ -156,7 +156,7 @@ func newGitBomb(
 		prefix = "d"
 	}
 
-	oid = createObject(t, repo.Path(), "commit", func(w io.Writer) error {
+	oid = createObject(t, path, "commit", func(w io.Writer) error {
 		_, err := fmt.Fprintf(
 			w,
 			"tree %s\n"+
@@ -169,7 +169,7 @@ func newGitBomb(
 		return err
 	})
 
-	err = updateRef(t, repo.Path(), "refs/heads/master", oid)
+	err = updateRef(t, path, "refs/heads/master", oid)
 	require.NoError(t, err)
 
 	return repo

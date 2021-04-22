@@ -62,7 +62,7 @@ func ScanRepositoryUsingGraph(
 			if !ok {
 				break
 			}
-			if !filter(ref) {
+			if !filter(ref.Refname) {
 				continue
 			}
 			refs = append(refs, ref)

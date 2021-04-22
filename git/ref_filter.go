@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-type ReferenceFilter func(Reference) bool
+type ReferenceFilter func(refname string) bool
 
-func AllReferencesFilter(_ Reference) bool {
+func AllReferencesFilter(_ string) bool {
 	return true
 }
 
@@ -43,10 +43,10 @@ func (ief *IncludeExcludeFilter) Exclude(f ReferenceFilter) {
 	ief.filters = append(ief.filters, polarizedFilter{Exclude, f})
 }
 
-func (ief *IncludeExcludeFilter) Filter(r Reference) bool {
+func (ief *IncludeExcludeFilter) Filter(refname string) bool {
 	for i := len(ief.filters); i > 0; i-- {
 		f := ief.filters[i-1]
-		if !f.filter(r) {
+		if !f.filter(refname) {
 			continue
 		}
 		return f.polarity == Include
@@ -66,14 +66,14 @@ func (ief *IncludeExcludeFilter) Filter(r Reference) bool {
 //   "refs/foobar".
 func PrefixFilter(prefix string) ReferenceFilter {
 	if strings.HasSuffix(prefix, "/") {
-		return func(r Reference) bool {
-			return strings.HasPrefix(r.Refname, prefix)
+		return func(refname string) bool {
+			return strings.HasPrefix(refname, prefix)
 		}
 	}
 
-	return func(r Reference) bool {
-		return strings.HasPrefix(r.Refname, prefix) &&
-			(len(r.Refname) == len(prefix) || r.Refname[len(prefix)] == '/')
+	return func(refname string) bool {
+		return strings.HasPrefix(refname, prefix) &&
+			(len(refname) == len(prefix) || refname[len(prefix)] == '/')
 	}
 }
 
@@ -87,7 +87,7 @@ func RegexpFilter(pattern string) (ReferenceFilter, error) {
 		return nil, err
 	}
 
-	return func(r Reference) bool {
-		return re.MatchString(r.Refname)
+	return func(refname string) bool {
+		return re.MatchString(refname)
 	}, nil
 }

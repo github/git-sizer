@@ -300,12 +300,12 @@ func mainImplementation(args []string) error {
 	if showRefs {
 		oldRefFilter := refFilter
 		fmt.Fprintf(os.Stderr, "References (included references marked with '+'):\n")
-		refFilter = func(ref git.Reference) bool {
-			b := oldRefFilter(ref)
+		refFilter = func(refname string) bool {
+			b := oldRefFilter(refname)
 			if b {
-				fmt.Fprintf(os.Stderr, "+ %s\n", ref.Refname)
+				fmt.Fprintf(os.Stderr, "+ %s\n", refname)
 			} else {
-				fmt.Fprintf(os.Stderr, "  %s\n", ref.Refname)
+				fmt.Fprintf(os.Stderr, "  %s\n", refname)
 			}
 			return b
 		}

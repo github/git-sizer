@@ -19,7 +19,7 @@ import (
 const Usage = `usage: git-sizer [OPTS]
 
   -v, --verbose                report all statistics, whether concerning or not
-      --threshold threshold    minimum level of concern (i.e., number of stars)
+      --threshold THRESHOLD    minimum level of concern (i.e., number of stars)
                                that should be reported. Default:
                                '--threshold=1'.
       --critical               only report critical statistics
@@ -43,18 +43,20 @@ const Usage = `usage: git-sizer [OPTS]
       --branches               process branches
       --tags                   process tags
       --remotes                process remote refs
-      --include prefix         process references with the specified prefix
+      --include PREFIX         process references with the specified PREFIX
                                (e.g., '--include=refs/remotes/origin')
-      --include-regexp pattern process references matching the specified
+      --include-regexp REGEXP  process references matching the specified
                                regular expression (e.g.,
                                '--include-regexp=refs/tags/release-.*')
-      --exclude prefix         don't process references with the specified
-                               prefix (e.g., '--exclude=refs/notes')
-      --exclude-regexp pattern don't process references matching the specified
+      --exclude PREFIX         don't process references with the specified
+                               PREFIX (e.g., '--exclude=refs/notes')
+      --exclude-regexp REGEXP  don't process references matching the specified
                                regular expression
       --show-refs              show which refs are being included/excluded
 
- Regular expression patterns must match the full reference name.
+ Prefixes must match at a boundary; for example 'refs/foo' matches
+ 'refs/foo' and 'refs/foo/bar' but not 'refs/foobar'. Regular
+ expression patterns must match the full reference name.
 
 `
 

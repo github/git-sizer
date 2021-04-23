@@ -43,7 +43,7 @@ func gitCommand(t *testing.T, repoPath string, args ...string) *exec.Cmd {
 	return exec.Command("git", gitArgs...)
 }
 
-func updateRef(t *testing.T, repoPath string, refname string, oid git.OID) error {
+func updateRef(t *testing.T, repoPath string, refname string, oid git.OID) {
 	t.Helper()
 
 	var cmd *exec.Cmd
@@ -53,7 +53,7 @@ func updateRef(t *testing.T, repoPath string, refname string, oid git.OID) error
 	} else {
 		cmd = gitCommand(t, repoPath, "update-ref", refname, oid.String())
 	}
-	return cmd.Run()
+	require.NoError(t, cmd.Run())
 }
 
 // createObject creates a new Git object, of the specified type, in
@@ -175,8 +175,7 @@ func newGitBomb(
 		return err
 	})
 
-	err = updateRef(t, path, "refs/heads/master", oid)
-	require.NoError(t, err)
+	updateRef(t, path, "refs/heads/master", oid)
 }
 
 func TestRefSelection(t *testing.T) {
@@ -244,8 +243,7 @@ func TestRefSelection(t *testing.T) {
 			return err
 		})
 
-		err = updateRef(t, path, refname, oid)
-		require.NoError(t, err)
+		updateRef(t, path, refname, oid)
 	}
 
 	executable, err := exec.LookPath("bin/git-sizer")

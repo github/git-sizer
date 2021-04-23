@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/github/git-sizer/counts"
 	"github.com/github/git-sizer/git"
 	"github.com/github/git-sizer/sizes"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // Smoke test that the program runs.
@@ -27,13 +27,76 @@ func TestExec(t *testing.T) {
 	assert.NoErrorf(t, err, "command failed; output: %#v", string(output))
 }
 
-func gitCommand(t *testing.T, repo *git.Repository, args ...string) *exec.Cmd {
-	cmd := exec.Command("git", args...)
-	cmd.Env = append(os.Environ(), "GIT_DIR="+repo.Path())
-	return cmd
+func newRepository(t *testing.T, repoPath string) *git.Repository {
+	t.Helper()
+
+	repo, err := git.NewRepository(repoPath)
+	require.NoError(t, err)
+	return repo
 }
 
-func addFile(t *testing.T, repoPath string, repo *git.Repository, relativePath, contents string) {
+func gitCommand(t *testing.T, repoPath string, args ...string) *exec.Cmd {
+	t.Helper()
+
+	gitArgs := []string{"-C", repoPath}
+	gitArgs = append(gitArgs, args...)
+	return exec.Command("git", gitArgs...)
+}
+
+func updateRef(t *testing.T, repoPath string, refname string, oid git.OID) error {
+	t.Helper()
+
+	var cmd *exec.Cmd
+
+	if oid == git.NullOID {
+		cmd = gitCommand(t, repoPath, "update-ref", "-d", refname)
+	} else {
+		cmd = gitCommand(t, repoPath, "update-ref", refname, oid.String())
+	}
+	return cmd.Run()
+}
+
+// createObject creates a new Git object, of the specified type, in
+// the repository at `repoPath`. `writer` is a function that writes
+// the object in `git hash-object` input format. This is used for
+// testing only.
+func createObject(
+	t *testing.T, repoPath string, otype git.ObjectType, writer func(io.Writer) error,
+) git.OID {
+	t.Helper()
+
+	cmd := gitCommand(t, repoPath, "hash-object", "-w", "-t", string(otype), "--stdin")
+	in, err := cmd.StdinPipe()
+	require.NoError(t, err)
+
+	out, err := cmd.StdoutPipe()
+	cmd.Stderr = os.Stderr
+
+	err = cmd.Start()
+	require.NoError(t, err)
+
+	err = writer(in)
+	err2 := in.Close()
+	if err != nil {
+		cmd.Wait()
+		require.NoError(t, err)
+	}
+	if err2 != nil {
+		cmd.Wait()
+		require.NoError(t, err2)
+	}
+
+	output, err := ioutil.ReadAll(out)
+	err2 = cmd.Wait()
+	require.NoError(t, err)
+	require.NoError(t, err2)
+
+	oid, err := git.NewOID(string(bytes.TrimSpace(output)))
+	require.NoError(t, err)
+	return oid
+}
+
+func addFile(t *testing.T, repoPath string, relativePath, contents string) {
 	dirPath := filepath.Dir(relativePath)
 	if dirPath != "." {
 		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, dirPath), 0777), "creating subdir")
@@ -46,8 +109,7 @@ func addFile(t *testing.T, repoPath string, repo *git.Repository, relativePath, 
 	require.NoErrorf(t, err, "writing to file %q", filename)
 	require.NoErrorf(t, f.Close(), "closing file %q", filename)
 
-	cmd := gitCommand(t, repo, "add", relativePath)
-	cmd.Dir = repoPath
+	cmd := gitCommand(t, repoPath, "add", relativePath)
 	require.NoErrorf(t, cmd.Run(), "adding file %q", relativePath)
 }
 
@@ -64,31 +126,15 @@ func addAuthorInfo(cmd *exec.Cmd, timestamp *time.Time) {
 }
 
 func newGitBomb(
-	repoName string, depth, breadth int, body string,
-) (repo *git.Repository, err error) {
-	path, err := ioutil.TempDir("", repoName)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		if err != nil {
-			os.RemoveAll(path)
-		}
-	}()
+	t *testing.T, path string, depth, breadth int, body string,
+) {
+	t.Helper()
 
 	cmd := exec.Command("git", "init", "--bare", path)
-	err = cmd.Run()
-	if err != nil {
-		return nil, err
-	}
+	err := cmd.Run()
+	require.NoError(t, err)
 
-	repo, err = git.NewRepository(path)
-	if err != nil {
-		return nil, err
-	}
-
-	oid, err := repo.CreateObject("blob", func(w io.Writer) error {
+	oid := createObject(t, path, "blob", func(w io.Writer) error {
 		_, err := io.WriteString(w, body)
 		return err
 	})
@@ -99,7 +145,7 @@ func newGitBomb(
 	prefix := "f"
 
 	for ; depth > 0; depth-- {
-		oid, err = repo.CreateObject("tree", func(w io.Writer) error {
+		oid = createObject(t, path, "tree", func(w io.Writer) error {
 			for i := 0; i < breadth; i++ {
 				_, err = fmt.Fprintf(
 					w, "%s %s%0*d\x00%s",
@@ -111,36 +157,26 @@ func newGitBomb(
 			}
 			return nil
 		})
-		if err != nil {
-			return nil, err
-		}
 
 		mode = "40000"
 		prefix = "d"
 	}
 
-	oid, err = repo.CreateObject("commit", func(w io.Writer) error {
+	oid = createObject(t, path, "commit", func(w io.Writer) error {
 		_, err := fmt.Fprintf(
 			w,
 			"tree %s\n"+
 				"author Example <example@example.com> 1112911993 -0700\n"+
 				"committer Example <example@example.com> 1112911993 -0700\n"+
 				"\n"+
-				"Mwahahaha!\n",
+				"Test git bomb\n",
 			oid,
 		)
 		return err
 	})
-	if err != nil {
-		return nil, err
-	}
 
-	err = repo.UpdateRef("refs/heads/master", oid)
-	if err != nil {
-		return nil, err
-	}
-
-	return repo, nil
+	err = updateRef(t, path, "refs/heads/master", oid)
+	require.NoError(t, err)
 }
 
 func TestRefSelection(t *testing.T) {
@@ -184,23 +220,18 @@ func TestRefSelection(t *testing.T) {
 	err = exec.Command("git", "init", "--bare", path).Run()
 	require.NoError(t, err)
 
-	repo, err := git.NewRepository(path)
-	require.NoError(t, err)
-
 	for _, refname := range allRefs {
-		oid, err := repo.CreateObject("blob", func(w io.Writer) error {
+		oid := createObject(t, path, "blob", func(w io.Writer) error {
 			_, err := fmt.Fprintf(w, "%s\n", refname)
 			return err
 		})
-		require.NoError(t, err)
 
-		oid, err = repo.CreateObject("tree", func(w io.Writer) error {
+		oid = createObject(t, path, "tree", func(w io.Writer) error {
 			_, err = fmt.Fprintf(w, "100644 a.txt\x00%s", oid.Bytes())
 			return err
 		})
-		require.NoError(t, err)
 
-		oid, err = repo.CreateObject("commit", func(w io.Writer) error {
+		oid = createObject(t, path, "commit", func(w io.Writer) error {
 			_, err := fmt.Fprintf(
 				w,
 				"tree %s\n"+
@@ -212,9 +243,8 @@ func TestRefSelection(t *testing.T) {
 			)
 			return err
 		})
-		require.NoError(t, err)
 
-		err = repo.UpdateRef(refname, oid)
+		err = updateRef(t, path, refname, oid)
 		require.NoError(t, err)
 	}
 
@@ -265,60 +295,60 @@ func pow(x uint64, n int) uint64 {
 
 func TestBomb(t *testing.T) {
 	t.Parallel()
-	assert := assert.New(t)
 
-	repo, err := newGitBomb("bomb", 10, 10, "boom!\n")
-	if err != nil {
-		t.Errorf("failed to create bomb: %s", err)
-	}
-	defer os.RemoveAll(repo.Path())
+	path, err := ioutil.TempDir("", "bomb")
+	require.NoError(t, err)
+
+	defer func() {
+		os.RemoveAll(path)
+	}()
+
+	newGitBomb(t, path, 10, 10, "boom!\n")
 
 	h, err := sizes.ScanRepositoryUsingGraph(
-		repo, git.AllReferencesFilter, sizes.NameStyleFull, false,
+		newRepository(t, path), git.AllReferencesFilter, sizes.NameStyleFull, false,
 	)
-	if !assert.NoError(err) {
-		return
-	}
+	require.NoError(t, err)
 
-	assert.Equal(counts.Count32(1), h.UniqueCommitCount, "unique commit count")
-	assert.Equal(counts.Count64(169), h.UniqueCommitSize, "unique commit size")
-	assert.Equal(counts.Count32(169), h.MaxCommitSize, "max commit size")
-	assert.Equal("refs/heads/master", h.MaxCommitSizeCommit.Path(), "max commit size commit")
-	assert.Equal(counts.Count32(1), h.MaxHistoryDepth, "max history depth")
-	assert.Equal(counts.Count32(0), h.MaxParentCount, "max parent count")
-	assert.Equal("refs/heads/master", h.MaxParentCountCommit.Path(), "max parent count commit")
+	assert.Equal(t, counts.Count32(1), h.UniqueCommitCount, "unique commit count")
+	assert.Equal(t, counts.Count64(172), h.UniqueCommitSize, "unique commit size")
+	assert.Equal(t, counts.Count32(172), h.MaxCommitSize, "max commit size")
+	assert.Equal(t, "refs/heads/master", h.MaxCommitSizeCommit.Path(), "max commit size commit")
+	assert.Equal(t, counts.Count32(1), h.MaxHistoryDepth, "max history depth")
+	assert.Equal(t, counts.Count32(0), h.MaxParentCount, "max parent count")
+	assert.Equal(t, "refs/heads/master", h.MaxParentCountCommit.Path(), "max parent count commit")
 
-	assert.Equal(counts.Count32(10), h.UniqueTreeCount, "unique tree count")
-	assert.Equal(counts.Count64(2910), h.UniqueTreeSize, "unique tree size")
-	assert.Equal(counts.Count64(100), h.UniqueTreeEntries, "unique tree entries")
-	assert.Equal(counts.Count32(10), h.MaxTreeEntries, "max tree entries")
-	assert.Equal("refs/heads/master:d0/d0/d0/d0/d0/d0/d0/d0/d0", h.MaxTreeEntriesTree.Path(), "max tree entries tree")
+	assert.Equal(t, counts.Count32(10), h.UniqueTreeCount, "unique tree count")
+	assert.Equal(t, counts.Count64(2910), h.UniqueTreeSize, "unique tree size")
+	assert.Equal(t, counts.Count64(100), h.UniqueTreeEntries, "unique tree entries")
+	assert.Equal(t, counts.Count32(10), h.MaxTreeEntries, "max tree entries")
+	assert.Equal(t, "refs/heads/master:d0/d0/d0/d0/d0/d0/d0/d0/d0", h.MaxTreeEntriesTree.Path(), "max tree entries tree")
 
-	assert.Equal(counts.Count32(1), h.UniqueBlobCount, "unique blob count")
-	assert.Equal(counts.Count64(6), h.UniqueBlobSize, "unique blob size")
-	assert.Equal(counts.Count32(6), h.MaxBlobSize, "max blob size")
-	assert.Equal("refs/heads/master:d0/d0/d0/d0/d0/d0/d0/d0/d0/f0", h.MaxBlobSizeBlob.Path(), "max blob size blob")
+	assert.Equal(t, counts.Count32(1), h.UniqueBlobCount, "unique blob count")
+	assert.Equal(t, counts.Count64(6), h.UniqueBlobSize, "unique blob size")
+	assert.Equal(t, counts.Count32(6), h.MaxBlobSize, "max blob size")
+	assert.Equal(t, "refs/heads/master:d0/d0/d0/d0/d0/d0/d0/d0/d0/f0", h.MaxBlobSizeBlob.Path(), "max blob size blob")
 
-	assert.Equal(counts.Count32(0), h.UniqueTagCount, "unique tag count")
-	assert.Equal(counts.Count32(0), h.MaxTagDepth, "max tag depth")
+	assert.Equal(t, counts.Count32(0), h.UniqueTagCount, "unique tag count")
+	assert.Equal(t, counts.Count32(0), h.MaxTagDepth, "max tag depth")
 
-	assert.Equal(counts.Count32(1), h.ReferenceCount, "reference count")
+	assert.Equal(t, counts.Count32(1), h.ReferenceCount, "reference count")
 
-	assert.Equal(counts.Count32(10), h.MaxPathDepth, "max path depth")
-	assert.Equal("refs/heads/master^{tree}", h.MaxPathDepthTree.Path(), "max path depth tree")
-	assert.Equal(counts.Count32(29), h.MaxPathLength, "max path length")
-	assert.Equal("refs/heads/master^{tree}", h.MaxPathLengthTree.Path(), "max path length tree")
+	assert.Equal(t, counts.Count32(10), h.MaxPathDepth, "max path depth")
+	assert.Equal(t, "refs/heads/master^{tree}", h.MaxPathDepthTree.Path(), "max path depth tree")
+	assert.Equal(t, counts.Count32(29), h.MaxPathLength, "max path length")
+	assert.Equal(t, "refs/heads/master^{tree}", h.MaxPathLengthTree.Path(), "max path length tree")
 
-	assert.Equal(counts.Count32((pow(10, 10)-1)/(10-1)), h.MaxExpandedTreeCount, "max expanded tree count")
-	assert.Equal("refs/heads/master^{tree}", h.MaxExpandedTreeCountTree.Path(), "max expanded tree count tree")
-	assert.Equal(counts.Count32(0xffffffff), h.MaxExpandedBlobCount, "max expanded blob count")
-	assert.Equal("refs/heads/master^{tree}", h.MaxExpandedBlobCountTree.Path(), "max expanded blob count tree")
-	assert.Equal(counts.Count64(6*pow(10, 10)), h.MaxExpandedBlobSize, "max expanded blob size")
-	assert.Equal("refs/heads/master^{tree}", h.MaxExpandedBlobSizeTree.Path(), "max expanded blob size tree")
-	assert.Equal(counts.Count32(0), h.MaxExpandedLinkCount, "max expanded link count")
-	assert.Nil(h.MaxExpandedLinkCountTree, "max expanded link count tree")
-	assert.Equal(counts.Count32(0), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
-	assert.Nil(h.MaxExpandedSubmoduleCountTree, "max expanded submodule count tree")
+	assert.Equal(t, counts.Count32((pow(10, 10)-1)/(10-1)), h.MaxExpandedTreeCount, "max expanded tree count")
+	assert.Equal(t, "refs/heads/master^{tree}", h.MaxExpandedTreeCountTree.Path(), "max expanded tree count tree")
+	assert.Equal(t, counts.Count32(0xffffffff), h.MaxExpandedBlobCount, "max expanded blob count")
+	assert.Equal(t, "refs/heads/master^{tree}", h.MaxExpandedBlobCountTree.Path(), "max expanded blob count tree")
+	assert.Equal(t, counts.Count64(6*pow(10, 10)), h.MaxExpandedBlobSize, "max expanded blob size")
+	assert.Equal(t, "refs/heads/master^{tree}", h.MaxExpandedBlobSizeTree.Path(), "max expanded blob size tree")
+	assert.Equal(t, counts.Count32(0), h.MaxExpandedLinkCount, "max expanded link count")
+	assert.Nil(t, h.MaxExpandedLinkCountTree, "max expanded link count tree")
+	assert.Equal(t, counts.Count32(0), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
+	assert.Nil(t, h.MaxExpandedSubmoduleCountTree, "max expanded submodule count tree")
 }
 
 func TestTaggedTags(t *testing.T) {
@@ -332,31 +362,29 @@ func TestTaggedTags(t *testing.T) {
 
 	cmd := exec.Command("git", "init", path)
 	require.NoError(t, cmd.Run(), "initializing repo")
-	repo, err := git.NewRepository(path)
-	require.NoError(t, err, "initializing Repository object")
 
 	timestamp := time.Unix(1112911993, 0)
 
-	cmd = gitCommand(t, repo, "commit", "-m", "initial", "--allow-empty")
+	cmd = gitCommand(t, path, "commit", "-m", "initial", "--allow-empty")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating commit")
 
 	// The lexicographical order of these tags is important, hence
 	// their strange names.
-	cmd = gitCommand(t, repo, "tag", "-m", "tag 1", "tag", "master")
+	cmd = gitCommand(t, path, "tag", "-m", "tag 1", "tag", "master")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 1")
 
-	cmd = gitCommand(t, repo, "tag", "-m", "tag 2", "bag", "tag")
+	cmd = gitCommand(t, path, "tag", "-m", "tag 2", "bag", "tag")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 2")
 
-	cmd = gitCommand(t, repo, "tag", "-m", "tag 3", "wag", "bag")
+	cmd = gitCommand(t, path, "tag", "-m", "tag 3", "wag", "bag")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 3")
 
 	h, err := sizes.ScanRepositoryUsingGraph(
-		repo, git.AllReferencesFilter, sizes.NameStyleNone, false,
+		newRepository(t, path), git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(3), h.MaxTagDepth, "tag depth")
@@ -373,21 +401,18 @@ func TestFromSubdir(t *testing.T) {
 
 	cmd := exec.Command("git", "init", path)
 	require.NoError(t, cmd.Run(), "initializing repo")
-	repo, err := git.NewRepository(path)
-	require.NoError(t, err, "initializing Repository object")
 
 	timestamp := time.Unix(1112911993, 0)
 
-	addFile(t, path, repo, "subdir/file.txt", "Hello, world!\n")
+	addFile(t, path, "subdir/file.txt", "Hello, world!\n")
 
-	cmd = gitCommand(t, repo, "commit", "-m", "initial")
+	cmd = gitCommand(t, path, "commit", "-m", "initial")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating commit")
 
-	repo2, err := git.NewRepository(filepath.Join(path, "subdir"))
-	require.NoError(t, err, "creating Repository object in subdirectory")
 	h, err := sizes.ScanRepositoryUsingGraph(
-		repo2, git.AllReferencesFilter, sizes.NameStyleNone, false,
+		newRepository(t, filepath.Join(path, "subdir")),
+		git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.MaxPathDepth, "max path depth")
@@ -407,39 +432,36 @@ func TestSubmodule(t *testing.T) {
 	submPath := filepath.Join(path, "subm")
 	cmd := exec.Command("git", "init", submPath)
 	require.NoError(t, cmd.Run(), "initializing subm repo")
-	submRepo, err := git.NewRepository(submPath)
-	require.NoError(t, err, "initializing subm Repository object")
-	addFile(t, submPath, submRepo, "submfile1.txt", "Hello, submodule!\n")
-	addFile(t, submPath, submRepo, "submfile2.txt", "Hello again, submodule!\n")
-	addFile(t, submPath, submRepo, "submfile3.txt", "Hello again, submodule!\n")
+	addFile(t, submPath, "submfile1.txt", "Hello, submodule!\n")
+	addFile(t, submPath, "submfile2.txt", "Hello again, submodule!\n")
+	addFile(t, submPath, "submfile3.txt", "Hello again, submodule!\n")
 
-	cmd = gitCommand(t, submRepo, "commit", "-m", "subm initial")
+	cmd = gitCommand(t, submPath, "commit", "-m", "subm initial")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating subm commit")
 
 	mainPath := filepath.Join(path, "main")
 	cmd = exec.Command("git", "init", mainPath)
 	require.NoError(t, cmd.Run(), "initializing main repo")
-	mainRepo, err := git.NewRepository(mainPath)
-	require.NoError(t, err, "initializing main Repository object")
-	addFile(t, mainPath, mainRepo, "mainfile.txt", "Hello, main!\n")
 
-	cmd = gitCommand(t, mainRepo, "commit", "-m", "main initial")
+	addFile(t, mainPath, "mainfile.txt", "Hello, main!\n")
+
+	cmd = gitCommand(t, mainPath, "commit", "-m", "main initial")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating main commit")
 
 	// Make subm a submodule of main:
-	cmd = gitCommand(t, mainRepo, "submodule", "add", submPath, "sub")
+	cmd = gitCommand(t, mainPath, "submodule", "add", submPath, "sub")
 	cmd.Dir = mainPath
 	require.NoError(t, cmd.Run(), "adding submodule")
 
-	cmd = gitCommand(t, mainRepo, "commit", "-m", "add submodule")
+	cmd = gitCommand(t, mainPath, "commit", "-m", "add submodule")
 	addAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "committing submodule to main")
 
 	// Analyze the main repo:
 	h, err := sizes.ScanRepositoryUsingGraph(
-		mainRepo, git.AllReferencesFilter, sizes.NameStyleNone, false,
+		newRepository(t, mainPath), git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")
@@ -447,10 +469,9 @@ func TestSubmodule(t *testing.T) {
 	assert.Equal(t, counts.Count32(1), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
 
 	// Analyze the submodule:
-	submRepo2, err := git.NewRepository(filepath.Join(mainPath, "sub"))
-	require.NoError(t, err, "creating Repository object in submodule")
 	h, err = sizes.ScanRepositoryUsingGraph(
-		submRepo2, git.AllReferencesFilter, sizes.NameStyleNone, false,
+		newRepository(t, filepath.Join(mainPath, "sub")),
+		git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")

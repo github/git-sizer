@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -42,7 +43,7 @@ func gitCommand(t *testing.T, repoPath string, args ...string) *exec.Cmd {
 	return exec.Command("git", gitArgs...)
 }
 
-func updateRef(t *testing.T, repoPath string, refname string, oid git.OID) error {
+func updateRef(t *testing.T, repoPath string, refname string, oid git.OID) {
 	t.Helper()
 
 	var cmd *exec.Cmd
@@ -52,10 +53,10 @@ func updateRef(t *testing.T, repoPath string, refname string, oid git.OID) error
 	} else {
 		cmd = gitCommand(t, repoPath, "update-ref", refname, oid.String())
 	}
-	return cmd.Run()
+	require.NoError(t, cmd.Run())
 }
 
-// CreateObject creates a new Git object, of the specified type, in
+// createObject creates a new Git object, of the specified type, in
 // the repository at `repoPath`. `writer` is a function that writes
 // the object in `git hash-object` input format. This is used for
 // testing only.
@@ -174,8 +175,112 @@ func newGitBomb(
 		return err
 	})
 
-	err = updateRef(t, path, "refs/heads/master", oid)
+	updateRef(t, path, "refs/heads/master", oid)
+}
+
+func TestRefSelection(t *testing.T) {
+	t.Parallel()
+
+	allRefs := []string{
+		"refs/barfoo",
+		"refs/foo",
+		"refs/foobar",
+		"refs/heads/foo",
+		"refs/heads/master",
+		"refs/remotes/origin/master",
+		"refs/remotes/upstream/foo",
+		"refs/remotes/upstream/master",
+		"refs/tags/foolish",
+		"refs/tags/other",
+		"refs/tags/release-1",
+		"refs/tags/release-2",
+	}
+
+	expectedStderr := "References (included references marked with '+'):\n" +
+		"+ refs/barfoo\n" +
+		"  refs/foo\n" +
+		"+ refs/foobar\n" +
+		"+ refs/heads/foo\n" +
+		"+ refs/heads/master\n" +
+		"  refs/remotes/origin/master\n" +
+		"+ refs/remotes/upstream/foo\n" +
+		"  refs/remotes/upstream/master\n" +
+		"+ refs/tags/foolish\n" +
+		"+ refs/tags/other\n" +
+		"  refs/tags/release-1\n" +
+		"  refs/tags/release-2\n"
+
+	// Create a test repo with one orphan commit per refname:
+	path, err := ioutil.TempDir("", "ref-selection")
 	require.NoError(t, err)
+
+	defer os.RemoveAll(path)
+
+	err = exec.Command("git", "init", "--bare", path).Run()
+	require.NoError(t, err)
+
+	for _, refname := range allRefs {
+		oid := createObject(t, path, "blob", func(w io.Writer) error {
+			_, err := fmt.Fprintf(w, "%s\n", refname)
+			return err
+		})
+
+		oid = createObject(t, path, "tree", func(w io.Writer) error {
+			_, err = fmt.Fprintf(w, "100644 a.txt\x00%s", oid.Bytes())
+			return err
+		})
+
+		oid = createObject(t, path, "commit", func(w io.Writer) error {
+			_, err := fmt.Fprintf(
+				w,
+				"tree %s\n"+
+					"author Example <example@example.com> 1112911993 -0700\n"+
+					"committer Example <example@example.com> 1112911993 -0700\n"+
+					"\n"+
+					"Commit for reference %s\n",
+				oid, refname,
+			)
+			return err
+		})
+
+		updateRef(t, path, refname, oid)
+	}
+
+	executable, err := exec.LookPath("bin/git-sizer")
+	require.NoError(t, err)
+	executable, err = filepath.Abs(executable)
+	require.NoError(t, err)
+
+	cmd := exec.Command(
+		executable, "--show-refs", "--no-progress", "--json", "--json-version=2",
+		"--include=refs/heads",
+		"--tags",
+		"--exclude", "refs/heads/foo",
+		"--include-regexp", ".*foo.*",
+		"--exclude", "refs/foo",
+		"--exclude-regexp", "refs/tags/release-.*",
+	)
+	cmd.Dir = path
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	require.NoError(t, err)
+
+	// Make sure that the right number of commits was scanned:
+	var v struct {
+		UniqueCommitCount struct {
+			Value int
+		}
+	}
+	err = json.Unmarshal(stdout.Bytes(), &v)
+	if assert.NoError(t, err) {
+		assert.EqualValues(t, 7, v.UniqueCommitCount.Value)
+	}
+
+	// Make sure that the right references were reported scanned:
+	assert.Equal(t, expectedStderr, stderr.String())
 }
 
 func pow(x uint64, n int) uint64 {

@@ -16,6 +16,50 @@ import (
 	"github.com/spf13/pflag"
 )
 
+const Usage = `usage: git-sizer [OPTS]
+
+  -v, --verbose                report all statistics, whether concerning or not
+      --threshold THRESHOLD    minimum level of concern (i.e., number of stars)
+                               that should be reported. Default:
+                               '--threshold=1'.
+      --critical               only report critical statistics
+      --names=[none|hash|full] display names of large objects in the specified
+                               style: 'none' (omit footnotes entirely), 'hash'
+                               (show only the SHA-1s of objects), or 'full'
+                               (show full names). Default is '--names=full'.
+  -j, --json                   output results in JSON format
+      --json-version=[1|2]     choose which JSON format version to output.
+                               Default: --json-version=1.
+      --[no-]progress          report (don't report) progress to stderr.
+      --version                only report the git-sizer version number
+
+ Reference selection:
+
+ By default, git-sizer processes all Git objects that are reachable from any
+ reference. The following options can be used to limit which references to
+ include. The last rule matching a reference determines whether that reference
+ is processed:
+
+      --branches               process branches
+      --tags                   process tags
+      --remotes                process remote refs
+      --include PREFIX         process references with the specified PREFIX
+                               (e.g., '--include=refs/remotes/origin')
+      --include-regexp REGEXP  process references matching the specified
+                               regular expression (e.g.,
+                               '--include-regexp=refs/tags/release-.*')
+      --exclude PREFIX         don't process references with the specified
+                               PREFIX (e.g., '--exclude=refs/notes')
+      --exclude-regexp REGEXP  don't process references matching the specified
+                               regular expression
+      --show-refs              show which refs are being included/excluded
+
+ Prefixes must match at a boundary; for example 'refs/foo' matches
+ 'refs/foo' and 'refs/foo/bar' but not 'refs/foobar'. Regular
+ expression patterns must match the full reference name.
+
+`
+
 var ReleaseVersion string
 var BuildVersion string
 
@@ -23,21 +67,21 @@ type NegatedBoolValue struct {
 	value *bool
 }
 
-func (b *NegatedBoolValue) Set(s string) error {
-	v, err := strconv.ParseBool(s)
-	*b.value = !v
+func (v *NegatedBoolValue) Set(s string) error {
+	b, err := strconv.ParseBool(s)
+	*v.value = !b
 	return err
 }
 
-func (b *NegatedBoolValue) Get() interface{} {
-	return !*b.value
+func (v *NegatedBoolValue) Get() interface{} {
+	return !*v.value
 }
 
-func (b *NegatedBoolValue) String() string {
-	if b == nil || b.value == nil {
+func (v *NegatedBoolValue) String() string {
+	if v == nil || v.value == nil {
 		return "true"
 	} else {
-		return strconv.FormatBool(!*b.value)
+		return strconv.FormatBool(!*v.value)
 	}
 }
 
@@ -45,18 +89,78 @@ func (v *NegatedBoolValue) Type() string {
 	return "bool"
 }
 
+type filterValue struct {
+	filter   *git.IncludeExcludeFilter
+	polarity git.Polarity
+	pattern  string
+	regexp   bool
+}
+
+func (v *filterValue) Set(s string) error {
+	var polarity git.Polarity
+	var filter git.ReferenceFilter
+
+	if v.regexp {
+		polarity = v.polarity
+		var err error
+		filter, err = git.RegexpFilter(s)
+		if err != nil {
+			return fmt.Errorf("invalid regexp: %q", s)
+		}
+	} else if v.pattern == "" {
+		polarity = v.polarity
+		filter = git.PrefixFilter(s)
+	} else {
+		// Allow a boolean value to alter the polarity:
+		b, err := strconv.ParseBool(s)
+		if err != nil {
+			return err
+		}
+		if b {
+			polarity = git.Include
+		} else {
+			polarity = git.Exclude
+		}
+		filter = git.PrefixFilter(v.pattern)
+	}
+
+	switch polarity {
+	case git.Include:
+		v.filter.Include(filter)
+	case git.Exclude:
+		v.filter.Exclude(filter)
+	}
+
+	return nil
+}
+
+func (v *filterValue) Get() interface{} {
+	return nil
+}
+
+func (v *filterValue) String() string {
+	return ""
+}
+
+func (v *filterValue) Type() string {
+	if v.regexp {
+		return "regexp"
+	} else if v.pattern == "" {
+		return "prefix"
+	} else {
+		return ""
+	}
+}
+
 func main() {
-	err := mainImplementation()
+	err := mainImplementation(os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
 	}
 }
 
-func mainImplementation() error {
-	var processBranches bool
-	var processTags bool
-	var processRemotes bool
+func mainImplementation(args []string) error {
 	var nameStyle sizes.NameStyle = sizes.NameStyleFull
 	var cpuprofile string
 	var jsonOutput bool
@@ -64,12 +168,48 @@ func mainImplementation() error {
 	var threshold sizes.Threshold = 1
 	var progress bool
 	var version bool
+	var filter git.IncludeExcludeFilter
+	var showRefs bool
 
-	flags := pflag.NewFlagSet("", pflag.ContinueOnError)
+	flags := pflag.NewFlagSet("git-sizer", pflag.ContinueOnError)
+	flags.Usage = func() {
+		fmt.Print(Usage)
+	}
 
-	flags.BoolVar(&processBranches, "branches", false, "process all branches")
-	flags.BoolVar(&processTags, "tags", false, "process all tags")
-	flags.BoolVar(&processRemotes, "remotes", false, "process all remote-tracking branches")
+	flags.Var(
+		&filterValue{&filter, git.Include, "", false}, "include",
+		"include specified references",
+	)
+	flags.Var(
+		&filterValue{&filter, git.Include, "", true}, "include-regexp",
+		"include references matching the specified regular expression",
+	)
+	flags.Var(
+		&filterValue{&filter, git.Exclude, "", false}, "exclude",
+		"exclude specified references",
+	)
+	flags.Var(
+		&filterValue{&filter, git.Exclude, "", true}, "exclude-regexp",
+		"exclude references matching the specified regular expression",
+	)
+
+	flag := flags.VarPF(
+		&filterValue{&filter, git.Include, "refs/heads/", false}, "branches", "",
+		"process all branches",
+	)
+	flag.NoOptDefVal = "true"
+
+	flag = flags.VarPF(
+		&filterValue{&filter, git.Include, "refs/tags/", false}, "tags", "",
+		"process all tags",
+	)
+	flag.NoOptDefVal = "true"
+
+	flag = flags.VarPF(
+		&filterValue{&filter, git.Include, "refs/remotes/", false}, "remotes", "",
+		"process all remotes",
+	)
+	flag.NoOptDefVal = "true"
 
 	flags.VarP(
 		sizes.NewThresholdFlagValue(&threshold, 0),
@@ -105,6 +245,7 @@ func mainImplementation() error {
 		atty = false
 	}
 	flags.BoolVar(&progress, "progress", atty, "report progress to stderr")
+	flags.BoolVar(&showRefs, "show-refs", false, "list the references being processed")
 	flags.BoolVar(&version, "version", false, "report the git-sizer version number")
 	flags.Var(&NegatedBoolValue{&progress}, "no-progress", "suppress progress output")
 	flags.Lookup("no-progress").NoOptDefVal = "true"
@@ -114,7 +255,7 @@ func mainImplementation() error {
 
 	flags.SortFlags = false
 
-	err = flags.Parse(os.Args[1:])
+	err = flags.Parse(args)
 	if err != nil {
 		if err == pflag.ErrHelp {
 			return nil
@@ -144,9 +285,7 @@ func mainImplementation() error {
 		return nil
 	}
 
-	args := flags.Args()
-
-	if len(args) != 0 {
+	if len(flags.Args()) != 0 {
 		return errors.New("excess arguments")
 	}
 
@@ -158,24 +297,23 @@ func mainImplementation() error {
 
 	var historySize sizes.HistorySize
 
-	var filter git.ReferenceFilter
-	if processBranches || processTags || processRemotes {
-		var filters []git.ReferenceFilter
-		if processBranches {
-			filters = append(filters, git.BranchesFilter)
+	var refFilter git.ReferenceFilter = filter.Filter
+
+	if showRefs {
+		oldRefFilter := refFilter
+		fmt.Fprintf(os.Stderr, "References (included references marked with '+'):\n")
+		refFilter = func(refname string) bool {
+			b := oldRefFilter(refname)
+			if b {
+				fmt.Fprintf(os.Stderr, "+ %s\n", refname)
+			} else {
+				fmt.Fprintf(os.Stderr, "  %s\n", refname)
+			}
+			return b
 		}
-		if processTags {
-			filters = append(filters, git.TagsFilter)
-		}
-		if processRemotes {
-			filters = append(filters, git.RemotesFilter)
-		}
-		filter = git.OrFilter(filters...)
-	} else {
-		filter = git.AllReferencesFilter
 	}
 
-	historySize, err = sizes.ScanRepositoryUsingGraph(repo, filter, nameStyle, progress)
+	historySize, err = sizes.ScanRepositoryUsingGraph(repo, refFilter, nameStyle, progress)
 	if err != nil {
 		return fmt.Errorf("error scanning repository: %s", err)
 	}

@@ -23,6 +23,8 @@ func TestPrefixFilter(t *testing.T) {
 		{"refs/heads", "refs/he", false},
 		{"refs/heads", "refs/headstrong", false},
 		{"refs/heads", "refs/tags/refs/heads", false},
+		{"refs/heads/", "refs/heads", false},
+		{"refs/heads/", "refs/heads/foo/bar", true},
 		{"refs/stash", "refs/stash", true},
 		{"refs/stash", "refs/stashy", false},
 		{"refs/remotes", "refs/remotes/origin/master", true},

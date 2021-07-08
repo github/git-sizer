@@ -9,7 +9,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Get full repo histroy
+      - name: Get full repo history
         run: git fetch --prune --unshallow --tags
       - name: Test
         run: make test

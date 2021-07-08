@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -178,37 +179,53 @@ func newGitBomb(
 	updateRef(t, path, "refs/heads/master", oid)
 }
 
-func TestRefSelection(t *testing.T) {
+// TestRefSelections tests various combinations of reference selection
+// options.
+func TestRefSelections(t *testing.T) {
 	t.Parallel()
 
-	allRefs := []string{
-		"refs/barfoo",
-		"refs/foo",
-		"refs/foobar",
-		"refs/heads/foo",
-		"refs/heads/master",
-		"refs/remotes/origin/master",
-		"refs/remotes/upstream/foo",
-		"refs/remotes/upstream/master",
-		"refs/tags/foolish",
-		"refs/tags/other",
-		"refs/tags/release-1",
-		"refs/tags/release-2",
+	references := []struct {
+		// The plusses and spaces in the `results` string correspond
+		// to the expected results for one of the tests: `results[i]`
+		// tells whether we expect `refname` to be included ('+') or
+		// excluded (' ') in test case number `i`.
+		results string
+
+		refname string
+	}{
+		//          1111111
+		//01234567890123456
+		{"+ + + + + + +   +", "refs/barfoo"},
+		{"+ + + + + + +++  ", "refs/foo"},
+		{"+ + + + + + +   +", "refs/foobar"},
+		{"++  + + + +++   +", "refs/heads/foo"},
+		{"++  + + + ++    +", "refs/heads/master"},
+		{"+ + + ++  +      ", "refs/notes/discussion"},
+		{"+ + ++  + +      ", "refs/remotes/origin/master"},
+		{"+ + ++  + + +   +", "refs/remotes/upstream/foo"},
+		{"+ + ++  + +      ", "refs/remotes/upstream/master"},
+		{"+ + + + ++       ", "refs/stash"},
+		{"+ ++  + + +++   +", "refs/tags/foolish"},
+		{"+ ++  + + ++    +", "refs/tags/other"},
+		{"+ ++  + + ++   + ", "refs/tags/release-1"},
+		{"+ ++  + + ++   + ", "refs/tags/release-2"},
 	}
 
-	expectedStderr := "References (included references marked with '+'):\n" +
-		"+ refs/barfoo\n" +
-		"  refs/foo\n" +
-		"+ refs/foobar\n" +
-		"+ refs/heads/foo\n" +
-		"+ refs/heads/master\n" +
-		"  refs/remotes/origin/master\n" +
-		"+ refs/remotes/upstream/foo\n" +
-		"  refs/remotes/upstream/master\n" +
-		"+ refs/tags/foolish\n" +
-		"+ refs/tags/other\n" +
-		"  refs/tags/release-1\n" +
-		"  refs/tags/release-2\n"
+	// computeExpectations assembles and returns the results expected
+	// for test `i` from the `references` slice.
+	computeExpectations := func(i int) (string, int) {
+		var sb strings.Builder
+		fmt.Fprintln(&sb, "References (included references marked with '+'):")
+		count := 0
+		for _, p := range references {
+			present := p.results[i]
+			fmt.Fprintf(&sb, "%c %s\n", present, p.refname)
+			if present == '+' {
+				count++
+			}
+		}
+		return sb.String(), count
+	}
 
 	// Create a test repo with one orphan commit per refname:
 	path, err := ioutil.TempDir("", "ref-selection")
@@ -219,9 +236,9 @@ func TestRefSelection(t *testing.T) {
 	err = exec.Command("git", "init", "--bare", path).Run()
 	require.NoError(t, err)
 
-	for _, refname := range allRefs {
+	for _, p := range references {
 		oid := createObject(t, path, "blob", func(w io.Writer) error {
-			_, err := fmt.Fprintf(w, "%s\n", refname)
+			_, err := fmt.Fprintf(w, "%s\n", p.refname)
 			return err
 		})
 
@@ -238,12 +255,12 @@ func TestRefSelection(t *testing.T) {
 					"committer Example <example@example.com> 1112911993 -0700\n"+
 					"\n"+
 					"Commit for reference %s\n",
-				oid, refname,
+				oid, p.refname,
 			)
 			return err
 		})
 
-		updateRef(t, path, refname, oid)
+		updateRef(t, path, p.refname, oid)
 	}
 
 	executable, err := exec.LookPath("bin/git-sizer")
@@ -251,36 +268,70 @@ func TestRefSelection(t *testing.T) {
 	executable, err = filepath.Abs(executable)
 	require.NoError(t, err)
 
-	cmd := exec.Command(
-		executable, "--show-refs", "--no-progress", "--json", "--json-version=2",
-		"--include=refs/heads",
-		"--tags",
-		"--exclude", "refs/heads/foo",
-		"--include-regexp", ".*foo.*",
-		"--exclude", "refs/foo",
-		"--exclude-regexp", "refs/tags/release-.*",
-	)
-	cmd.Dir = path
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	err = cmd.Run()
-	require.NoError(t, err)
+	for i, p := range []struct {
+		name string
+		args []string
+	}{
+		{"no arguments", nil},                                                  // 0
+		{"branches", []string{"--branches"}},                                   // 1
+		{"no branches", []string{"--no-branches"}},                             // 2
+		{"tags", []string{"--tags"}},                                           // 3
+		{"no tags", []string{"--no-tags"}},                                     // 4
+		{"remotes", []string{"--remotes"}},                                     // 5
+		{"no remotes", []string{"--no-remotes"}},                               // 6
+		{"notes", []string{"--notes"}},                                         // 7
+		{"no notes", []string{"--no-notes"}},                                   // 8
+		{"stash", []string{"--stash"}},                                         // 9
+		{"no stash", []string{"--no-stash"}},                                   // 10
+		{"branches and tags", []string{"--branches", "--tags"}},                // 11
+		{"foo", []string{"--include-regexp", ".*foo.*"}},                       // 12
+		{"refs/foo as prefix", []string{"--include", "refs/foo"}},              // 13
+		{"refs/foo as regexp", []string{"--include-regexp", "refs/foo"}},       // 14
+		{"release tags", []string{"--include-regexp", "refs/tags/release-.*"}}, // 15
+		{
+			name: "combination",
+			args: []string{
+				"--include=refs/heads",
+				"--tags",
+				"--exclude", "refs/heads/foo",
+				"--include-regexp", ".*foo.*",
+				"--exclude", "refs/foo",
+				"--exclude-regexp", "refs/tags/release-.*",
+			},
+		}, // 16
+	} {
+		t.Run(
+			p.name,
+			func(t *testing.T) {
+				args := []string{"--show-refs", "--no-progress", "--json", "--json-version=2"}
+				args = append(args, p.args...)
+				cmd := exec.Command(executable, args...)
+				cmd.Dir = path
+				var stdout bytes.Buffer
+				cmd.Stdout = &stdout
+				var stderr bytes.Buffer
+				cmd.Stderr = &stderr
+				err = cmd.Run()
+				assert.NoError(t, err)
 
-	// Make sure that the right number of commits was scanned:
-	var v struct {
-		UniqueCommitCount struct {
-			Value int
-		}
-	}
-	err = json.Unmarshal(stdout.Bytes(), &v)
-	if assert.NoError(t, err) {
-		assert.EqualValues(t, 7, v.UniqueCommitCount.Value)
-	}
+				expectedStderr, expectedUniqueCommitCount := computeExpectations(i)
 
-	// Make sure that the right references were reported scanned:
-	assert.Equal(t, expectedStderr, stderr.String())
+				// Make sure that the right number of commits was scanned:
+				var v struct {
+					UniqueCommitCount struct {
+						Value int
+					}
+				}
+				err = json.Unmarshal(stdout.Bytes(), &v)
+				if assert.NoError(t, err) {
+					assert.EqualValues(t, expectedUniqueCommitCount, v.UniqueCommitCount.Value)
+				}
+
+				// Make sure that the right references were reported scanned:
+				assert.Equal(t, expectedStderr, stderr.String())
+			},
+		)
+	}
 }
 
 func pow(x uint64, n int) uint64 {

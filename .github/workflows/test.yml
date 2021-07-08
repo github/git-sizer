@@ -1,0 +1,15 @@
+on: [push, pull_request]
+name: Test
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Get full repo history
+        run: git fetch --prune --unshallow --tags
+      - name: Test
+        run: make test

@@ -63,6 +63,11 @@ const Usage = `usage: git-sizer [OPTS]
                                PREFIX (e.g., '--exclude=refs/changes')
       --exclude-regexp REGEXP  don't process references matching the specified
                                regular expression
+      --refgroup=NAME          process reference in group defined by gitconfig:
+                               'refgroup.NAME.include',
+                               'refgroup.NAME.includeRegexp',
+                               'refgroup.NAME.exclude', and
+                               'refgroup.NAME.excludeRegexp' as above.
       --show-refs              show which refs are being included/excluded
 
  Prefixes must match at a boundary; for example 'refs/foo' matches
@@ -178,6 +183,70 @@ func (v *filterValue) Type() string {
 	}
 }
 
+type filterGroupValue struct {
+	filter *git.IncludeExcludeFilter
+	repo   *git.Repository
+}
+
+func (v *filterGroupValue) Set(name string) error {
+	// At this point, it is not yet certain that the command was run
+	// inside a Git repository. If not, ignore this option (the
+	// command will error out anyway).
+	if v.repo == nil {
+		fmt.Fprintf(
+			os.Stderr,
+			"warning: not in Git repository; ignoring '--refgroup' option.\n",
+		)
+		return nil
+	}
+
+	config, err := v.repo.Config(fmt.Sprintf("refgroup.%s", name))
+	if err != nil {
+		return err
+	}
+	for _, entry := range config.Entries {
+		switch entry.Key {
+		case "include":
+			v.filter.Include(git.PrefixFilter(entry.Value))
+		case "includeregexp":
+			filter, err := git.RegexpFilter(entry.Value)
+			if err != nil {
+				return fmt.Errorf(
+					"invalid regular expression for 'refgroup.%s.%s': %w",
+					name, entry.Key, err,
+				)
+			}
+			v.filter.Include(filter)
+		case "exclude":
+			v.filter.Exclude(git.PrefixFilter(entry.Value))
+		case "excluderegexp":
+			filter, err := git.RegexpFilter(entry.Value)
+			if err != nil {
+				return fmt.Errorf(
+					"invalid regular expression for 'refgroup.%s.%s': %w",
+					name, entry.Key, err,
+				)
+			}
+			v.filter.Exclude(filter)
+		default:
+			// Ignore unrecognized keys.
+		}
+	}
+	return nil
+}
+
+func (v *filterGroupValue) Get() interface{} {
+	return nil
+}
+
+func (v *filterGroupValue) String() string {
+	return ""
+}
+
+func (v *filterGroupValue) Type() string {
+	return "name"
+}
+
 func main() {
 	err := mainImplementation(os.Args[1:])
 	if err != nil {
@@ -196,6 +265,13 @@ func mainImplementation(args []string) error {
 	var version bool
 	var filter git.IncludeExcludeFilter
 	var showRefs bool
+
+	// Try to open the repository, but it's not an error yet if this
+	// fails, because the user might only be asking for `--help`.
+	repo, repoErr := git.NewRepository(".")
+	if repoErr == nil {
+		defer repo.Close()
+	}
 
 	flags := pflag.NewFlagSet("git-sizer", pflag.ContinueOnError)
 	flags.Usage = func() {
@@ -279,6 +355,11 @@ func mainImplementation(args []string) error {
 	)
 	flag.NoOptDefVal = "true"
 
+	flag = flags.VarPF(
+		&filterGroupValue{&filter, repo}, "refgroup", "",
+		"process references in refgroup defined by gitconfig",
+	)
+
 	flags.VarP(
 		sizes.NewThresholdFlagValue(&threshold, 0),
 		"verbose", "v", "report all statistics, whether concerning or not",
@@ -359,11 +440,9 @@ func mainImplementation(args []string) error {
 		return errors.New("excess arguments")
 	}
 
-	repo, err := git.NewRepository(".")
-	if err != nil {
-		return fmt.Errorf("couldn't open Git repository: %s", err)
+	if repoErr != nil {
+		return fmt.Errorf("couldn't open Git repository: %s", repoErr)
 	}
-	defer repo.Close()
 
 	if jsonOutput {
 		if !flags.Changed("json-version") {

@@ -193,22 +193,22 @@ func TestRefSelections(t *testing.T) {
 
 		refname string
 	}{
-		//          1111111
-		//01234567890123456
-		{"+ + + + + + +   +", "refs/barfoo"},
-		{"+ + + + + + +++  ", "refs/foo"},
-		{"+ + + + + + +   +", "refs/foobar"},
-		{"++  + + + +++   +", "refs/heads/foo"},
-		{"++  + + + ++    +", "refs/heads/master"},
-		{"+ + + ++  +      ", "refs/notes/discussion"},
-		{"+ + ++  + +      ", "refs/remotes/origin/master"},
-		{"+ + ++  + + +   +", "refs/remotes/upstream/foo"},
-		{"+ + ++  + +      ", "refs/remotes/upstream/master"},
-		{"+ + + + ++       ", "refs/stash"},
-		{"+ ++  + + +++   +", "refs/tags/foolish"},
-		{"+ ++  + + ++    +", "refs/tags/other"},
-		{"+ ++  + + ++   + ", "refs/tags/release-1"},
-		{"+ ++  + + ++   + ", "refs/tags/release-2"},
+		//          111111111
+		//0123456789012345678
+		{"+ + + + + + +   + +", "refs/barfoo"},
+		{"+ + + + + + +++    ", "refs/foo"},
+		{"+ + + + + + +   + +", "refs/foobar"},
+		{"++  + + + +++   +++", "refs/heads/foo"},
+		{"++  + + + ++    +++", "refs/heads/master"},
+		{"+ + + ++  +        ", "refs/notes/discussion"},
+		{"+ + ++  + +        ", "refs/remotes/origin/master"},
+		{"+ + ++  + + +   + +", "refs/remotes/upstream/foo"},
+		{"+ + ++  + +        ", "refs/remotes/upstream/master"},
+		{"+ + + + ++         ", "refs/stash"},
+		{"+ ++  + + +++   + +", "refs/tags/foolish"},
+		{"+ ++  + + ++    + +", "refs/tags/other"},
+		{"+ ++  + + ++   +   ", "refs/tags/release-1"},
+		{"+ ++  + + ++   +   ", "refs/tags/release-2"},
 	}
 
 	// computeExpectations assembles and returns the results expected
@@ -269,8 +269,9 @@ func TestRefSelections(t *testing.T) {
 	require.NoError(t, err)
 
 	for i, p := range []struct {
-		name string
-		args []string
+		name   string
+		args   []string
+		config [][2]string
 	}{
 		{ // 0
 			name: "no arguments",
@@ -346,10 +347,46 @@ func TestRefSelections(t *testing.T) {
 				"--exclude-regexp", "refs/tags/release-.*",
 			},
 		},
+		{ // 17
+			name: "branches-refgroup",
+			args: []string{"--refgroup=mygroup"},
+			config: [][2]string{
+				{"include", "refs/heads"},
+			},
+		},
+		{ // 18
+			name: "combination-refgroup",
+			args: []string{"--refgroup=mygroup"},
+			config: [][2]string{
+				{"include", "refs/heads"},
+				{"include", "refs/tags"},
+				{"exclude", "refs/heads/foo"},
+				{"includeRegexp", ".*foo.*"},
+				{"exclude", "refs/foo"},
+				{"excludeRegexp", "refs/tags/release-.*"},
+			},
+		},
 	} {
 		t.Run(
 			p.name,
 			func(t *testing.T) {
+				if len(p.config) != 0 {
+					for _, c := range p.config {
+						cmd := gitCommand(
+							t, path,
+							"config", "--add", fmt.Sprintf("refgroup.mygroup.%s", c[0]), c[1],
+						)
+						err := cmd.Run()
+						require.NoError(t, err)
+					}
+					defer func() {
+						cmd := gitCommand(
+							t, path, "config", "--remove-section", "refgroup.mygroup",
+						)
+						err := cmd.Run()
+						require.NoError(t, err)
+					}()
+				}
 				args := []string{"--show-refs", "--no-progress", "--json", "--json-version=2"}
 				args = append(args, p.args...)
 				cmd := exec.Command(executable, args...)

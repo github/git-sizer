@@ -18,19 +18,28 @@ import (
 
 const Usage = `usage: git-sizer [OPTS]
 
-  -v, --verbose                report all statistics, whether concerning or not
       --threshold THRESHOLD    minimum level of concern (i.e., number of stars)
                                that should be reported. Default:
-                               '--threshold=1'.
-      --critical               only report critical statistics
+                               '--threshold=1'. Can be set via gitconfig:
+                               'sizer.threshold'.
+  -v, --verbose                report all statistics, whether concerning or
+                               not; equivalent to '--threshold=0
+      --no-verbose             equivalent to '--threshold=1'
+      --critical               only report critical statistics; equivalent
+                               to '--threshold=30'
       --names=[none|hash|full] display names of large objects in the specified
-                               style: 'none' (omit footnotes entirely), 'hash'
-                               (show only the SHA-1s of objects), or 'full'
-                               (show full names). Default is '--names=full'.
+                               style. Values:
+                               * 'none' - omit footnotes entirely
+                               * 'hash' - show only the SHA-1s of objects
+                               * 'full' - show full names
+                               Default is '--names=full'. Can be set via
+                               gitconfig: 'sizer.names'.
   -j, --json                   output results in JSON format
       --json-version=[1|2]     choose which JSON format version to output.
-                               Default: --json-version=1.
-      --[no-]progress          report (don't report) progress to stderr.
+                               Default: --json-version=1. Can be set via
+                               gitconfig: 'sizer.jsonVersion'.
+      --[no-]progress          report (don't report) progress to stderr. Can
+                               be set via gitconfig: 'sizer.progress'.
       --version                only report the git-sizer version number
 
  Reference selection:
@@ -164,8 +173,8 @@ func mainImplementation(args []string) error {
 	var nameStyle sizes.NameStyle = sizes.NameStyleFull
 	var cpuprofile string
 	var jsonOutput bool
-	var jsonVersion uint
-	var threshold sizes.Threshold = 1
+	var jsonVersion int
+	var threshold sizes.Threshold
 	var progress bool
 	var version bool
 	var filter git.IncludeExcludeFilter
@@ -218,6 +227,12 @@ func mainImplementation(args []string) error {
 	flags.Lookup("verbose").NoOptDefVal = "true"
 
 	flags.Var(
+		sizes.NewThresholdFlagValue(&threshold, 1),
+		"no-verbose", "report statistics that are at all concerning",
+	)
+	flags.Lookup("no-verbose").NoOptDefVal = "true"
+
+	flags.Var(
 		&threshold, "threshold",
 		"minimum level of concern (i.e., number of stars) that should be\n"+
 			"                              reported",
@@ -238,7 +253,7 @@ func mainImplementation(args []string) error {
 	)
 
 	flags.BoolVarP(&jsonOutput, "json", "j", false, "output results in JSON format")
-	flags.UintVar(&jsonVersion, "json-version", 1, "JSON format version to output (1 or 2)")
+	flags.IntVar(&jsonVersion, "json-version", 1, "JSON format version to output (1 or 2)")
 
 	atty, err := isatty.Isatty(os.Stderr.Fd())
 	if err != nil {
@@ -261,10 +276,6 @@ func mainImplementation(args []string) error {
 			return nil
 		}
 		return err
-	}
-
-	if jsonOutput && !(jsonVersion == 1 || jsonVersion == 2) {
-		return fmt.Errorf("JSON version must be 1 or 2")
 	}
 
 	if cpuprofile != "" {
@@ -294,6 +305,55 @@ func mainImplementation(args []string) error {
 		return fmt.Errorf("couldn't open Git repository: %s", err)
 	}
 	defer repo.Close()
+
+	if jsonOutput {
+		if !flags.Changed("json-version") {
+			v, err := repo.ConfigIntDefault("sizer.jsonVersion", jsonVersion)
+			if err != nil {
+				return err
+			}
+			jsonVersion = v
+			if !(jsonVersion == 1 || jsonVersion == 2) {
+				return fmt.Errorf("JSON version (read from gitconfig) must be 1 or 2")
+			}
+		} else if !(jsonVersion == 1 || jsonVersion == 2) {
+			return fmt.Errorf("JSON version must be 1 or 2")
+		}
+	}
+
+	if !flags.Changed("threshold") &&
+		!flags.Changed("verbose") &&
+		!flags.Changed("no-verbose") &&
+		!flags.Changed("critical") {
+		s, err := repo.ConfigStringDefault("sizer.threshold", fmt.Sprintf("%g", threshold))
+		if err != nil {
+			return err
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return fmt.Errorf("parsing gitconfig value for 'sizer.threshold': %w", err)
+		}
+		threshold = sizes.Threshold(v)
+	}
+
+	if !flags.Changed("names") {
+		s, err := repo.ConfigStringDefault("sizer.names", "full")
+		if err != nil {
+			return err
+		}
+		err = nameStyle.Set(s)
+		if err != nil {
+			return fmt.Errorf("parsing gitconfig value for 'sizer.names': %w", err)
+		}
+	}
+
+	if !flags.Changed("progress") && !flags.Changed("no-progress") {
+		v, err := repo.ConfigBoolDefault("sizer.progress", progress)
+		if err != nil {
+			return fmt.Errorf("parsing gitconfig value for 'sizer.progress': %w", err)
+		}
+		progress = v
+	}
 
 	var historySize sizes.HistorySize
 

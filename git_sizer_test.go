@@ -272,23 +272,70 @@ func TestRefSelections(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"no arguments", nil},                                                  // 0
-		{"branches", []string{"--branches"}},                                   // 1
-		{"no branches", []string{"--no-branches"}},                             // 2
-		{"tags", []string{"--tags"}},                                           // 3
-		{"no tags", []string{"--no-tags"}},                                     // 4
-		{"remotes", []string{"--remotes"}},                                     // 5
-		{"no remotes", []string{"--no-remotes"}},                               // 6
-		{"notes", []string{"--notes"}},                                         // 7
-		{"no notes", []string{"--no-notes"}},                                   // 8
-		{"stash", []string{"--stash"}},                                         // 9
-		{"no stash", []string{"--no-stash"}},                                   // 10
-		{"branches and tags", []string{"--branches", "--tags"}},                // 11
-		{"foo", []string{"--include-regexp", ".*foo.*"}},                       // 12
-		{"refs/foo as prefix", []string{"--include", "refs/foo"}},              // 13
-		{"refs/foo as regexp", []string{"--include-regexp", "refs/foo"}},       // 14
-		{"release tags", []string{"--include-regexp", "refs/tags/release-.*"}}, // 15
-		{
+		{ // 0
+			name: "no arguments",
+		},
+		{ // 1
+			name: "branches",
+			args: []string{"--branches"},
+		},
+		{ // 2
+			name: "no branches",
+			args: []string{"--no-branches"},
+		},
+		{ // 3
+			name: "tags",
+			args: []string{"--tags"},
+		},
+		{ // 4
+			name: "no tags",
+			args: []string{"--no-tags"},
+		},
+		{ // 5
+			name: "remotes",
+			args: []string{"--remotes"},
+		},
+		{ // 6
+			name: "no remotes",
+			args: []string{"--no-remotes"},
+		},
+		{ // 7
+			name: "notes",
+			args: []string{"--notes"},
+		},
+		{ // 8
+			name: "no notes",
+			args: []string{"--no-notes"},
+		},
+		{ // 9
+			name: "stash",
+			args: []string{"--stash"},
+		},
+		{ // 10
+			name: "no stash",
+			args: []string{"--no-stash"},
+		},
+		{ // 11
+			name: "branches and tags",
+			args: []string{"--branches", "--tags"},
+		},
+		{ // 12
+			name: "foo",
+			args: []string{"--include-regexp", ".*foo.*"},
+		},
+		{ // 13
+			name: "refs/foo as prefix",
+			args: []string{"--include", "refs/foo"},
+		},
+		{ // 14
+			name: "refs/foo as regexp",
+			args: []string{"--include-regexp", "refs/foo"},
+		},
+		{ // 15
+			name: "release tags",
+			args: []string{"--include-regexp", "refs/tags/release-.*"},
+		},
+		{ // 16
 			name: "combination",
 			args: []string{
 				"--include=refs/heads",
@@ -298,7 +345,7 @@ func TestRefSelections(t *testing.T) {
 				"--exclude", "refs/foo",
 				"--exclude-regexp", "refs/tags/release-.*",
 			},
-		}, // 16
+		},
 	} {
 		t.Run(
 			p.name,

@@ -18,6 +18,18 @@ const (
 	Exclude
 )
 
+func (p Polarity) Inverted() Polarity {
+	switch p {
+	case Include:
+		return Exclude
+	case Exclude:
+		return Include
+	default:
+		// This shouldn't happen:
+		return Exclude
+	}
+}
+
 // polarizedFilter is a filter that might match, in which case it
 // includes or excludes the reference (according to its polarity). If
 // it doesn't match, then it doesn't say anything about the reference.

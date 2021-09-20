@@ -49,16 +49,18 @@ const Usage = `usage: git-sizer [OPTS]
  include. The last rule matching a reference determines whether that reference
  is processed:
 
-      --branches               process branches
-      --tags                   process tags
-      --remotes                process remote refs
+      --[no-]branches          process [don't process] branches
+      --[no-]tags              process [don't process] tags
+      --[no-]remotes           process [don't process] remote-tracking references
+      --[no-]notes             process [don't process] git-notes references
+      --[no-]stash             process [don't process] refs/stash
       --include PREFIX         process references with the specified PREFIX
                                (e.g., '--include=refs/remotes/origin')
       --include-regexp REGEXP  process references matching the specified
                                regular expression (e.g.,
                                '--include-regexp=refs/tags/release-.*')
       --exclude PREFIX         don't process references with the specified
-                               PREFIX (e.g., '--exclude=refs/notes')
+                               PREFIX (e.g., '--exclude=refs/changes')
       --exclude-regexp REGEXP  don't process references matching the specified
                                regular expression
       --show-refs              show which refs are being included/excluded
@@ -99,38 +101,53 @@ func (v *NegatedBoolValue) Type() string {
 }
 
 type filterValue struct {
-	filter   *git.IncludeExcludeFilter
+	// The filter to which values will be appended:
+	filter *git.IncludeExcludeFilter
+
+	// The polarity of this option (i.e., does it cause the things
+	// that it references to be included or excluded?):
 	polarity git.Polarity
-	pattern  string
-	regexp   bool
+
+	// If this is set, then it is used as the pattern. If not, then
+	// the user should supply the pattern.
+	pattern string
+
+	// Should `pattern` be interpreted as a regexp (as opposed to a
+	// prefix)?
+	regexp bool
 }
 
 func (v *filterValue) Set(s string) error {
-	var polarity git.Polarity
 	var filter git.ReferenceFilter
+	polarity := v.polarity
 
-	if v.regexp {
-		polarity = v.polarity
-		var err error
-		filter, err = git.RegexpFilter(s)
-		if err != nil {
-			return fmt.Errorf("invalid regexp: %q", s)
-		}
-	} else if v.pattern == "" {
-		polarity = v.polarity
-		filter = git.PrefixFilter(s)
-	} else {
-		// Allow a boolean value to alter the polarity:
+	var pattern string
+	if v.pattern != "" {
+		// The pattern is fixed for this option:
+		pattern = v.pattern
+
+		// It's not really expected, but if the user supplied a
+		// `false` boolean value, invert the polarity:
 		b, err := strconv.ParseBool(s)
 		if err != nil {
 			return err
 		}
-		if b {
-			polarity = git.Include
-		} else {
-			polarity = git.Exclude
+		if !b {
+			polarity = polarity.Inverted()
 		}
-		filter = git.PrefixFilter(v.pattern)
+	} else {
+		// The user must supply the pattern.
+		pattern = s
+	}
+
+	if v.regexp {
+		var err error
+		filter, err = git.RegexpFilter(pattern)
+		if err != nil {
+			return fmt.Errorf("invalid regexp: %q", s)
+		}
+	} else {
+		filter = git.PrefixFilter(pattern)
 	}
 
 	switch polarity {
@@ -152,12 +169,12 @@ func (v *filterValue) String() string {
 }
 
 func (v *filterValue) Type() string {
-	if v.regexp {
+	if v.pattern != "" {
+		return "bool"
+	} else if v.regexp {
 		return "regexp"
-	} else if v.pattern == "" {
-		return "prefix"
 	} else {
-		return ""
+		return "prefix"
 	}
 }
 
@@ -203,20 +220,62 @@ func mainImplementation(args []string) error {
 	)
 
 	flag := flags.VarPF(
-		&filterValue{&filter, git.Include, "refs/heads/", false}, "branches", "",
+		&filterValue{&filter, git.Include, "refs/heads", false}, "branches", "",
 		"process all branches",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{&filter, git.Include, "refs/tags/", false}, "tags", "",
+		&filterValue{&filter, git.Exclude, "refs/heads", false}, "no-branches", "",
+		"exclude all branches",
+	)
+	flag.NoOptDefVal = "true"
+
+	flag = flags.VarPF(
+		&filterValue{&filter, git.Include, "refs/tags", false}, "tags", "",
 		"process all tags",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{&filter, git.Include, "refs/remotes/", false}, "remotes", "",
-		"process all remotes",
+		&filterValue{&filter, git.Exclude, "refs/tags", false}, "no-tags", "",
+		"exclude all tags",
+	)
+	flag.NoOptDefVal = "true"
+
+	flag = flags.VarPF(
+		&filterValue{&filter, git.Include, "refs/remotes", false}, "remotes", "",
+		"process all remote-tracking references",
+	)
+	flag.NoOptDefVal = "true"
+
+	flag = flags.VarPF(
+		&filterValue{&filter, git.Exclude, "refs/remotes", false}, "no-remotes", "",
+		"exclude all remote-tracking references",
+	)
+	flag.NoOptDefVal = "true"
+
+	flag = flags.VarPF(
+		&filterValue{&filter, git.Include, "refs/notes", false}, "notes", "",
+		"process all git-notes references",
+	)
+	flag.NoOptDefVal = "true"
+
+	flag = flags.VarPF(
+		&filterValue{&filter, git.Exclude, "refs/notes", false}, "no-notes", "",
+		"exclude all git-notes references",
+	)
+	flag.NoOptDefVal = "true"
+
+	flag = flags.VarPF(
+		&filterValue{&filter, git.Include, "refs/stash", true}, "stash", "",
+		"process refs/stash",
+	)
+	flag.NoOptDefVal = "true"
+
+	flag = flags.VarPF(
+		&filterValue{&filter, git.Exclude, "refs/stash", true}, "no-stash", "",
+		"exclude refs/stash",
 	)
 	flag.NoOptDefVal = "true"
 

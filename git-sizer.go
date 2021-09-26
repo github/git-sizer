@@ -493,8 +493,6 @@ func mainImplementation(args []string) error {
 		progress = v
 	}
 
-	var historySize sizes.HistorySize
-
 	var refFilter git.ReferenceFilter = filter.Filter
 
 	if showRefs {
@@ -511,7 +509,7 @@ func mainImplementation(args []string) error {
 		}
 	}
 
-	historySize, err = sizes.ScanRepositoryUsingGraph(repo, refFilter, nameStyle, progress)
+	historySize, err := sizes.ScanRepositoryUsingGraph(repo, refFilter, nameStyle, progress)
 	if err != nil {
 		return fmt.Errorf("error scanning repository: %s", err)
 	}

@@ -260,7 +260,7 @@ func mainImplementation(args []string) error {
 	var cpuprofile string
 	var jsonOutput bool
 	var jsonVersion int
-	var threshold sizes.Threshold
+	var threshold sizes.Threshold = 1
 	var progress bool
 	var version bool
 	var filter git.IncludeExcludeFilter

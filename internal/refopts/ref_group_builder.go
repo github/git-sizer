@@ -146,20 +146,27 @@ func (rgb *RefGroupBuilder) AddRefopts(flags *pflag.FlagSet) {
 		&filterValue{rgb, git.Include, "", false}, "include",
 		"include specified references",
 	)
-	flags.Var(
-		&filterValue{rgb, git.Include, "", true}, "include-regexp",
+
+	flag := flags.VarPF(
+		&filterValue{rgb, git.Include, "", true}, "include-regexp", "",
 		"include references matching the specified regular expression",
 	)
+	flag.Hidden = true
+	flag.Deprecated = "use --include=/REGEXP/"
+
 	flags.Var(
 		&filterValue{rgb, git.Exclude, "", false}, "exclude",
 		"exclude specified references",
 	)
-	flags.Var(
-		&filterValue{rgb, git.Exclude, "", true}, "exclude-regexp",
+
+	flag = flags.VarPF(
+		&filterValue{rgb, git.Exclude, "", true}, "exclude-regexp", "",
 		"exclude references matching the specified regular expression",
 	)
+	flag.Hidden = true
+	flag.Deprecated = "use --exclude=/REGEXP/"
 
-	flag := flags.VarPF(
+	flag = flags.VarPF(
 		&filterValue{rgb, git.Include, "refs/heads", false}, "branches", "",
 		"process all branches",
 	)
@@ -223,6 +230,8 @@ func (rgb *RefGroupBuilder) AddRefopts(flags *pflag.FlagSet) {
 		&filterGroupValue{rgb}, "refgroup", "",
 		"process references in refgroup defined by gitconfig",
 	)
+	flag.Hidden = true
+	flag.Deprecated = "use --include=@REFGROUP"
 
 	flags.BoolVar(&rgb.ShowRefs, "show-refs", false, "list the references being processed")
 }

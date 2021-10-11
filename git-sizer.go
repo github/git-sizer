@@ -45,35 +45,43 @@ const Usage = `usage: git-sizer [OPTS]
 
  Reference selection:
 
- By default, git-sizer processes all Git objects that are reachable from any
- reference. The following options can be used to limit which references to
- include. The last rule matching a reference determines whether that reference
- is processed:
+ By default, git-sizer processes all Git objects that are reachable
+ from any reference. The following options can be used to limit which
+ references to process. The last rule matching a reference determines
+ whether that reference is processed.
 
       --[no-]branches          process [don't process] branches
       --[no-]tags              process [don't process] tags
-      --[no-]remotes           process [don't process] remote-tracking references
+      --[no-]remotes           process [don't process] remote-tracking
+                               references
       --[no-]notes             process [don't process] git-notes references
       --[no-]stash             process [don't process] refs/stash
-      --include PREFIX         process references with the specified PREFIX
-                               (e.g., '--include=refs/remotes/origin')
-      --include-regexp REGEXP  process references matching the specified
-                               regular expression (e.g.,
-                               '--include-regexp=refs/tags/release-.*')
-      --exclude PREFIX         don't process references with the specified
-                               PREFIX (e.g., '--exclude=refs/changes')
-      --exclude-regexp REGEXP  don't process references matching the specified
-                               regular expression
-      --refgroup=NAME          process reference in group defined by gitconfig:
-                               'refgroup.NAME.include',
-                               'refgroup.NAME.includeRegexp',
-                               'refgroup.NAME.exclude', and
-                               'refgroup.NAME.excludeRegexp' as above.
+      --include PREFIX, --exclude PREFIX
+                               process [don't process] references with the
+                               specified PREFIX (e.g.,
+                               '--include=refs/remotes/origin')
+      --include /REGEXP/, --exclude /REGEXP/
+                               process [don't process] references matching the
+                               specified regular expression (e.g.,
+                               '--include=refs/tags/release-.*')
+      --include @REFGROUP, --exclude @REFGROUP
+                               process [don't process] references in the
+                               specified reference group (see below)
       --show-refs              show which refs are being included/excluded
 
- Prefixes must match at a boundary; for example 'refs/foo' matches
- 'refs/foo' and 'refs/foo/bar' but not 'refs/foobar'. Regular
- expression patterns must match the full reference name.
+ PREFIX must match at a boundary; for example 'refs/foo' matches
+ 'refs/foo' and 'refs/foo/bar' but not 'refs/foobar'.
+
+ REGEXP patterns must match the full reference name.
+
+ REFGROUP can be the name of a predefined reference group ('branches',
+ 'tags', 'remotes', 'notes', or 'stash'), or one defined via
+ gitconfig settings like the following (these can be repeated):
+
+   * 'refgroup.REFGROUP.include=PREFIX'
+   * 'refgroup.REFGROUP.includeRegexp=REGEXP'
+   * 'refgroup.REFGROUP.exclude=PREFIX'
+   * 'refgroup.REFGROUP.excludeRegexp=REGEXP'
 
 `
 

@@ -21,20 +21,21 @@ import (
 // contains a pointer to a `refGroup` and uses it (including its
 // `parent` and `subgroups` to figure out what should be allowed.
 type filterGroupValue struct {
-	filter *git.ReferenceFilter
-	groups map[sizes.RefGroupSymbol]*refGroup
+	rgb *RefGroupBuilder
 }
 
 func (v *filterGroupValue) Set(symbolString string) error {
 	symbol := sizes.RefGroupSymbol(symbolString)
 
-	refGroup, ok := v.groups[symbol]
+	refGroup, ok := v.rgb.groups[symbol]
 
 	if !ok || symbol == "" {
 		return fmt.Errorf("refgroup '%s' is not defined", symbol)
 	}
 
-	*v.filter = git.Include.Combine(*v.filter, refGroupFilter{refGroup})
+	v.rgb.topLevelGroup.filter = git.Include.Combine(
+		v.rgb.topLevelGroup.filter, refGroupFilter{refGroup},
+	)
 
 	return nil
 }

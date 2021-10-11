@@ -221,7 +221,7 @@ func (rgb *RefGroupBuilder) AddRefopts(flags *pflag.FlagSet) {
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterGroupValue{tlf, rgb.groups}, "refgroup", "",
+		&filterGroupValue{rgb}, "refgroup", "",
 		"process references in refgroup defined by gitconfig",
 	)
 

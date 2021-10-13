@@ -416,6 +416,10 @@ func NewGraph(nameStyle NameStyle) *Graph {
 		tagRecords: make(map[git.OID]*tagRecord),
 		tagSizes:   make(map[git.OID]TagSize),
 
+		historySize: HistorySize{
+			ReferenceGroups: make(map[RefGroupSymbol]*counts.Count32),
+		},
+
 		pathResolver: NewPathResolver(nameStyle),
 	}
 }

@@ -160,6 +160,10 @@ type HistorySize struct {
 	// once.
 	ReferenceCount counts.Count32 `json:"reference_count"`
 
+	// ReferenceGroups keeps track of how many references in each
+	// reference group were scanned.
+	ReferenceGroups map[RefGroupSymbol]*counts.Count32 `json:"reference_groups"`
+
 	// The maximum TreeSize in the analyzed history (where each
 	// attribute is maximized separately).
 
@@ -290,5 +294,11 @@ func (s *HistorySize) recordReference(g *Graph, ref git.Reference) {
 }
 
 func (s *HistorySize) recordReferenceGroup(g *Graph, group RefGroupSymbol) {
-	// FIXME
+	c, ok := s.ReferenceGroups[group]
+	if ok {
+		c.Increment(1)
+	} else {
+		n := counts.Count32(1)
+		s.ReferenceGroups[group] = &n
+	}
 }

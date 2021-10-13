@@ -285,6 +285,16 @@ func pow(x uint64, n int) uint64 {
 	return p
 }
 
+type refGrouper struct{}
+
+func (rg refGrouper) Categorize(refname string) (bool, []sizes.RefGroupSymbol) {
+	return true, nil
+}
+
+func (rg refGrouper) Groups() []sizes.RefGroup {
+	return nil
+}
+
 func TestBomb(t *testing.T) {
 	t.Parallel()
 
@@ -295,7 +305,7 @@ func TestBomb(t *testing.T) {
 
 	h, err := sizes.ScanRepositoryUsingGraph(
 		repo.Repository(t),
-		git.AllReferencesFilter, sizes.NameStyleFull, false,
+		refGrouper{}, sizes.NameStyleFull, false,
 	)
 	require.NoError(t, err)
 
@@ -368,7 +378,7 @@ func TestTaggedTags(t *testing.T) {
 
 	h, err := sizes.ScanRepositoryUsingGraph(
 		repo.Repository(t),
-		git.AllReferencesFilter, sizes.NameStyleNone, false,
+		refGrouper{}, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(3), h.MaxTagDepth, "tag depth")
@@ -390,7 +400,7 @@ func TestFromSubdir(t *testing.T) {
 
 	h, err := sizes.ScanRepositoryUsingGraph(
 		repo.Repository(t),
-		git.AllReferencesFilter, sizes.NameStyleNone, false,
+		refGrouper{}, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.MaxPathDepth, "max path depth")
@@ -443,7 +453,7 @@ func TestSubmodule(t *testing.T) {
 	// Analyze the main repo:
 	h, err := sizes.ScanRepositoryUsingGraph(
 		mainRepo.Repository(t),
-		git.AllReferencesFilter, sizes.NameStyleNone, false,
+		refGrouper{}, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")
@@ -456,7 +466,7 @@ func TestSubmodule(t *testing.T) {
 	}
 	h, err = sizes.ScanRepositoryUsingGraph(
 		submRepo2.Repository(t),
-		git.AllReferencesFilter, sizes.NameStyleNone, false,
+		refGrouper{}, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")

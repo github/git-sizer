@@ -478,7 +478,11 @@ func mainImplementation(args []string) error {
 		filter = showRefFilter{filter}
 	}
 
-	historySize, err := sizes.ScanRepositoryUsingGraph(repo, filter, nameStyle, progress)
+	rg := refGrouper{
+		filter: filter,
+	}
+
+	historySize, err := sizes.ScanRepositoryUsingGraph(repo, &rg, nameStyle, progress)
 	if err != nil {
 		return fmt.Errorf("error scanning repository: %s", err)
 	}
@@ -502,6 +506,18 @@ func mainImplementation(args []string) error {
 		io.WriteString(os.Stdout, historySize.TableString(threshold, nameStyle))
 	}
 
+	return nil
+}
+
+type refGrouper struct {
+	filter git.ReferenceFilter
+}
+
+func (rg *refGrouper) Categorize(refname string) (bool, []sizes.RefGroupSymbol) {
+	return rg.filter.Filter(refname), nil
+}
+
+func (rg *refGrouper) Groups() []sizes.RefGroup {
 	return nil
 }
 

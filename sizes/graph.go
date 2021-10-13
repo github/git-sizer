@@ -13,8 +13,36 @@ import (
 	"github.com/github/git-sizer/meter"
 )
 
+type RefGroupSymbol string
+
+// RefGroup is a group of references, for example "branches" or
+// "tags". Reference groups might overlap.
+type RefGroup struct {
+	// Symbol is the unique string by which this `RefGroup` is
+	// identified and configured. It consists of dot-separated
+	// components, which implicitly makes a nested tree-like
+	// structure.
+	Symbol RefGroupSymbol
+
+	// Name is the name for this `ReferenceGroup` to be presented
+	// in user-readable output.
+	Name string
+}
+
+type RefGrouper interface {
+	// Categorize tells whether `refname` should be walked at all,
+	// and if so, the symbols of the reference groups to which it
+	// belongs.
+	Categorize(refname string) (bool, []RefGroupSymbol)
+
+	// Groups returns the list of `ReferenceGroup`s, in the order
+	// that they should be presented. The return value might
+	// depend on which references have been seen so far.
+	Groups() []RefGroup
+}
+
 func ScanRepositoryUsingGraph(
-	repo *git.Repository, filter git.ReferenceFilter, nameStyle NameStyle, progress bool,
+	repo *git.Repository, rg RefGrouper, nameStyle NameStyle, progress bool,
 ) (HistorySize, error) {
 	graph := NewGraph(nameStyle)
 	var progressMeter meter.Progress
@@ -62,7 +90,9 @@ func ScanRepositoryUsingGraph(
 			if !ok {
 				break
 			}
-			if !filter.Filter(ref.Refname) {
+
+			walk, _ := rg.Categorize(ref.Refname)
+			if !walk {
 				continue
 			}
 			refs = append(refs, ref)

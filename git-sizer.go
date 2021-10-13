@@ -79,32 +79,6 @@ const Usage = `usage: git-sizer [OPTS]
 var ReleaseVersion string
 var BuildVersion string
 
-type NegatedBoolValue struct {
-	value *bool
-}
-
-func (v *NegatedBoolValue) Set(s string) error {
-	b, err := strconv.ParseBool(s)
-	*v.value = !b
-	return err
-}
-
-func (v *NegatedBoolValue) Get() interface{} {
-	return !*v.value
-}
-
-func (v *NegatedBoolValue) String() string {
-	if v == nil || v.value == nil {
-		return "true"
-	} else {
-		return strconv.FormatBool(!*v.value)
-	}
-}
-
-func (v *NegatedBoolValue) Type() string {
-	return "bool"
-}
-
 type filterValue struct {
 	// The filter to which values will be appended:
 	filter *git.IncludeExcludeFilter

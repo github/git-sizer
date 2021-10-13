@@ -41,6 +41,11 @@ type RefGrouper interface {
 	Groups() []RefGroup
 }
 
+type refSeen struct {
+	git.Reference
+	groups []RefGroupSymbol
+}
+
 func ScanRepositoryUsingGraph(
 	repo *git.Repository, rg RefGrouper, nameStyle NameStyle, progress bool,
 ) (HistorySize, error) {
@@ -73,7 +78,7 @@ func ScanRepositoryUsingGraph(
 	}()
 
 	errChan := make(chan error, 1)
-	var refs []git.Reference
+	var refsSeen []refSeen
 	// Feed the references that we want into the stdin of the object
 	// iterator:
 	go func() {
@@ -91,11 +96,20 @@ func ScanRepositoryUsingGraph(
 				break
 			}
 
-			walk, _ := rg.Categorize(ref.Refname)
+			walk, groups := rg.Categorize(ref.Refname)
+
+			refsSeen = append(
+				refsSeen,
+				refSeen{
+					Reference: ref,
+					groups:    groups,
+				},
+			)
+
 			if !walk {
 				continue
 			}
-			refs = append(refs, ref)
+
 			_, err = bufin.WriteString(ref.OID.String())
 			if err != nil {
 				errChan <- err
@@ -356,9 +370,9 @@ func ScanRepositoryUsingGraph(
 	}
 
 	progressMeter.Start("Processing references: %d")
-	for _, ref := range refs {
+	for _, refSeen := range refsSeen {
 		progressMeter.Inc()
-		graph.RegisterReference(ref)
+		graph.RegisterReference(refSeen.Reference)
 	}
 	progressMeter.Done()
 

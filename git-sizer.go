@@ -494,7 +494,7 @@ func mainImplementation(args []string) error {
 		case 1:
 			j, err = json.MarshalIndent(historySize, "", "    ")
 		case 2:
-			j, err = historySize.JSON(threshold, nameStyle)
+			j, err = historySize.JSON(rg.Groups(), threshold, nameStyle)
 		default:
 			return fmt.Errorf("JSON version must be 1 or 2")
 		}
@@ -503,7 +503,10 @@ func mainImplementation(args []string) error {
 		}
 		fmt.Printf("%s\n", j)
 	} else {
-		io.WriteString(os.Stdout, historySize.TableString(threshold, nameStyle))
+		io.WriteString(
+			os.Stdout,
+			historySize.TableString(rg.Groups(), threshold, nameStyle),
+		)
 	}
 
 	return nil

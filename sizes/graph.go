@@ -49,7 +49,7 @@ type refSeen struct {
 func ScanRepositoryUsingGraph(
 	repo *git.Repository, rg RefGrouper, nameStyle NameStyle, progress bool,
 ) (HistorySize, error) {
-	graph := NewGraph(nameStyle)
+	graph := NewGraph(rg, nameStyle)
 	var progressMeter meter.Progress
 	if progress {
 		progressMeter = meter.NewProgressMeter(100 * time.Millisecond)
@@ -383,6 +383,8 @@ func ScanRepositoryUsingGraph(
 type Graph struct {
 	repo *git.Repository
 
+	rg RefGrouper
+
 	blobLock  sync.Mutex
 	blobSizes map[git.OID]BlobSize
 
@@ -404,8 +406,10 @@ type Graph struct {
 	pathResolver PathResolver
 }
 
-func NewGraph(nameStyle NameStyle) *Graph {
+func NewGraph(rg RefGrouper, nameStyle NameStyle) *Graph {
 	return &Graph{
+		rg: rg,
+
 		blobSizes: make(map[git.OID]BlobSize),
 
 		treeRecords: make(map[git.OID]*treeRecord),

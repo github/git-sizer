@@ -345,8 +345,10 @@ type table struct {
 	buf           bytes.Buffer
 }
 
-func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) string {
-	contents := s.contents()
+func (s HistorySize) TableString(
+	refGroups []RefGroup, threshold Threshold, nameStyle NameStyle,
+) string {
+	contents := s.contents(refGroups)
 	t := table{
 		threshold: threshold,
 		nameStyle: nameStyle,
@@ -422,19 +424,41 @@ func (t *table) formatRow(
 	)
 }
 
-func (s HistorySize) JSON(threshold Threshold, nameStyle NameStyle) ([]byte, error) {
-	contents := s.contents()
+func (s HistorySize) JSON(
+	refGroups []RefGroup, threshold Threshold, nameStyle NameStyle,
+) ([]byte, error) {
+	contents := s.contents(refGroups)
 	items := make(map[string]*item)
 	contents.CollectItems(items)
 	j, err := json.MarshalIndent(items, "", "    ")
 	return j, err
 }
 
-func (s HistorySize) contents() tableContents {
+func (s HistorySize) contents(refGroups []RefGroup) tableContents {
 	S := newSection
 	I := newItem
 	metric := counts.Metric
 	binary := counts.Binary
+
+	var rgis []tableContents
+	for _, rg := range refGroups {
+		if rg.Symbol == "" {
+			continue
+		}
+		count, ok := s.ReferenceGroups[rg.Symbol]
+		if !ok {
+			continue
+		}
+		rgis = append(
+			rgis,
+			I(
+				fmt.Sprintf("refgroup.%s", rg.Symbol), rg.Name,
+				fmt.Sprintf("The number of references in group '%s'", rg.Symbol),
+				nil, *count, metric, "", 25000,
+			),
+		)
+	}
+
 	return S(
 		"",
 		S(
@@ -484,6 +508,10 @@ func (s HistorySize) contents() tableContents {
 				I("referenceCount", "Count",
 					"The total number of references",
 					nil, s.ReferenceCount, metric, "", 25e3),
+				S(
+					"",
+					rgis...,
+				),
 			),
 		),
 

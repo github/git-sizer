@@ -288,3 +288,7 @@ func (s *HistorySize) recordTag(g *Graph, oid git.OID, tagSize TagSize, size cou
 func (s *HistorySize) recordReference(g *Graph, ref git.Reference) {
 	s.ReferenceCount.Increment(1)
 }
+
+func (s *HistorySize) recordReferenceGroup(g *Graph, group RefGroupSymbol) {
+	// FIXME
+}

@@ -372,7 +372,7 @@ func ScanRepositoryUsingGraph(
 	progressMeter.Start("Processing references: %d")
 	for _, refSeen := range refsSeen {
 		progressMeter.Inc()
-		graph.RegisterReference(refSeen.Reference)
+		graph.RegisterReference(refSeen.Reference, refSeen.groups)
 	}
 	progressMeter.Done()
 
@@ -420,9 +420,12 @@ func NewGraph(nameStyle NameStyle) *Graph {
 	}
 }
 
-func (g *Graph) RegisterReference(ref git.Reference) {
+func (g *Graph) RegisterReference(ref git.Reference, groups []RefGroupSymbol) {
 	g.historyLock.Lock()
 	g.historySize.recordReference(g, ref)
+	for _, group := range groups {
+		g.historySize.recordReferenceGroup(g, group)
+	}
 	g.historyLock.Unlock()
 
 	g.pathResolver.RecordReference(ref)

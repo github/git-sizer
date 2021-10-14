@@ -156,11 +156,16 @@ func mainImplementation(args []string) error {
 	flags.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 	flags.MarkHidden("cpuprofile")
 
-	var rgb refopts.RefGroupBuilder
 	var configger refopts.Configger
 	if repo != nil {
 		configger = repo
 	}
+
+	rgb, err := refopts.NewRefGroupBuilder(configger)
+	if err != nil {
+		return err
+	}
+
 	rgb.AddRefopts(flags, configger)
 
 	flags.SortFlags = false

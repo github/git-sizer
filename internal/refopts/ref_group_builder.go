@@ -3,6 +3,7 @@ package refopts
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/pflag"
 
@@ -17,91 +18,210 @@ type Configger interface {
 // RefGroupBuilder handles reference-related options and puts together
 // a `sizes.RefGrouper` to be used by the main part of the program.
 type RefGroupBuilder struct {
-	Filter   git.ReferenceFilter
+	topLevelGroup *refGroup
+	groups        map[sizes.RefGroupSymbol]*refGroup
+
 	ShowRefs bool
+}
+
+func NewRefGroupBuilder(configger Configger) (*RefGroupBuilder, error) {
+	tlg := refGroup{
+		RefGroup: sizes.RefGroup{
+			Symbol: "",
+			Name:   "Refs to walk",
+		},
+	}
+
+	rgb := RefGroupBuilder{
+		topLevelGroup: &tlg,
+		groups: map[sizes.RefGroupSymbol]*refGroup{
+			"": &tlg,
+		},
+	}
+
+	rgb.initializeStandardRefgroups()
+	if err := rgb.readRefgroupsFromGitconfig(configger); err != nil {
+		return nil, err
+	}
+
+	return &rgb, nil
+}
+
+// getGroup returns the `refGroup` for the symbol with the specified
+// name, first creating it (and any missing parents) if needed.
+func (rgb *RefGroupBuilder) getGroup(symbol sizes.RefGroupSymbol) *refGroup {
+	if rg, ok := rgb.groups[symbol]; ok {
+		return rg
+	}
+
+	parentSymbol := parentName(symbol)
+	parent := rgb.getGroup(parentSymbol)
+
+	rg := refGroup{
+		RefGroup: sizes.RefGroup{
+			Symbol: symbol,
+		},
+		parent: parent,
+	}
+
+	rgb.groups[symbol] = &rg
+	parent.subgroups = append(parent.subgroups, &rg)
+	return &rg
+}
+
+func parentName(symbol sizes.RefGroupSymbol) sizes.RefGroupSymbol {
+	i := strings.LastIndexByte(string(symbol), '.')
+	if i == -1 {
+		return ""
+	}
+	return symbol[:i]
+}
+
+func (rgb *RefGroupBuilder) initializeStandardRefgroups() {
+	initializeGroup := func(
+		symbol sizes.RefGroupSymbol, name string, filter git.ReferenceFilter,
+	) {
+		rg := rgb.getGroup(symbol)
+		rg.Name = name
+		rg.filter = filter
+	}
+
+	initializeGroup("branches", "Branches", git.PrefixFilter("refs/heads/"))
+	initializeGroup("tags", "Tags", git.PrefixFilter("refs/tags/"))
+	initializeGroup("remotes", "Remote-tracking refs", git.PrefixFilter("refs/remotes/"))
+	initializeGroup("notes", "Git notes", git.PrefixFilter("refs/notes/"))
+
+	filter, err := git.RegexpFilter("refs/stash")
+	if err != nil {
+		panic("internal error")
+	}
+	initializeGroup("stash", "Git stash", filter)
+}
+
+func (rgb *RefGroupBuilder) readRefgroupsFromGitconfig(configger Configger) error {
+	if configger == nil {
+		// At this point, it is not yet certain that the command was
+		// run inside a Git repository. If not, ignore this option
+		// (the command will error out anyway).
+		return nil
+	}
+
+	config, err := configger.Config("refgroup")
+	if err != nil {
+		return err
+	}
+
+	seen := make(map[sizes.RefGroupSymbol]bool)
+	for _, entry := range config.Entries {
+		symbol, _ := splitKey(entry.Key)
+		if symbol == "" || seen[symbol] {
+			// The point of this loop is only to find
+			// _which_ groups are defined, so we only need
+			// to visit each one once.
+			continue
+		}
+
+		rg := rgb.getGroup(symbol)
+		if err := rg.augmentFromConfig(configger); err != nil {
+			return err
+		}
+
+		seen[symbol] = true
+	}
+
+	return nil
+}
+
+func splitKey(key string) (sizes.RefGroupSymbol, string) {
+	i := strings.LastIndexByte(key, '.')
+	if i == -1 {
+		return "", key
+	}
+	return sizes.RefGroupSymbol(key[:i]), key[i+1:]
 }
 
 // Add some reference-related options to `flags`.
 func (rgb *RefGroupBuilder) AddRefopts(flags *pflag.FlagSet, configger Configger) {
+	tlf := &rgb.topLevelGroup.filter
 	flags.Var(
-		&filterValue{&rgb.Filter, git.Include, "", false}, "include",
+		&filterValue{tlf, git.Include, "", false}, "include",
 		"include specified references",
 	)
 	flags.Var(
-		&filterValue{&rgb.Filter, git.Include, "", true}, "include-regexp",
+		&filterValue{tlf, git.Include, "", true}, "include-regexp",
 		"include references matching the specified regular expression",
 	)
 	flags.Var(
-		&filterValue{&rgb.Filter, git.Exclude, "", false}, "exclude",
+		&filterValue{tlf, git.Exclude, "", false}, "exclude",
 		"exclude specified references",
 	)
 	flags.Var(
-		&filterValue{&rgb.Filter, git.Exclude, "", true}, "exclude-regexp",
+		&filterValue{tlf, git.Exclude, "", true}, "exclude-regexp",
 		"exclude references matching the specified regular expression",
 	)
 
 	flag := flags.VarPF(
-		&filterValue{&rgb.Filter, git.Include, "refs/heads", false}, "branches", "",
+		&filterValue{tlf, git.Include, "refs/heads", false}, "branches", "",
 		"process all branches",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{&rgb.Filter, git.Exclude, "refs/heads", false}, "no-branches", "",
+		&filterValue{tlf, git.Exclude, "refs/heads", false}, "no-branches", "",
 		"exclude all branches",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{&rgb.Filter, git.Include, "refs/tags", false}, "tags", "",
+		&filterValue{tlf, git.Include, "refs/tags", false}, "tags", "",
 		"process all tags",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{&rgb.Filter, git.Exclude, "refs/tags", false}, "no-tags", "",
+		&filterValue{tlf, git.Exclude, "refs/tags", false}, "no-tags", "",
 		"exclude all tags",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{&rgb.Filter, git.Include, "refs/remotes", false}, "remotes", "",
+		&filterValue{tlf, git.Include, "refs/remotes", false}, "remotes", "",
 		"process all remote-tracking references",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{&rgb.Filter, git.Exclude, "refs/remotes", false}, "no-remotes", "",
+		&filterValue{tlf, git.Exclude, "refs/remotes", false}, "no-remotes", "",
 		"exclude all remote-tracking references",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{&rgb.Filter, git.Include, "refs/notes", false}, "notes", "",
+		&filterValue{tlf, git.Include, "refs/notes", false}, "notes", "",
 		"process all git-notes references",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{&rgb.Filter, git.Exclude, "refs/notes", false}, "no-notes", "",
+		&filterValue{tlf, git.Exclude, "refs/notes", false}, "no-notes", "",
 		"exclude all git-notes references",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{&rgb.Filter, git.Include, "refs/stash", true}, "stash", "",
+		&filterValue{tlf, git.Include, "refs/stash", true}, "stash", "",
 		"process refs/stash",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{&rgb.Filter, git.Exclude, "refs/stash", true}, "no-stash", "",
+		&filterValue{tlf, git.Exclude, "refs/stash", true}, "no-stash", "",
 		"exclude refs/stash",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterGroupValue{&rgb.Filter, configger}, "refgroup", "",
+		&filterGroupValue{tlf, configger}, "refgroup", "",
 		"process references in refgroup defined by gitconfig",
 	)
 
@@ -111,31 +231,87 @@ func (rgb *RefGroupBuilder) AddRefopts(flags *pflag.FlagSet, configger Configger
 // Finish collects the information gained from processing the options
 // and returns a `sizes.RefGrouper`.
 func (rgb *RefGroupBuilder) Finish() (sizes.RefGrouper, error) {
-	if rgb.Filter == nil {
-		rgb.Filter = git.AllReferencesFilter
+	if rgb.topLevelGroup.filter == nil {
+		rgb.topLevelGroup.filter = git.AllReferencesFilter
 	}
 
 	if rgb.ShowRefs {
 		fmt.Fprintf(os.Stderr, "References (included references marked with '+'):\n")
-		rgb.Filter = showRefFilter{rgb.Filter}
+		rgb.topLevelGroup.filter = showRefFilter{rgb.topLevelGroup.filter}
 	}
 
-	return &refGrouper{
-		filter: rgb.Filter,
-	}, nil
+	refGrouper := refGrouper{
+		topLevelGroup: rgb.topLevelGroup,
+	}
 
+	if err := refGrouper.fillInTree(refGrouper.topLevelGroup); err != nil {
+		return nil, err
+	}
+
+	if refGrouper.topLevelGroup.filter != nil {
+		refGrouper.ignoredRefGroup = &sizes.RefGroup{
+			Symbol: "ignored",
+			Name:   "Ignored",
+		}
+		refGrouper.refGroups = append(refGrouper.refGroups, *refGrouper.ignoredRefGroup)
+	}
+
+	return &refGrouper, nil
 }
 
 type refGrouper struct {
-	filter git.ReferenceFilter
+	topLevelGroup *refGroup
+	refGroups     []sizes.RefGroup
+
+	// ignoredRefGroup, if set, is the reference group for
+	// tallying references that don't match at all.
+	ignoredRefGroup *sizes.RefGroup
 }
 
-func (rg *refGrouper) Categorize(refname string) (bool, []sizes.RefGroupSymbol) {
-	return rg.filter.Filter(refname), nil
-}
+func (refGrouper *refGrouper) fillInTree(rg *refGroup) error {
+	if rg.Name == "" {
+		_, rg.Name = splitKey(string(rg.Symbol))
+	}
 
-func (rg *refGrouper) Groups() []sizes.RefGroup {
+	if rg.filter == nil && len(rg.subgroups) == 0 {
+		return fmt.Errorf("refgroup '%s' is not defined", rg.Symbol)
+	}
+
+	refGrouper.refGroups = append(refGrouper.refGroups, rg.RefGroup)
+
+	for _, rg := range rg.subgroups {
+		if err := refGrouper.fillInTree(rg); err != nil {
+			return err
+		}
+	}
+
+	if len(rg.subgroups) != 0 {
+		var otherSymbol sizes.RefGroupSymbol
+		if rg.Symbol == "" {
+			otherSymbol = "other"
+		} else {
+			otherSymbol = sizes.RefGroupSymbol(fmt.Sprintf("%s.other", rg.Symbol))
+		}
+		rg.otherRefGroup = &sizes.RefGroup{
+			Symbol: otherSymbol,
+			Name:   "Other",
+		}
+		refGrouper.refGroups = append(refGrouper.refGroups, *rg.otherRefGroup)
+	}
+
 	return nil
+}
+
+func (refGrouper *refGrouper) Categorize(refname string) (bool, []sizes.RefGroupSymbol) {
+	walk, symbols := refGrouper.topLevelGroup.collectSymbols(refname)
+	if !walk && refGrouper.ignoredRefGroup != nil {
+		symbols = append(symbols, refGrouper.ignoredRefGroup.Symbol)
+	}
+	return walk, symbols
+}
+
+func (refGrouper *refGrouper) Groups() []sizes.RefGroup {
+	return refGrouper.refGroups
 }
 
 // showRefFilter is a `git.ReferenceFilter` that logs its choices to Stderr.

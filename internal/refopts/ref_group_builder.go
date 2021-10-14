@@ -141,7 +141,7 @@ func splitKey(key string) (sizes.RefGroupSymbol, string) {
 }
 
 // Add some reference-related options to `flags`.
-func (rgb *RefGroupBuilder) AddRefopts(flags *pflag.FlagSet, configger Configger) {
+func (rgb *RefGroupBuilder) AddRefopts(flags *pflag.FlagSet) {
 	tlf := &rgb.topLevelGroup.filter
 	flags.Var(
 		&filterValue{tlf, git.Include, "", false}, "include",
@@ -221,7 +221,7 @@ func (rgb *RefGroupBuilder) AddRefopts(flags *pflag.FlagSet, configger Configger
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterGroupValue{tlf, configger}, "refgroup", "",
+		&filterGroupValue{tlf, rgb.groups}, "refgroup", "",
 		"process references in refgroup defined by gitconfig",
 	)
 

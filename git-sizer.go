@@ -166,7 +166,7 @@ func mainImplementation(args []string) error {
 		return err
 	}
 
-	rgb.AddRefopts(flags, configger)
+	rgb.AddRefopts(flags)
 
 	flags.SortFlags = false
 

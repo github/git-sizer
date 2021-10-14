@@ -235,11 +235,6 @@ func (rgb *RefGroupBuilder) Finish() (sizes.RefGrouper, error) {
 		rgb.topLevelGroup.filter = git.AllReferencesFilter
 	}
 
-	if rgb.ShowRefs {
-		fmt.Fprintf(os.Stderr, "References (included references marked with '+'):\n")
-		rgb.topLevelGroup.filter = showRefFilter{rgb.topLevelGroup.filter}
-	}
-
 	refGrouper := refGrouper{
 		topLevelGroup: rgb.topLevelGroup,
 	}
@@ -254,6 +249,11 @@ func (rgb *RefGroupBuilder) Finish() (sizes.RefGrouper, error) {
 			Name:   "Ignored",
 		}
 		refGrouper.refGroups = append(refGrouper.refGroups, *refGrouper.ignoredRefGroup)
+	}
+
+	if rgb.ShowRefs {
+		fmt.Fprintf(os.Stderr, "References (included references marked with '+'):\n")
+		return showRefGrouper{&refGrouper, os.Stderr}, nil
 	}
 
 	return &refGrouper, nil
@@ -312,19 +312,4 @@ func (refGrouper *refGrouper) Categorize(refname string) (bool, []sizes.RefGroup
 
 func (refGrouper *refGrouper) Groups() []sizes.RefGroup {
 	return refGrouper.refGroups
-}
-
-// showRefFilter is a `git.ReferenceFilter` that logs its choices to Stderr.
-type showRefFilter struct {
-	f git.ReferenceFilter
-}
-
-func (f showRefFilter) Filter(refname string) bool {
-	b := f.f.Filter(refname)
-	if b {
-		fmt.Fprintf(os.Stderr, "+ %s\n", refname)
-	} else {
-		fmt.Fprintf(os.Stderr, "  %s\n", refname)
-	}
-	return b
 }

@@ -250,23 +250,27 @@ func TestRefSelections(t *testing.T) {
 		t.Run(
 			p.name,
 			func(t *testing.T) {
-				if len(p.config) != 0 {
-					for _, c := range p.config {
-						cmd := testutils.GitCommand(
-							t, path,
-							"config", "--add", fmt.Sprintf("refgroup.mygroup.%s", c[0]), c[1],
-						)
-						err := cmd.Run()
-						require.NoError(t, err)
-					}
-					defer func() {
-						cmd := testutils.GitCommand(
-							t, path, "config", "--remove-section", "refgroup.mygroup",
-						)
-						err := cmd.Run()
-						require.NoError(t, err)
-					}()
+				clonePath, err := ioutil.TempDir("", "ref-selection")
+				require.NoError(t, err)
+
+				defer os.RemoveAll(clonePath)
+
+				err = exec.Command(
+					"git", "clone", "--bare", "--mirror", path, clonePath,
+				).Run()
+				require.NoError(t, err)
+
+				path := clonePath
+
+				for _, c := range p.config {
+					cmd := testutils.GitCommand(
+						t, path,
+						"config", "--add", fmt.Sprintf("refgroup.mygroup.%s", c[0]), c[1],
+					)
+					err := cmd.Run()
+					require.NoError(t, err)
 				}
+
 				args := []string{"--show-refs", "--no-progress", "--json", "--json-version=2"}
 				args = append(args, p.args...)
 				cmd := exec.Command(executable, args...)

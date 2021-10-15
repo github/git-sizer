@@ -191,7 +191,7 @@ func TestRefSelections(t *testing.T) {
 		},
 		{ // 12
 			name: "foo",
-			args: []string{"--include-regexp", ".*foo.*"},
+			args: []string{"--include", "/.*foo.*/"},
 		},
 		{ // 13
 			name: "refs/foo as prefix",
@@ -199,11 +199,11 @@ func TestRefSelections(t *testing.T) {
 		},
 		{ // 14
 			name: "refs/foo as regexp",
-			args: []string{"--include-regexp", "refs/foo"},
+			args: []string{"--include", "/refs/foo/"},
 		},
 		{ // 15
 			name: "release tags",
-			args: []string{"--include-regexp", "refs/tags/release-.*"},
+			args: []string{"--include", "/refs/tags/release-.*/"},
 		},
 		{ // 16
 			name: "combination",
@@ -211,21 +211,21 @@ func TestRefSelections(t *testing.T) {
 				"--include=refs/heads",
 				"--tags",
 				"--exclude", "refs/heads/foo",
-				"--include-regexp", ".*foo.*",
+				"--include", "/.*foo.*/",
 				"--exclude", "refs/foo",
-				"--exclude-regexp", "refs/tags/release-.*",
+				"--exclude", "/refs/tags/release-.*/",
 			},
 		},
 		{ // 17
 			name: "branches-refgroup",
-			args: []string{"--refgroup=mygroup"},
+			args: []string{"--include=@mygroup"},
 			config: []git.ConfigEntry{
 				{"refgroup.mygroup.include", "refs/heads"},
 			},
 		},
 		{ // 18
 			name: "combination-refgroup",
-			args: []string{"--refgroup=mygroup"},
+			args: []string{"--include=@mygroup"},
 			config: []git.ConfigEntry{
 				{"refgroup.mygroup.include", "refs/heads"},
 				{"refgroup.mygroup.include", "refs/tags"},

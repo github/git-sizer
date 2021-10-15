@@ -1,10 +1,13 @@
 package refopts
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/github/git-sizer/git"
+	"github.com/github/git-sizer/sizes"
 )
 
 type filterValue struct {
@@ -23,7 +26,7 @@ type filterValue struct {
 	pattern string
 
 	// regexp specifies whether `pattern` should be interpreted as
-	// a regexp (as opposed to a prefix).
+	// a regexp (as opposed to handling it flexibly).
 	regexp bool
 }
 
@@ -57,12 +60,48 @@ func (v *filterValue) Set(s string) error {
 			return fmt.Errorf("invalid regexp: %q", s)
 		}
 	} else {
-		filter = git.PrefixFilter(pattern)
+		var err error
+		filter, err = v.interpretFlexibly(pattern)
+		if err != nil {
+			return err
+		}
 	}
 
 	v.rgb.topLevelGroup.filter = combiner.Combine(v.rgb.topLevelGroup.filter, filter)
 
 	return nil
+}
+
+// Interpret an option argument flexibly:
+//
+// * If it is bracketed with `/` characters, treat it as a regexp.
+//
+// * If it starts with `@`, then consider it a refgroup name. That
+//   refgroup must already be defined. Use its filter. This construct
+//   is only allowed at the top level.
+//
+// * Otherwise treat it as a prefix.
+func (v *filterValue) interpretFlexibly(s string) (git.ReferenceFilter, error) {
+	if len(s) >= 2 && strings.HasPrefix(s, "/") && strings.HasSuffix(s, "/") {
+		pattern := s[1 : len(s)-1]
+		return git.RegexpFilter(pattern)
+	}
+
+	if len(s) >= 1 && s[0] == '@' {
+		name := sizes.RefGroupSymbol(s[1:])
+		if name == "" {
+			return nil, errors.New("missing refgroup name")
+		}
+
+		refGroup := v.rgb.groups[name]
+		if refGroup == nil {
+			return nil, fmt.Errorf("undefined refgroup '%s'", name)
+		}
+
+		return refGroupFilter{refGroup}, nil
+	}
+
+	return git.PrefixFilter(s), nil
 }
 
 func (v *filterValue) Get() interface{} {

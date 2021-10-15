@@ -231,19 +231,19 @@ func TestRefSelections(t *testing.T) {
 			name: "branches-refgroup",
 			args: []string{"--refgroup=mygroup"},
 			config: [][2]string{
-				{"include", "refs/heads"},
+				{"refgroup.mygroup.include", "refs/heads"},
 			},
 		},
 		{ // 18
 			name: "combination-refgroup",
 			args: []string{"--refgroup=mygroup"},
 			config: [][2]string{
-				{"include", "refs/heads"},
-				{"include", "refs/tags"},
-				{"exclude", "refs/heads/foo"},
-				{"includeRegexp", ".*foo.*"},
-				{"exclude", "refs/foo"},
-				{"excludeRegexp", "refs/tags/release-.*"},
+				{"refgroup.mygroup.include", "refs/heads"},
+				{"refgroup.mygroup.include", "refs/tags"},
+				{"refgroup.mygroup.exclude", "refs/heads/foo"},
+				{"refgroup.mygroup.includeRegexp", ".*foo.*"},
+				{"refgroup.mygroup.exclude", "refs/foo"},
+				{"refgroup.mygroup.excludeRegexp", "refs/tags/release-.*"},
 			},
 		},
 	} {
@@ -263,9 +263,7 @@ func TestRefSelections(t *testing.T) {
 				path := clonePath
 
 				for _, c := range p.config {
-					testutils.ConfigAdd(
-						t, path, fmt.Sprintf("refgroup.mygroup.%s", c[0]), c[1],
-					)
+					testutils.ConfigAdd(t, path, c[0], c[1])
 				}
 
 				args := []string{"--show-refs", "--no-progress", "--json", "--json-version=2"}

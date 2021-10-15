@@ -104,6 +104,35 @@ func AddFile(t *testing.T, repoPath string, relativePath, contents string) {
 	require.NoErrorf(t, cmd.Run(), "adding file %q", relativePath)
 }
 
+func CreateReferencedOrphan(t *testing.T, repoPath string, refname string) {
+	t.Helper()
+
+	oid := CreateObject(t, repoPath, "blob", func(w io.Writer) error {
+		_, err := fmt.Fprintf(w, "%s\n", refname)
+		return err
+	})
+
+	oid = CreateObject(t, repoPath, "tree", func(w io.Writer) error {
+		_, err := fmt.Fprintf(w, "100644 a.txt\x00%s", oid.Bytes())
+		return err
+	})
+
+	oid = CreateObject(t, repoPath, "commit", func(w io.Writer) error {
+		_, err := fmt.Fprintf(
+			w,
+			"tree %s\n"+
+				"author Example <example@example.com> 1112911993 -0700\n"+
+				"committer Example <example@example.com> 1112911993 -0700\n"+
+				"\n"+
+				"Commit for reference %s\n",
+			oid, refname,
+		)
+		return err
+	})
+
+	UpdateRef(t, repoPath, refname, oid)
+}
+
 func AddAuthorInfo(cmd *exec.Cmd, timestamp *time.Time) {
 	cmd.Env = append(cmd.Env,
 		"GIT_AUTHOR_NAME=Arthur",

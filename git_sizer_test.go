@@ -140,30 +140,7 @@ func TestRefSelections(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, p := range references {
-		oid := testutils.CreateObject(t, path, "blob", func(w io.Writer) error {
-			_, err := fmt.Fprintf(w, "%s\n", p.refname)
-			return err
-		})
-
-		oid = testutils.CreateObject(t, path, "tree", func(w io.Writer) error {
-			_, err = fmt.Fprintf(w, "100644 a.txt\x00%s", oid.Bytes())
-			return err
-		})
-
-		oid = testutils.CreateObject(t, path, "commit", func(w io.Writer) error {
-			_, err := fmt.Fprintf(
-				w,
-				"tree %s\n"+
-					"author Example <example@example.com> 1112911993 -0700\n"+
-					"committer Example <example@example.com> 1112911993 -0700\n"+
-					"\n"+
-					"Commit for reference %s\n",
-				oid, p.refname,
-			)
-			return err
-		})
-
-		testutils.UpdateRef(t, path, p.refname, oid)
+		testutils.CreateReferencedOrphan(t, path, p.refname)
 	}
 
 	executable, err := exec.LookPath("bin/git-sizer")

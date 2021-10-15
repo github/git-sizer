@@ -86,6 +86,8 @@ func CreateObject(
 }
 
 func AddFile(t *testing.T, repoPath string, relativePath, contents string) {
+	t.Helper()
+
 	dirPath := filepath.Dir(relativePath)
 	if dirPath != "." {
 		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, dirPath), 0777), "creating subdir")

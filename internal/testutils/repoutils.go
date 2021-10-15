@@ -16,45 +16,112 @@ import (
 	"github.com/github/git-sizer/git"
 )
 
-func NewRepository(t *testing.T, repoPath string) *git.Repository {
-	t.Helper()
-
-	repo, err := git.NewRepository(repoPath)
-	require.NoError(t, err)
-	return repo
+// TestRepo represents a git repository used for tests.
+type TestRepo struct {
+	Path string
 }
 
-func GitCommand(t *testing.T, repoPath string, args ...string) *exec.Cmd {
+// NewTestRepo creates and initializes a test repository in a
+// temporary directory constructed using `pattern`. The caller must
+// delete the repository by calling `repo.Remove()`.
+func NewTestRepo(t *testing.T, bare bool, pattern string) *TestRepo {
 	t.Helper()
 
-	gitArgs := []string{"-C", repoPath}
+	path, err := ioutil.TempDir("", pattern)
+	require.NoError(t, err)
+
+	repo := TestRepo{Path: path}
+
+	repo.Init(t, bare)
+
+	return &TestRepo{
+		Path: path,
+	}
+}
+
+// Init initializes a git repository at `repo.Path`.
+func (repo *TestRepo) Init(t *testing.T, bare bool) {
+	t.Helper()
+
+	// Don't use `GitCommand()` because the directory might not
+	// exist yet:
+	var cmd *exec.Cmd
+	if bare {
+		cmd = exec.Command("git", "init", "--bare", repo.Path)
+	} else {
+		cmd = exec.Command("git", "init", repo.Path)
+	}
+	err := cmd.Run()
+	require.NoError(t, err)
+}
+
+// Remove deletes the test repository at `repo.Path`.
+func (repo *TestRepo) Remove(t *testing.T) {
+	t.Helper()
+
+	_ = os.RemoveAll(repo.Path)
+}
+
+// Clone creates a clone of `repo` at a temporary path constructued
+// using `pattern`. The caller is responsible for removing it when
+// done by calling `Remove()`.
+func (repo *TestRepo) Clone(t *testing.T, pattern string) *TestRepo {
+	t.Helper()
+
+	path, err := ioutil.TempDir("", pattern)
+	require.NoError(t, err)
+
+	err = repo.GitCommand(
+		t, "clone", "--bare", "--mirror", repo.Path, path,
+	).Run()
+	require.NoError(t, err)
+
+	return &TestRepo{
+		Path: path,
+	}
+}
+
+// Repository returns a `*git.Repository` for `repo`.
+func (repo *TestRepo) Repository(t *testing.T) *git.Repository {
+	t.Helper()
+
+	r, err := git.NewRepository(repo.Path)
+	require.NoError(t, err)
+	return r
+}
+
+// GitCommand creates an `*exec.Cmd` for running `git` in `repo` with
+// the specified arguments.
+func (repo *TestRepo) GitCommand(t *testing.T, args ...string) *exec.Cmd {
+	t.Helper()
+
+	gitArgs := []string{"-C", repo.Path}
 	gitArgs = append(gitArgs, args...)
 	return exec.Command("git", gitArgs...)
 }
 
-func UpdateRef(t *testing.T, repoPath string, refname string, oid git.OID) {
+func (repo *TestRepo) UpdateRef(t *testing.T, refname string, oid git.OID) {
 	t.Helper()
 
 	var cmd *exec.Cmd
 
 	if oid == git.NullOID {
-		cmd = GitCommand(t, repoPath, "update-ref", "-d", refname)
+		cmd = repo.GitCommand(t, "update-ref", "-d", refname)
 	} else {
-		cmd = GitCommand(t, repoPath, "update-ref", refname, oid.String())
+		cmd = repo.GitCommand(t, "update-ref", refname, oid.String())
 	}
 	require.NoError(t, cmd.Run())
 }
 
 // createObject creates a new Git object, of the specified type, in
 // the repository at `repoPath`. `writer` is a function that writes
-// the object in `git hash-object` input format. This is used for
-// testing only.
-func CreateObject(
-	t *testing.T, repoPath string, otype git.ObjectType, writer func(io.Writer) error,
+// the object in `git hash-object` input format.
+func (repo *TestRepo) CreateObject(
+	t *testing.T, otype git.ObjectType, writer func(io.Writer) error,
 ) git.OID {
 	t.Helper()
 
-	cmd := GitCommand(t, repoPath, "hash-object", "-w", "-t", string(otype), "--stdin")
+	cmd := repo.GitCommand(t, "hash-object", "-w", "-t", string(otype), "--stdin")
 	in, err := cmd.StdinPipe()
 	require.NoError(t, err)
 
@@ -85,39 +152,49 @@ func CreateObject(
 	return oid
 }
 
-func AddFile(t *testing.T, repoPath string, relativePath, contents string) {
+// AddFile adds and stages a file in `repo` at path `relativePath`
+// with the specified `contents`. This must be run in a non-bare
+// repository.
+func (repo *TestRepo) AddFile(t *testing.T, relativePath, contents string) {
 	t.Helper()
 
 	dirPath := filepath.Dir(relativePath)
 	if dirPath != "." {
-		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, dirPath), 0777), "creating subdir")
+		require.NoError(
+			t,
+			os.MkdirAll(filepath.Join(repo.Path, dirPath), 0777),
+			"creating subdir",
+		)
 	}
 
-	filename := filepath.Join(repoPath, relativePath)
+	filename := filepath.Join(repo.Path, relativePath)
 	f, err := os.Create(filename)
 	require.NoErrorf(t, err, "creating file %q", filename)
 	_, err = f.WriteString(contents)
 	require.NoErrorf(t, err, "writing to file %q", filename)
 	require.NoErrorf(t, f.Close(), "closing file %q", filename)
 
-	cmd := GitCommand(t, repoPath, "add", relativePath)
+	cmd := repo.GitCommand(t, "add", relativePath)
 	require.NoErrorf(t, cmd.Run(), "adding file %q", relativePath)
 }
 
-func CreateReferencedOrphan(t *testing.T, repoPath string, refname string) {
+// CreateReferencedOrphan creates a simple new orphan commit and
+// points the reference with name `refname` at it. This can be run in
+// a bare or non-bare repository.
+func (repo *TestRepo) CreateReferencedOrphan(t *testing.T, refname string) {
 	t.Helper()
 
-	oid := CreateObject(t, repoPath, "blob", func(w io.Writer) error {
+	oid := repo.CreateObject(t, "blob", func(w io.Writer) error {
 		_, err := fmt.Fprintf(w, "%s\n", refname)
 		return err
 	})
 
-	oid = CreateObject(t, repoPath, "tree", func(w io.Writer) error {
+	oid = repo.CreateObject(t, "tree", func(w io.Writer) error {
 		_, err := fmt.Fprintf(w, "100644 a.txt\x00%s", oid.Bytes())
 		return err
 	})
 
-	oid = CreateObject(t, repoPath, "commit", func(w io.Writer) error {
+	oid = repo.CreateObject(t, "commit", func(w io.Writer) error {
 		_, err := fmt.Fprintf(
 			w,
 			"tree %s\n"+
@@ -130,7 +207,7 @@ func CreateReferencedOrphan(t *testing.T, repoPath string, refname string) {
 		return err
 	})
 
-	UpdateRef(t, repoPath, refname, oid)
+	repo.UpdateRef(t, refname, oid)
 }
 
 func AddAuthorInfo(cmd *exec.Cmd, timestamp *time.Time) {
@@ -145,11 +222,10 @@ func AddAuthorInfo(cmd *exec.Cmd, timestamp *time.Time) {
 	*timestamp = timestamp.Add(60 * time.Second)
 }
 
-// ConfigAdd adds a key-value pair to the gitconfig in the repository
-// at `repoPath`.
-func ConfigAdd(t *testing.T, repoPath string, key, value string) {
+// ConfigAdd adds a key-value pair to the gitconfig in `repo`.
+func (repo *TestRepo) ConfigAdd(t *testing.T, key, value string) {
 	t.Helper()
 
-	err := GitCommand(t, repoPath, "config", "--add", key, value).Run()
+	err := repo.GitCommand(t, "config", "--add", key, value).Run()
 	require.NoError(t, err)
 }

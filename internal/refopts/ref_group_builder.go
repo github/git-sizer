@@ -142,80 +142,79 @@ func splitKey(key string) (sizes.RefGroupSymbol, string) {
 
 // Add some reference-related options to `flags`.
 func (rgb *RefGroupBuilder) AddRefopts(flags *pflag.FlagSet) {
-	tlf := &rgb.topLevelGroup.filter
 	flags.Var(
-		&filterValue{tlf, git.Include, "", false}, "include",
+		&filterValue{rgb, git.Include, "", false}, "include",
 		"include specified references",
 	)
 	flags.Var(
-		&filterValue{tlf, git.Include, "", true}, "include-regexp",
+		&filterValue{rgb, git.Include, "", true}, "include-regexp",
 		"include references matching the specified regular expression",
 	)
 	flags.Var(
-		&filterValue{tlf, git.Exclude, "", false}, "exclude",
+		&filterValue{rgb, git.Exclude, "", false}, "exclude",
 		"exclude specified references",
 	)
 	flags.Var(
-		&filterValue{tlf, git.Exclude, "", true}, "exclude-regexp",
+		&filterValue{rgb, git.Exclude, "", true}, "exclude-regexp",
 		"exclude references matching the specified regular expression",
 	)
 
 	flag := flags.VarPF(
-		&filterValue{tlf, git.Include, "refs/heads", false}, "branches", "",
+		&filterValue{rgb, git.Include, "refs/heads", false}, "branches", "",
 		"process all branches",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{tlf, git.Exclude, "refs/heads", false}, "no-branches", "",
+		&filterValue{rgb, git.Exclude, "refs/heads", false}, "no-branches", "",
 		"exclude all branches",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{tlf, git.Include, "refs/tags", false}, "tags", "",
+		&filterValue{rgb, git.Include, "refs/tags", false}, "tags", "",
 		"process all tags",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{tlf, git.Exclude, "refs/tags", false}, "no-tags", "",
+		&filterValue{rgb, git.Exclude, "refs/tags", false}, "no-tags", "",
 		"exclude all tags",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{tlf, git.Include, "refs/remotes", false}, "remotes", "",
+		&filterValue{rgb, git.Include, "refs/remotes", false}, "remotes", "",
 		"process all remote-tracking references",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{tlf, git.Exclude, "refs/remotes", false}, "no-remotes", "",
+		&filterValue{rgb, git.Exclude, "refs/remotes", false}, "no-remotes", "",
 		"exclude all remote-tracking references",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{tlf, git.Include, "refs/notes", false}, "notes", "",
+		&filterValue{rgb, git.Include, "refs/notes", false}, "notes", "",
 		"process all git-notes references",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{tlf, git.Exclude, "refs/notes", false}, "no-notes", "",
+		&filterValue{rgb, git.Exclude, "refs/notes", false}, "no-notes", "",
 		"exclude all git-notes references",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{tlf, git.Include, "refs/stash", true}, "stash", "",
+		&filterValue{rgb, git.Include, "refs/stash", true}, "stash", "",
 		"process refs/stash",
 	)
 	flag.NoOptDefVal = "true"
 
 	flag = flags.VarPF(
-		&filterValue{tlf, git.Exclude, "refs/stash", true}, "no-stash", "",
+		&filterValue{rgb, git.Exclude, "refs/stash", true}, "no-stash", "",
 		"exclude refs/stash",
 	)
 	flag.NoOptDefVal = "true"

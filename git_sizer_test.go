@@ -151,7 +151,7 @@ func TestRefSelections(t *testing.T) {
 	for i, p := range []struct {
 		name   string
 		args   []string
-		config [][2]string
+		config []git.ConfigEntry
 	}{
 		{ // 0
 			name: "no arguments",
@@ -230,14 +230,14 @@ func TestRefSelections(t *testing.T) {
 		{ // 17
 			name: "branches-refgroup",
 			args: []string{"--refgroup=mygroup"},
-			config: [][2]string{
+			config: []git.ConfigEntry{
 				{"refgroup.mygroup.include", "refs/heads"},
 			},
 		},
 		{ // 18
 			name: "combination-refgroup",
 			args: []string{"--refgroup=mygroup"},
-			config: [][2]string{
+			config: []git.ConfigEntry{
 				{"refgroup.mygroup.include", "refs/heads"},
 				{"refgroup.mygroup.include", "refs/tags"},
 				{"refgroup.mygroup.exclude", "refs/heads/foo"},
@@ -262,8 +262,8 @@ func TestRefSelections(t *testing.T) {
 
 				path := clonePath
 
-				for _, c := range p.config {
-					testutils.ConfigAdd(t, path, c[0], c[1])
+				for _, e := range p.config {
+					testutils.ConfigAdd(t, path, e.Key, e.Value)
 				}
 
 				args := []string{"--show-refs", "--no-progress", "--json", "--json-version=2"}

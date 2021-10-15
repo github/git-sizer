@@ -126,7 +126,6 @@ func TestRefSelections(t *testing.T) {
 
 	// Create a test repo with one orphan commit per refname:
 	repo := testutils.NewTestRepo(t, true, "ref-selection")
-
 	defer repo.Remove(t)
 
 	for _, p := range references {
@@ -241,7 +240,6 @@ func TestRefSelections(t *testing.T) {
 			p.name,
 			func(t *testing.T) {
 				repo := repo.Clone(t, "ref-selection")
-
 				defer repo.Remove(t)
 
 				for _, e := range p.config {

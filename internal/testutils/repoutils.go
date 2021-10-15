@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,6 +52,7 @@ func (repo *TestRepo) Init(t *testing.T, bare bool) {
 	} else {
 		cmd = exec.Command("git", "init", repo.Path)
 	}
+	cmd.Env = CleanGitEnv()
 	err := cmd.Run()
 	require.NoError(t, err)
 }
@@ -90,6 +92,49 @@ func (repo *TestRepo) Repository(t *testing.T) *git.Repository {
 	return r
 }
 
+// localEnvVars is a list of the variable names that should be cleared
+// to give Git a clean environment.
+var localEnvVars = func() map[string]bool {
+	m := map[string]bool{
+		"HOME":            true,
+		"XDG_CONFIG_HOME": true,
+	}
+	out, err := exec.Command("git", "rev-parse", "--local-env-vars").Output()
+	if err != nil {
+		return m
+	}
+	for _, k := range strings.Fields(string(out)) {
+		m[k] = true
+	}
+	return m
+}()
+
+// GitEnv returns an appropriate environment for running `git`
+// commands without being confused by any existing environment or
+// gitconfig.
+func CleanGitEnv() []string {
+	var env []string
+	for _, e := range os.Environ() {
+		i := strings.IndexByte(e, '=')
+		if i == -1 {
+			// This shouldn't happen, but if it does,
+			// ignore it.
+			continue
+		}
+		k := e[:i]
+		if localEnvVars[k] {
+			continue
+		}
+		env = append(env, e)
+	}
+	return append(
+		env,
+		fmt.Sprintf("HOME=%s", os.DevNull),
+		fmt.Sprintf("XDG_CONFIG_HOME=%s", os.DevNull),
+		"GIT_CONFIG_NOSYSTEM=1",
+	)
+}
+
 // GitCommand creates an `*exec.Cmd` for running `git` in `repo` with
 // the specified arguments.
 func (repo *TestRepo) GitCommand(t *testing.T, args ...string) *exec.Cmd {
@@ -97,7 +142,9 @@ func (repo *TestRepo) GitCommand(t *testing.T, args ...string) *exec.Cmd {
 
 	gitArgs := []string{"-C", repo.Path}
 	gitArgs = append(gitArgs, args...)
-	return exec.Command("git", gitArgs...)
+	cmd := exec.Command("git", gitArgs...)
+	cmd.Env = CleanGitEnv()
+	return cmd
 }
 
 func (repo *TestRepo) UpdateRef(t *testing.T, refname string, oid git.OID) {

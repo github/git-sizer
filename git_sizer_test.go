@@ -263,12 +263,9 @@ func TestRefSelections(t *testing.T) {
 				path := clonePath
 
 				for _, c := range p.config {
-					cmd := testutils.GitCommand(
-						t, path,
-						"config", "--add", fmt.Sprintf("refgroup.mygroup.%s", c[0]), c[1],
+					testutils.ConfigAdd(
+						t, path, fmt.Sprintf("refgroup.mygroup.%s", c[0]), c[1],
 					)
-					err := cmd.Run()
-					require.NoError(t, err)
 				}
 
 				args := []string{"--show-refs", "--no-progress", "--json", "--json-version=2"}

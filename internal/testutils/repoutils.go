@@ -144,3 +144,12 @@ func AddAuthorInfo(cmd *exec.Cmd, timestamp *time.Time) {
 	)
 	*timestamp = timestamp.Add(60 * time.Second)
 }
+
+// ConfigAdd adds a key-value pair to the gitconfig in the repository
+// at `repoPath`.
+func ConfigAdd(t *testing.T, repoPath string, key, value string) {
+	t.Helper()
+
+	err := GitCommand(t, repoPath, "config", "--add", key, value).Run()
+	require.NoError(t, err)
+}

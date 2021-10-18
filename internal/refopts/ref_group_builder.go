@@ -89,9 +89,17 @@ func (rgb *RefGroupBuilder) initializeStandardRefgroups() {
 	initializeGroup("branches", "Branches", git.PrefixFilter("refs/heads/"))
 	initializeGroup("tags", "Tags", git.PrefixFilter("refs/tags/"))
 	initializeGroup("remotes", "Remote-tracking refs", git.PrefixFilter("refs/remotes/"))
+	initializeGroup("pulls", "Pull request refs", git.PrefixFilter("refs/pull/"))
+
+	filter, err := git.RegexpFilter(`refs/changes/\d{2}/\d+/\d+`)
+	if err != nil {
+		panic("internal error")
+	}
+	initializeGroup("changes", "Changeset refs", filter)
+
 	initializeGroup("notes", "Git notes", git.PrefixFilter("refs/notes/"))
 
-	filter, err := git.RegexpFilter("refs/stash")
+	filter, err = git.RegexpFilter(`refs/stash`)
 	if err != nil {
 		panic("internal error")
 	}

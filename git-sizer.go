@@ -75,9 +75,11 @@ const Usage = `usage: git-sizer [OPTS]
  REGEXP patterns must match the full reference name.
 
  REFGROUP can be the name of a predefined reference group ('branches',
- 'tags', 'remotes', 'notes', or 'stash'), or one defined via
- gitconfig settings like the following (these can be repeated):
+ 'tags', 'remotes', 'pulls', 'changes', 'notes', or 'stash'), or one
+ defined via gitconfig settings like the following (the
+ include/exclude settings can be repeated):
 
+   * 'refgroup.REFGROUP.name=NAME'
    * 'refgroup.REFGROUP.include=PREFIX'
    * 'refgroup.REFGROUP.includeRegexp=REGEXP'
    * 'refgroup.REFGROUP.exclude=PREFIX'

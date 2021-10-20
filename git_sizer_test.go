@@ -18,6 +18,7 @@ import (
 
 	"github.com/github/git-sizer/counts"
 	"github.com/github/git-sizer/git"
+	"github.com/github/git-sizer/internal/testutils"
 	"github.com/github/git-sizer/sizes"
 )
 
@@ -28,114 +29,10 @@ func TestExec(t *testing.T) {
 	assert.NoErrorf(t, err, "command failed; output: %#v", string(output))
 }
 
-func newRepository(t *testing.T, repoPath string) *git.Repository {
+func newGitBomb(t *testing.T, repo *testutils.TestRepo, depth, breadth int, body string) {
 	t.Helper()
 
-	repo, err := git.NewRepository(repoPath)
-	require.NoError(t, err)
-	return repo
-}
-
-func gitCommand(t *testing.T, repoPath string, args ...string) *exec.Cmd {
-	t.Helper()
-
-	gitArgs := []string{"-C", repoPath}
-	gitArgs = append(gitArgs, args...)
-	return exec.Command("git", gitArgs...)
-}
-
-func updateRef(t *testing.T, repoPath string, refname string, oid git.OID) {
-	t.Helper()
-
-	var cmd *exec.Cmd
-
-	if oid == git.NullOID {
-		cmd = gitCommand(t, repoPath, "update-ref", "-d", refname)
-	} else {
-		cmd = gitCommand(t, repoPath, "update-ref", refname, oid.String())
-	}
-	require.NoError(t, cmd.Run())
-}
-
-// createObject creates a new Git object, of the specified type, in
-// the repository at `repoPath`. `writer` is a function that writes
-// the object in `git hash-object` input format. This is used for
-// testing only.
-func createObject(
-	t *testing.T, repoPath string, otype git.ObjectType, writer func(io.Writer) error,
-) git.OID {
-	t.Helper()
-
-	cmd := gitCommand(t, repoPath, "hash-object", "-w", "-t", string(otype), "--stdin")
-	in, err := cmd.StdinPipe()
-	require.NoError(t, err)
-
-	out, err := cmd.StdoutPipe()
-	cmd.Stderr = os.Stderr
-
-	err = cmd.Start()
-	require.NoError(t, err)
-
-	err = writer(in)
-	err2 := in.Close()
-	if err != nil {
-		cmd.Wait()
-		require.NoError(t, err)
-	}
-	if err2 != nil {
-		cmd.Wait()
-		require.NoError(t, err2)
-	}
-
-	output, err := ioutil.ReadAll(out)
-	err2 = cmd.Wait()
-	require.NoError(t, err)
-	require.NoError(t, err2)
-
-	oid, err := git.NewOID(string(bytes.TrimSpace(output)))
-	require.NoError(t, err)
-	return oid
-}
-
-func addFile(t *testing.T, repoPath string, relativePath, contents string) {
-	dirPath := filepath.Dir(relativePath)
-	if dirPath != "." {
-		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, dirPath), 0777), "creating subdir")
-	}
-
-	filename := filepath.Join(repoPath, relativePath)
-	f, err := os.Create(filename)
-	require.NoErrorf(t, err, "creating file %q", filename)
-	_, err = f.WriteString(contents)
-	require.NoErrorf(t, err, "writing to file %q", filename)
-	require.NoErrorf(t, f.Close(), "closing file %q", filename)
-
-	cmd := gitCommand(t, repoPath, "add", relativePath)
-	require.NoErrorf(t, cmd.Run(), "adding file %q", relativePath)
-}
-
-func addAuthorInfo(cmd *exec.Cmd, timestamp *time.Time) {
-	cmd.Env = append(cmd.Env,
-		"GIT_AUTHOR_NAME=Arthur",
-		"GIT_AUTHOR_EMAIL=arthur@example.com",
-		fmt.Sprintf("GIT_AUTHOR_DATE=%d -0700", timestamp.Unix()),
-		"GIT_COMMITTER_NAME=Constance",
-		"GIT_COMMITTER_EMAIL=constance@example.com",
-		fmt.Sprintf("GIT_COMMITTER_DATE=%d -0700", timestamp.Unix()),
-	)
-	*timestamp = timestamp.Add(60 * time.Second)
-}
-
-func newGitBomb(
-	t *testing.T, path string, depth, breadth int, body string,
-) {
-	t.Helper()
-
-	cmd := exec.Command("git", "init", "--bare", path)
-	err := cmd.Run()
-	require.NoError(t, err)
-
-	oid := createObject(t, path, "blob", func(w io.Writer) error {
+	oid := repo.CreateObject(t, "blob", func(w io.Writer) error {
 		_, err := io.WriteString(w, body)
 		return err
 	})
@@ -146,9 +43,9 @@ func newGitBomb(
 	prefix := "f"
 
 	for ; depth > 0; depth-- {
-		oid = createObject(t, path, "tree", func(w io.Writer) error {
+		oid = repo.CreateObject(t, "tree", func(w io.Writer) error {
 			for i := 0; i < breadth; i++ {
-				_, err = fmt.Fprintf(
+				_, err := fmt.Fprintf(
 					w, "%s %s%0*d\x00%s",
 					mode, prefix, digits, i, oid.Bytes(),
 				)
@@ -163,7 +60,7 @@ func newGitBomb(
 		prefix = "d"
 	}
 
-	oid = createObject(t, path, "commit", func(w io.Writer) error {
+	oid = repo.CreateObject(t, "commit", func(w io.Writer) error {
 		_, err := fmt.Fprintf(
 			w,
 			"tree %s\n"+
@@ -176,7 +73,7 @@ func newGitBomb(
 		return err
 	})
 
-	updateRef(t, path, "refs/heads/master", oid)
+	repo.UpdateRef(t, "refs/heads/master", oid)
 }
 
 // TestRefSelections tests various combinations of reference selection
@@ -228,39 +125,11 @@ func TestRefSelections(t *testing.T) {
 	}
 
 	// Create a test repo with one orphan commit per refname:
-	path, err := ioutil.TempDir("", "ref-selection")
-	require.NoError(t, err)
-
-	defer os.RemoveAll(path)
-
-	err = exec.Command("git", "init", "--bare", path).Run()
-	require.NoError(t, err)
+	repo := testutils.NewTestRepo(t, true, "ref-selection")
+	defer repo.Remove(t)
 
 	for _, p := range references {
-		oid := createObject(t, path, "blob", func(w io.Writer) error {
-			_, err := fmt.Fprintf(w, "%s\n", p.refname)
-			return err
-		})
-
-		oid = createObject(t, path, "tree", func(w io.Writer) error {
-			_, err = fmt.Fprintf(w, "100644 a.txt\x00%s", oid.Bytes())
-			return err
-		})
-
-		oid = createObject(t, path, "commit", func(w io.Writer) error {
-			_, err := fmt.Fprintf(
-				w,
-				"tree %s\n"+
-					"author Example <example@example.com> 1112911993 -0700\n"+
-					"committer Example <example@example.com> 1112911993 -0700\n"+
-					"\n"+
-					"Commit for reference %s\n",
-				oid, p.refname,
-			)
-			return err
-		})
-
-		updateRef(t, path, p.refname, oid)
+		repo.CreateReferencedOrphan(t, p.refname)
 	}
 
 	executable, err := exec.LookPath("bin/git-sizer")
@@ -271,7 +140,7 @@ func TestRefSelections(t *testing.T) {
 	for i, p := range []struct {
 		name   string
 		args   []string
-		config [][2]string
+		config []git.ConfigEntry
 	}{
 		{ // 0
 			name: "no arguments",
@@ -350,47 +219,37 @@ func TestRefSelections(t *testing.T) {
 		{ // 17
 			name: "branches-refgroup",
 			args: []string{"--refgroup=mygroup"},
-			config: [][2]string{
-				{"include", "refs/heads"},
+			config: []git.ConfigEntry{
+				{"refgroup.mygroup.include", "refs/heads"},
 			},
 		},
 		{ // 18
 			name: "combination-refgroup",
 			args: []string{"--refgroup=mygroup"},
-			config: [][2]string{
-				{"include", "refs/heads"},
-				{"include", "refs/tags"},
-				{"exclude", "refs/heads/foo"},
-				{"includeRegexp", ".*foo.*"},
-				{"exclude", "refs/foo"},
-				{"excludeRegexp", "refs/tags/release-.*"},
+			config: []git.ConfigEntry{
+				{"refgroup.mygroup.include", "refs/heads"},
+				{"refgroup.mygroup.include", "refs/tags"},
+				{"refgroup.mygroup.exclude", "refs/heads/foo"},
+				{"refgroup.mygroup.includeRegexp", ".*foo.*"},
+				{"refgroup.mygroup.exclude", "refs/foo"},
+				{"refgroup.mygroup.excludeRegexp", "refs/tags/release-.*"},
 			},
 		},
 	} {
 		t.Run(
 			p.name,
 			func(t *testing.T) {
-				if len(p.config) != 0 {
-					for _, c := range p.config {
-						cmd := gitCommand(
-							t, path,
-							"config", "--add", fmt.Sprintf("refgroup.mygroup.%s", c[0]), c[1],
-						)
-						err := cmd.Run()
-						require.NoError(t, err)
-					}
-					defer func() {
-						cmd := gitCommand(
-							t, path, "config", "--remove-section", "refgroup.mygroup",
-						)
-						err := cmd.Run()
-						require.NoError(t, err)
-					}()
+				repo := repo.Clone(t, "ref-selection")
+				defer repo.Remove(t)
+
+				for _, e := range p.config {
+					repo.ConfigAdd(t, e.Key, e.Value)
 				}
+
 				args := []string{"--show-refs", "--no-progress", "--json", "--json-version=2"}
 				args = append(args, p.args...)
 				cmd := exec.Command(executable, args...)
-				cmd.Dir = path
+				cmd.Dir = repo.Path
 				var stdout bytes.Buffer
 				cmd.Stdout = &stdout
 				var stderr bytes.Buffer
@@ -429,17 +288,14 @@ func pow(x uint64, n int) uint64 {
 func TestBomb(t *testing.T) {
 	t.Parallel()
 
-	path, err := ioutil.TempDir("", "bomb")
-	require.NoError(t, err)
+	repo := testutils.NewTestRepo(t, true, "bomb")
+	defer repo.Remove(t)
 
-	defer func() {
-		os.RemoveAll(path)
-	}()
-
-	newGitBomb(t, path, 10, 10, "boom!\n")
+	newGitBomb(t, repo, 10, 10, "boom!\n")
 
 	h, err := sizes.ScanRepositoryUsingGraph(
-		newRepository(t, path), git.AllReferencesFilter, sizes.NameStyleFull, false,
+		repo.Repository(t),
+		git.AllReferencesFilter, sizes.NameStyleFull, false,
 	)
 	require.NoError(t, err)
 
@@ -486,38 +342,33 @@ func TestBomb(t *testing.T) {
 
 func TestTaggedTags(t *testing.T) {
 	t.Parallel()
-	path, err := ioutil.TempDir("", "tagged-tags")
-	require.NoError(t, err, "creating temporary directory")
 
-	defer func() {
-		os.RemoveAll(path)
-	}()
-
-	cmd := exec.Command("git", "init", path)
-	require.NoError(t, cmd.Run(), "initializing repo")
+	repo := testutils.NewTestRepo(t, false, "tagged-tags")
+	defer repo.Remove(t)
 
 	timestamp := time.Unix(1112911993, 0)
 
-	cmd = gitCommand(t, path, "commit", "-m", "initial", "--allow-empty")
-	addAuthorInfo(cmd, &timestamp)
+	cmd := repo.GitCommand(t, "commit", "-m", "initial", "--allow-empty")
+	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating commit")
 
 	// The lexicographical order of these tags is important, hence
 	// their strange names.
-	cmd = gitCommand(t, path, "tag", "-m", "tag 1", "tag", "master")
-	addAuthorInfo(cmd, &timestamp)
+	cmd = repo.GitCommand(t, "tag", "-m", "tag 1", "tag", "master")
+	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 1")
 
-	cmd = gitCommand(t, path, "tag", "-m", "tag 2", "bag", "tag")
-	addAuthorInfo(cmd, &timestamp)
+	cmd = repo.GitCommand(t, "tag", "-m", "tag 2", "bag", "tag")
+	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 2")
 
-	cmd = gitCommand(t, path, "tag", "-m", "tag 3", "wag", "bag")
-	addAuthorInfo(cmd, &timestamp)
+	cmd = repo.GitCommand(t, "tag", "-m", "tag 3", "wag", "bag")
+	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 3")
 
 	h, err := sizes.ScanRepositoryUsingGraph(
-		newRepository(t, path), git.AllReferencesFilter, sizes.NameStyleNone, false,
+		repo.Repository(t),
+		git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(3), h.MaxTagDepth, "tag depth")
@@ -525,26 +376,20 @@ func TestTaggedTags(t *testing.T) {
 
 func TestFromSubdir(t *testing.T) {
 	t.Parallel()
-	path, err := ioutil.TempDir("", "subdir")
-	require.NoError(t, err, "creating temporary directory")
 
-	defer func() {
-		os.RemoveAll(path)
-	}()
-
-	cmd := exec.Command("git", "init", path)
-	require.NoError(t, cmd.Run(), "initializing repo")
+	repo := testutils.NewTestRepo(t, false, "subdir")
+	defer repo.Remove(t)
 
 	timestamp := time.Unix(1112911993, 0)
 
-	addFile(t, path, "subdir/file.txt", "Hello, world!\n")
+	repo.AddFile(t, "subdir/file.txt", "Hello, world!\n")
 
-	cmd = gitCommand(t, path, "commit", "-m", "initial")
-	addAuthorInfo(cmd, &timestamp)
+	cmd := repo.GitCommand(t, "commit", "-m", "initial")
+	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating commit")
 
 	h, err := sizes.ScanRepositoryUsingGraph(
-		newRepository(t, filepath.Join(path, "subdir")),
+		repo.Repository(t),
 		git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
@@ -553,48 +398,52 @@ func TestFromSubdir(t *testing.T) {
 
 func TestSubmodule(t *testing.T) {
 	t.Parallel()
-	path, err := ioutil.TempDir("", "submodule")
+
+	tmp, err := ioutil.TempDir("", "submodule")
 	require.NoError(t, err, "creating temporary directory")
 
 	defer func() {
-		os.RemoveAll(path)
+		os.RemoveAll(tmp)
 	}()
 
 	timestamp := time.Unix(1112911993, 0)
 
-	submPath := filepath.Join(path, "subm")
-	cmd := exec.Command("git", "init", submPath)
-	require.NoError(t, cmd.Run(), "initializing subm repo")
-	addFile(t, submPath, "submfile1.txt", "Hello, submodule!\n")
-	addFile(t, submPath, "submfile2.txt", "Hello again, submodule!\n")
-	addFile(t, submPath, "submfile3.txt", "Hello again, submodule!\n")
+	submRepo := testutils.TestRepo{
+		Path: filepath.Join(tmp, "subm"),
+	}
+	submRepo.Init(t, false)
+	submRepo.AddFile(t, "submfile1.txt", "Hello, submodule!\n")
+	submRepo.AddFile(t, "submfile2.txt", "Hello again, submodule!\n")
+	submRepo.AddFile(t, "submfile3.txt", "Hello again, submodule!\n")
 
-	cmd = gitCommand(t, submPath, "commit", "-m", "subm initial")
-	addAuthorInfo(cmd, &timestamp)
+	cmd := submRepo.GitCommand(t, "commit", "-m", "subm initial")
+	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating subm commit")
 
-	mainPath := filepath.Join(path, "main")
-	cmd = exec.Command("git", "init", mainPath)
-	require.NoError(t, cmd.Run(), "initializing main repo")
+	mainRepo := testutils.TestRepo{
+		Path: filepath.Join(tmp, "main"),
+	}
+	mainRepo.Init(t, false)
 
-	addFile(t, mainPath, "mainfile.txt", "Hello, main!\n")
+	mainRepo.AddFile(t, "mainfile.txt", "Hello, main!\n")
 
-	cmd = gitCommand(t, mainPath, "commit", "-m", "main initial")
-	addAuthorInfo(cmd, &timestamp)
+	cmd = mainRepo.GitCommand(t, "commit", "-m", "main initial")
+	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating main commit")
 
 	// Make subm a submodule of main:
-	cmd = gitCommand(t, mainPath, "submodule", "add", submPath, "sub")
-	cmd.Dir = mainPath
+	cmd = mainRepo.GitCommand(t, "submodule", "add", submRepo.Path, "sub")
+	cmd.Dir = mainRepo.Path
 	require.NoError(t, cmd.Run(), "adding submodule")
 
-	cmd = gitCommand(t, mainPath, "commit", "-m", "add submodule")
-	addAuthorInfo(cmd, &timestamp)
+	cmd = mainRepo.GitCommand(t, "commit", "-m", "add submodule")
+	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "committing submodule to main")
 
 	// Analyze the main repo:
 	h, err := sizes.ScanRepositoryUsingGraph(
-		newRepository(t, mainPath), git.AllReferencesFilter, sizes.NameStyleNone, false,
+		mainRepo.Repository(t),
+		git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")
@@ -602,8 +451,11 @@ func TestSubmodule(t *testing.T) {
 	assert.Equal(t, counts.Count32(1), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
 
 	// Analyze the submodule:
+	submRepo2 := testutils.TestRepo{
+		Path: filepath.Join(mainRepo.Path, "sub"),
+	}
 	h, err = sizes.ScanRepositoryUsingGraph(
-		newRepository(t, filepath.Join(mainPath, "sub")),
+		submRepo2.Repository(t),
 		git.AllReferencesFilter, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")

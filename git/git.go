@@ -231,9 +231,9 @@ func (iter *ReferenceIter) Next() (Reference, bool, error) {
 	}, true, nil
 }
 
-func (l *ReferenceIter) Close() error {
-	err := l.out.Close()
-	err2 := l.cmd.Wait()
+func (iter *ReferenceIter) Close() error {
+	err := iter.out.Close()
+	err2 := iter.cmd.Wait()
 	if err == nil {
 		err = err2
 	}
@@ -295,9 +295,9 @@ func (iter *BatchObjectIter) Next() (OID, ObjectType, counts.Count32, []byte, er
 	return oid, objectType, objectSize, data, nil
 }
 
-func (l *BatchObjectIter) Close() error {
-	err := l.out.Close()
-	err2 := l.cmd.Wait()
+func (iter *BatchObjectIter) Close() error {
+	err := iter.out.Close()
+	err2 := iter.cmd.Wait()
 	if err == nil {
 		err = err2
 	}

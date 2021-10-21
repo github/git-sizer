@@ -236,9 +236,12 @@ func TestRefSelections(t *testing.T) {
 			},
 		},
 	} {
+		i, p := i, p
 		t.Run(
 			p.name,
 			func(t *testing.T) {
+				t.Parallel()
+
 				repo := repo.Clone(t, "ref-selection")
 				defer repo.Remove(t)
 
@@ -254,7 +257,7 @@ func TestRefSelections(t *testing.T) {
 				cmd.Stdout = &stdout
 				var stderr bytes.Buffer
 				cmd.Stderr = &stderr
-				err = cmd.Run()
+				err := cmd.Run()
 				assert.NoError(t, err)
 
 				expectedStderr, expectedUniqueCommitCount := computeExpectations(i)
@@ -484,9 +487,12 @@ References (included references marked with '+'):
 `[1:],
 		},
 	} {
+		p := p
 		t.Run(
 			p.name,
 			func(t *testing.T) {
+				t.Parallel()
+
 				repo := repo.Clone(t, "refgroups")
 				defer repo.Remove(t)
 

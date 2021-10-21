@@ -331,7 +331,6 @@ func parseBatchHeader(spec string, header string) (OID, ObjectType, counts.Count
 type ObjectIter struct {
 	cmd1    *exec.Cmd
 	cmd2    *exec.Cmd
-	in1     io.Writer
 	out1    io.ReadCloser
 	out2    io.ReadCloser
 	f       *bufio.Reader

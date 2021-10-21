@@ -126,7 +126,7 @@ func TestRefSelections(t *testing.T) {
 
 	// Create a test repo with one orphan commit per refname:
 	repo := testutils.NewTestRepo(t, true, "ref-selection")
-	defer repo.Remove(t)
+	t.Cleanup(func() { repo.Remove(t) })
 
 	for _, p := range references {
 		repo.CreateReferencedOrphan(t, p.refname)
@@ -306,7 +306,7 @@ func TestRefgroups(t *testing.T) {
 
 	// Create a test repo with one orphan commit per refname:
 	repo := testutils.NewTestRepo(t, true, "refgroups")
-	defer repo.Remove(t)
+	t.Cleanup(func() { repo.Remove(t) })
 
 	for _, refname := range references {
 		repo.CreateReferencedOrphan(t, refname)
@@ -535,7 +535,7 @@ func TestBomb(t *testing.T) {
 	t.Parallel()
 
 	repo := testutils.NewTestRepo(t, true, "bomb")
-	defer repo.Remove(t)
+	t.Cleanup(func() { repo.Remove(t) })
 
 	newGitBomb(t, repo, 10, 10, "boom!\n")
 

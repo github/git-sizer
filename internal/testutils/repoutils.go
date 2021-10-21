@@ -173,6 +173,7 @@ func (repo *TestRepo) CreateObject(
 	require.NoError(t, err)
 
 	out, err := cmd.StdoutPipe()
+	require.NoError(t, err)
 	cmd.Stderr = os.Stderr
 
 	err = cmd.Start()

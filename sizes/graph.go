@@ -43,6 +43,7 @@ type RefGrouper interface {
 
 type refSeen struct {
 	git.Reference
+	walked bool
 	groups []RefGroupSymbol
 }
 
@@ -102,6 +103,7 @@ func ScanRepositoryUsingGraph(
 				refsSeen,
 				refSeen{
 					Reference: ref,
+					walked:    walk,
 					groups:    groups,
 				},
 			)
@@ -372,7 +374,7 @@ func ScanRepositoryUsingGraph(
 	progressMeter.Start("Processing references: %d")
 	for _, refSeen := range refsSeen {
 		progressMeter.Inc()
-		graph.RegisterReference(refSeen.Reference, refSeen.groups)
+		graph.RegisterReference(refSeen.Reference, refSeen.walked, refSeen.groups)
 	}
 	progressMeter.Done()
 
@@ -428,7 +430,7 @@ func NewGraph(rg RefGrouper, nameStyle NameStyle) *Graph {
 	}
 }
 
-func (g *Graph) RegisterReference(ref git.Reference, groups []RefGroupSymbol) {
+func (g *Graph) RegisterReference(ref git.Reference, walked bool, groups []RefGroupSymbol) {
 	g.historyLock.Lock()
 	g.historySize.recordReference(g, ref)
 	for _, group := range groups {
@@ -436,7 +438,9 @@ func (g *Graph) RegisterReference(ref git.Reference, groups []RefGroupSymbol) {
 	}
 	g.historyLock.Unlock()
 
-	g.pathResolver.RecordReference(ref)
+	if walked {
+		g.pathResolver.RecordReference(ref)
+	}
 }
 
 func (g *Graph) HistorySize() HistorySize {

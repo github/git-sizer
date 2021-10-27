@@ -14,6 +14,7 @@ type ConfigEntry struct {
 }
 
 type Config struct {
+	Prefix  string
 	Entries []ConfigEntry
 }
 
@@ -29,7 +30,9 @@ func (repo *Repository) Config(prefix string) (*Config, error) {
 		return nil, fmt.Errorf("reading git configuration: %w", err)
 	}
 
-	var config Config
+	config := Config{
+		Prefix: prefix,
+	}
 
 	for len(out) > 0 {
 		keyEnd := bytes.IndexByte(out, '\n')
@@ -58,6 +61,15 @@ func (repo *Repository) Config(prefix string) (*Config, error) {
 	}
 
 	return &config, nil
+}
+
+// FullKey returns the full gitconfig key name for the relative key
+// name `key`.
+func (config *Config) FullKey(key string) string {
+	if config.Prefix == "" {
+		return key
+	}
+	return fmt.Sprintf("%s.%s", config.Prefix, key)
 }
 
 // configKeyMatchesPrefix checks whether `key` starts with `prefix` at

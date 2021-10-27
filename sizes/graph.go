@@ -13,10 +13,44 @@ import (
 	"github.com/github/git-sizer/meter"
 )
 
+type RefGroupSymbol string
+
+// RefGroup is a group of references, for example "branches" or
+// "tags". Reference groups might overlap.
+type RefGroup struct {
+	// Symbol is the unique string by which this `RefGroup` is
+	// identified and configured. It consists of dot-separated
+	// components, which implicitly makes a nested tree-like
+	// structure.
+	Symbol RefGroupSymbol
+
+	// Name is the name for this `ReferenceGroup` to be presented
+	// in user-readable output.
+	Name string
+}
+
+type RefGrouper interface {
+	// Categorize tells whether `refname` should be walked at all,
+	// and if so, the symbols of the reference groups to which it
+	// belongs.
+	Categorize(refname string) (bool, []RefGroupSymbol)
+
+	// Groups returns the list of `ReferenceGroup`s, in the order
+	// that they should be presented. The return value might
+	// depend on which references have been seen so far.
+	Groups() []RefGroup
+}
+
+type refSeen struct {
+	git.Reference
+	walked bool
+	groups []RefGroupSymbol
+}
+
 func ScanRepositoryUsingGraph(
-	repo *git.Repository, filter git.ReferenceFilter, nameStyle NameStyle, progress bool,
+	repo *git.Repository, rg RefGrouper, nameStyle NameStyle, progress bool,
 ) (HistorySize, error) {
-	graph := NewGraph(nameStyle)
+	graph := NewGraph(rg, nameStyle)
 	var progressMeter meter.Progress
 	if progress {
 		progressMeter = meter.NewProgressMeter(100 * time.Millisecond)
@@ -45,7 +79,7 @@ func ScanRepositoryUsingGraph(
 	}()
 
 	errChan := make(chan error, 1)
-	var refs []git.Reference
+	var refsSeen []refSeen
 	// Feed the references that we want into the stdin of the object
 	// iterator:
 	go func() {
@@ -62,10 +96,22 @@ func ScanRepositoryUsingGraph(
 			if !ok {
 				break
 			}
-			if !filter(ref.Refname) {
+
+			walk, groups := rg.Categorize(ref.Refname)
+
+			refsSeen = append(
+				refsSeen,
+				refSeen{
+					Reference: ref,
+					walked:    walk,
+					groups:    groups,
+				},
+			)
+
+			if !walk {
 				continue
 			}
-			refs = append(refs, ref)
+
 			_, err = bufin.WriteString(ref.OID.String())
 			if err != nil {
 				errChan <- err
@@ -326,9 +372,9 @@ func ScanRepositoryUsingGraph(
 	}
 
 	progressMeter.Start("Processing references: %d")
-	for _, ref := range refs {
+	for _, refSeen := range refsSeen {
 		progressMeter.Inc()
-		graph.RegisterReference(ref)
+		graph.RegisterReference(refSeen.Reference, refSeen.walked, refSeen.groups)
 	}
 	progressMeter.Done()
 
@@ -338,6 +384,8 @@ func ScanRepositoryUsingGraph(
 // An object graph that is being built up.
 type Graph struct {
 	repo *git.Repository
+
+	rg RefGrouper
 
 	blobLock  sync.Mutex
 	blobSizes map[git.OID]BlobSize
@@ -360,8 +408,10 @@ type Graph struct {
 	pathResolver PathResolver
 }
 
-func NewGraph(nameStyle NameStyle) *Graph {
+func NewGraph(rg RefGrouper, nameStyle NameStyle) *Graph {
 	return &Graph{
+		rg: rg,
+
 		blobSizes: make(map[git.OID]BlobSize),
 
 		treeRecords: make(map[git.OID]*treeRecord),
@@ -372,16 +422,25 @@ func NewGraph(nameStyle NameStyle) *Graph {
 		tagRecords: make(map[git.OID]*tagRecord),
 		tagSizes:   make(map[git.OID]TagSize),
 
+		historySize: HistorySize{
+			ReferenceGroups: make(map[RefGroupSymbol]*counts.Count32),
+		},
+
 		pathResolver: NewPathResolver(nameStyle),
 	}
 }
 
-func (g *Graph) RegisterReference(ref git.Reference) {
+func (g *Graph) RegisterReference(ref git.Reference, walked bool, groups []RefGroupSymbol) {
 	g.historyLock.Lock()
 	g.historySize.recordReference(g, ref)
+	for _, group := range groups {
+		g.historySize.recordReferenceGroup(g, group)
+	}
 	g.historyLock.Unlock()
 
-	g.pathResolver.RecordReference(ref)
+	if walked {
+		g.pathResolver.RecordReference(ref)
+	}
 }
 
 func (g *Graph) HistorySize() HistorySize {

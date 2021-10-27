@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/github/git-sizer/counts"
 	"github.com/github/git-sizer/git"
@@ -218,6 +219,26 @@ func (i *item) MarshalJSON() ([]byte, error) {
 	return json.Marshal(stat)
 }
 
+// Indented returns an `item` that is just like `i`, but indented by
+// `depth` more levels.
+func (i *item) Indented(depth int) tableContents {
+	return &indentedItem{
+		tableContents: i,
+		depth:         depth,
+	}
+}
+
+type indentedItem struct {
+	tableContents
+	depth int
+}
+
+func (i *indentedItem) Emit(t *table) {
+	subTable := t.indented("", i.depth)
+	i.tableContents.Emit(subTable)
+	t.addSection(subTable)
+}
+
 type Threshold float64
 
 // Methods to implement pflag.Value:
@@ -345,8 +366,10 @@ type table struct {
 	buf           bytes.Buffer
 }
 
-func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) string {
-	contents := s.contents()
+func (s HistorySize) TableString(
+	refGroups []RefGroup, threshold Threshold, nameStyle NameStyle,
+) string {
+	contents := s.contents(refGroups)
 	t := table{
 		threshold: threshold,
 		nameStyle: nameStyle,
@@ -363,14 +386,18 @@ func (s HistorySize) TableString(threshold Threshold, nameStyle NameStyle) strin
 	return t.generateHeader() + t.buf.String() + t.footnotes.String()
 }
 
-func (t *table) subTable(sectionHeader string) *table {
+func (t *table) indented(sectionHeader string, depth int) *table {
 	return &table{
 		threshold:     t.threshold,
 		nameStyle:     t.nameStyle,
 		sectionHeader: sectionHeader,
 		footnotes:     t.footnotes,
-		indent:        t.indent + 1,
+		indent:        t.indent + depth,
 	}
+}
+
+func (t *table) subTable(sectionHeader string) *table {
+	return t.indented(sectionHeader, 1)
 }
 
 func (t *table) addSection(subTable *table) {
@@ -422,19 +449,40 @@ func (t *table) formatRow(
 	)
 }
 
-func (s HistorySize) JSON(threshold Threshold, nameStyle NameStyle) ([]byte, error) {
-	contents := s.contents()
+func (s HistorySize) JSON(
+	refGroups []RefGroup, threshold Threshold, nameStyle NameStyle,
+) ([]byte, error) {
+	contents := s.contents(refGroups)
 	items := make(map[string]*item)
 	contents.CollectItems(items)
 	j, err := json.MarshalIndent(items, "", "    ")
 	return j, err
 }
 
-func (s HistorySize) contents() tableContents {
+func (s HistorySize) contents(refGroups []RefGroup) tableContents {
 	S := newSection
 	I := newItem
 	metric := counts.Metric
 	binary := counts.Binary
+
+	var rgis []tableContents
+	for _, rg := range refGroups {
+		if rg.Symbol == "" {
+			continue
+		}
+		count, ok := s.ReferenceGroups[rg.Symbol]
+		if !ok {
+			continue
+		}
+		rgi := I(
+			fmt.Sprintf("refgroup.%s", rg.Symbol), rg.Name,
+			fmt.Sprintf("The number of references in group '%s'", rg.Symbol),
+			nil, *count, metric, "", 25000,
+		)
+		indent := strings.Count(string(rg.Symbol), ".")
+		rgis = append(rgis, rgi.Indented(indent))
+	}
+
 	return S(
 		"",
 		S(
@@ -484,6 +532,10 @@ func (s HistorySize) contents() tableContents {
 				I("referenceCount", "Count",
 					"The total number of references",
 					nil, s.ReferenceCount, metric, "", 25e3),
+				S(
+					"",
+					rgis...,
+				),
 			),
 		),
 

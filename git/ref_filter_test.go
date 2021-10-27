@@ -38,7 +38,11 @@ func TestPrefixFilter(t *testing.T) {
 		t.Run(
 			fmt.Sprintf("prefix '%s', refname '%s'", p.prefix, p.refname),
 			func(t *testing.T) {
-				assert.Equal(t, p.expected, git.PrefixFilter(p.prefix)(p.refname))
+				assert.Equal(
+					t,
+					p.expected,
+					git.PrefixFilter(p.prefix).Filter(p.refname),
+				)
 			},
 		)
 	}
@@ -73,7 +77,11 @@ func TestRegexpFilter(t *testing.T) {
 		t.Run(
 			fmt.Sprintf("pattern '%s', refname '%s'", p.pattern, p.refname),
 			func(t *testing.T) {
-				assert.Equal(t, p.expected, regexpFilter(t, p.pattern)(p.refname))
+				assert.Equal(
+					t,
+					p.expected,
+					regexpFilter(t, p.pattern).Filter(p.refname),
+				)
 			},
 		)
 	}
@@ -82,11 +90,11 @@ func TestRegexpFilter(t *testing.T) {
 func TestIncludeExcludeFilter(t *testing.T) {
 	t.Parallel()
 
-	var filter git.IncludeExcludeFilter
-	filter.Include(git.PrefixFilter("refs/heads"))
-	filter.Exclude(regexpFilter(t, "refs/heads/.*foo.*"))
-	filter.Include(git.PrefixFilter("refs/remotes"))
-	filter.Exclude(git.PrefixFilter("refs/remotes/foo"))
+	var filter git.ReferenceFilter
+	filter = git.Include.Combine(filter, git.PrefixFilter("refs/heads"))
+	filter = git.Exclude.Combine(filter, regexpFilter(t, "refs/heads/.*foo.*"))
+	filter = git.Include.Combine(filter, git.PrefixFilter("refs/remotes"))
+	filter = git.Exclude.Combine(filter, git.PrefixFilter("refs/remotes/foo"))
 
 	for _, p := range []struct {
 		refname  string

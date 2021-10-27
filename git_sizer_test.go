@@ -191,7 +191,7 @@ func TestRefSelections(t *testing.T) {
 		},
 		{ // 12
 			name: "foo",
-			args: []string{"--include-regexp", ".*foo.*"},
+			args: []string{"--include", "/.*foo.*/"},
 		},
 		{ // 13
 			name: "refs/foo as prefix",
@@ -199,11 +199,11 @@ func TestRefSelections(t *testing.T) {
 		},
 		{ // 14
 			name: "refs/foo as regexp",
-			args: []string{"--include-regexp", "refs/foo"},
+			args: []string{"--include", "/refs/foo/"},
 		},
 		{ // 15
 			name: "release tags",
-			args: []string{"--include-regexp", "refs/tags/release-.*"},
+			args: []string{"--include", "/refs/tags/release-.*/"},
 		},
 		{ // 16
 			name: "combination",
@@ -211,21 +211,21 @@ func TestRefSelections(t *testing.T) {
 				"--include=refs/heads",
 				"--tags",
 				"--exclude", "refs/heads/foo",
-				"--include-regexp", ".*foo.*",
+				"--include", "/.*foo.*/",
 				"--exclude", "refs/foo",
-				"--exclude-regexp", "refs/tags/release-.*",
+				"--exclude", "/refs/tags/release-.*/",
 			},
 		},
 		{ // 17
 			name: "branches-refgroup",
-			args: []string{"--refgroup=mygroup"},
+			args: []string{"--include=@mygroup"},
 			config: []git.ConfigEntry{
 				{"refgroup.mygroup.include", "refs/heads"},
 			},
 		},
 		{ // 18
 			name: "combination-refgroup",
-			args: []string{"--refgroup=mygroup"},
+			args: []string{"--include=@mygroup"},
 			config: []git.ConfigEntry{
 				{"refgroup.mygroup.include", "refs/heads"},
 				{"refgroup.mygroup.include", "refs/tags"},
@@ -277,12 +277,258 @@ func TestRefSelections(t *testing.T) {
 	}
 }
 
+func TestRefgroups(t *testing.T) {
+	t.Parallel()
+
+	references := []string{
+		"refs/changes/20/884120/1",
+		"refs/changes/45/12345/42",
+		"refs/fo",
+		"refs/foo",
+		"refs/heads/foo",
+		"refs/heads/main",
+		"refs/notes/discussion",
+		"refs/notes/tests/build",
+		"refs/notes/tests/default",
+		"refs/pull/1/head",
+		"refs/pull/1/merge",
+		"refs/pull/123/head",
+		"refs/pull/1234/head",
+		"refs/remotes/origin/master",
+		"refs/remotes/upstream/foo",
+		"refs/remotes/upstream/master",
+		"refs/stash",
+		"refs/tags/foolish",
+		"refs/tags/other",
+		"refs/tags/release-1",
+		"refs/tags/release-2",
+	}
+
+	// Create a test repo with one orphan commit per refname:
+	repo := testutils.NewTestRepo(t, true, "refgroups")
+	defer repo.Remove(t)
+
+	for _, refname := range references {
+		repo.CreateReferencedOrphan(t, refname)
+	}
+
+	executable, err := exec.LookPath("bin/git-sizer")
+	require.NoError(t, err)
+	executable, err = filepath.Abs(executable)
+	require.NoError(t, err)
+
+	for _, p := range []struct {
+		name   string
+		args   []string
+		config []git.ConfigEntry
+		stdout string
+		stderr string
+	}{
+		{
+			name: "no arguments",
+			stdout: `
+| * References                 |           |                                |
+|   * Count                    |    21     |                                |
+|     * Branches               |     2     |                                |
+|     * Tags                   |     4     |                                |
+|     * Remote-tracking refs   |     3     |                                |
+|     * Pull request refs      |     4     |                                |
+|     * Changeset refs         |     2     |                                |
+|     * Git notes              |     3     |                                |
+|     * Git stash              |     1     |                                |
+|     * Other                  |     2     |                                |
+|                              |           |                                |
+`[1:],
+			stderr: `
+References (included references marked with '+'):
++ refs/changes/20/884120/1
++ refs/changes/45/12345/42
++ refs/fo
++ refs/foo
++ refs/heads/foo
++ refs/heads/main
++ refs/notes/discussion
++ refs/notes/tests/build
++ refs/notes/tests/default
++ refs/pull/1/head
++ refs/pull/1/merge
++ refs/pull/123/head
++ refs/pull/1234/head
++ refs/remotes/origin/master
++ refs/remotes/upstream/foo
++ refs/remotes/upstream/master
++ refs/stash
++ refs/tags/foolish
++ refs/tags/other
++ refs/tags/release-1
++ refs/tags/release-2
+`[1:],
+		},
+		{
+			name: "nested-groups",
+			config: []git.ConfigEntry{
+				// Note that refgroup "misc" is defined implicitly.
+
+				{"refgroup.misc.foo.includeRegexp", ".*foo.*"},
+
+				{"refgroup.misc.foo.oatend.includeRegexp", ".*o"},
+
+				{"refgroup.misc.foo.bogus.include", "bogus"},
+
+				{"refgroup.tags.releases.name", "Releases"},
+				{"refgroup.tags.releases.includeRegexp", "refs/tags/release-.*"},
+			},
+			stdout: `
+| * References                 |           |                                |
+|   * Count                    |    21     |                                |
+|     * Branches               |     2     |                                |
+|     * Tags                   |     4     |                                |
+|       * Releases             |     2     |                                |
+|       * Other                |     2     |                                |
+|     * Remote-tracking refs   |     3     |                                |
+|     * Pull request refs      |     4     |                                |
+|     * Changeset refs         |     2     |                                |
+|     * Git notes              |     3     |                                |
+|     * Git stash              |     1     |                                |
+|     * misc                   |     4     |                                |
+|       * foo                  |     4     |                                |
+|         * oatend             |     3     |                                |
+|         * Other              |     1     |                                |
+|     * Other                  |     1     |                                |
+|                              |           |                                |
+`[1:],
+		},
+		{
+			name: "include-refgroups",
+			args: []string{"--include=@branches", "--include=@tags.releases", "--include=@oatend"},
+			config: []git.ConfigEntry{
+				{"refgroup.oatend.includeRegexp", ".*o"},
+
+				{"refgroup.tags.releases.name", "Releases"},
+				{"refgroup.tags.releases.includeRegexp", "refs/tags/release-.*"},
+			},
+			stdout: `
+| * References                 |           |                                |
+|   * Count                    |    21     |                                |
+|     * Branches               |     2     |                                |
+|     * Tags                   |     2     |                                |
+|       * Releases             |     2     |                                |
+|     * Remote-tracking refs   |     1     |                                |
+|     * oatend                 |     4     |                                |
+|     * Ignored                |    14     |                                |
+|                              |           |                                |
+`[1:],
+			stderr: `
+References (included references marked with '+'):
+  refs/changes/20/884120/1
+  refs/changes/45/12345/42
++ refs/fo
++ refs/foo
++ refs/heads/foo
++ refs/heads/main
+  refs/notes/discussion
+  refs/notes/tests/build
+  refs/notes/tests/default
+  refs/pull/1/head
+  refs/pull/1/merge
+  refs/pull/123/head
+  refs/pull/1234/head
+  refs/remotes/origin/master
++ refs/remotes/upstream/foo
+  refs/remotes/upstream/master
+  refs/stash
+  refs/tags/foolish
+  refs/tags/other
++ refs/tags/release-1
++ refs/tags/release-2
+`[1:],
+		},
+		{
+			name: "exclude-refgroup",
+			args: []string{"--exclude=@stash", "--exclude=@notes"},
+			stdout: `
+| * References                 |           |                                |
+|   * Count                    |    21     |                                |
+|     * Branches               |     2     |                                |
+|     * Tags                   |     4     |                                |
+|     * Remote-tracking refs   |     3     |                                |
+|     * Pull request refs      |     4     |                                |
+|     * Changeset refs         |     2     |                                |
+|     * Other                  |     2     |                                |
+|     * Ignored                |     4     |                                |
+|                              |           |                                |
+`[1:],
+			stderr: `
+References (included references marked with '+'):
++ refs/changes/20/884120/1
++ refs/changes/45/12345/42
++ refs/fo
++ refs/foo
++ refs/heads/foo
++ refs/heads/main
+  refs/notes/discussion
+  refs/notes/tests/build
+  refs/notes/tests/default
++ refs/pull/1/head
++ refs/pull/1/merge
++ refs/pull/123/head
++ refs/pull/1234/head
++ refs/remotes/origin/master
++ refs/remotes/upstream/foo
++ refs/remotes/upstream/master
+  refs/stash
++ refs/tags/foolish
++ refs/tags/other
++ refs/tags/release-1
++ refs/tags/release-2
+`[1:],
+		},
+	} {
+		t.Run(
+			p.name,
+			func(t *testing.T) {
+				repo := repo.Clone(t, "refgroups")
+				defer repo.Remove(t)
+
+				for _, e := range p.config {
+					repo.ConfigAdd(t, e.Key, e.Value)
+				}
+
+				args := append([]string{"--show-refs", "-v", "--no-progress"}, p.args...)
+				cmd := exec.Command(executable, args...)
+				cmd.Dir = repo.Path
+				var stdout bytes.Buffer
+				cmd.Stdout = &stdout
+				var stderr bytes.Buffer
+				cmd.Stderr = &stderr
+				err := cmd.Run()
+				assert.NoError(t, err)
+
+				assert.Contains(t, stdout.String(), p.stdout)
+				if p.stderr != "" {
+					assert.Equal(t, stderr.String(), p.stderr)
+				}
+			},
+		)
+	}
+}
+
 func pow(x uint64, n int) uint64 {
 	p := uint64(1)
 	for ; n > 0; n-- {
 		p *= x
 	}
 	return p
+}
+
+type refGrouper struct{}
+
+func (rg refGrouper) Categorize(refname string) (bool, []sizes.RefGroupSymbol) {
+	return true, nil
+}
+
+func (rg refGrouper) Groups() []sizes.RefGroup {
+	return nil
 }
 
 func TestBomb(t *testing.T) {
@@ -295,7 +541,7 @@ func TestBomb(t *testing.T) {
 
 	h, err := sizes.ScanRepositoryUsingGraph(
 		repo.Repository(t),
-		git.AllReferencesFilter, sizes.NameStyleFull, false,
+		refGrouper{}, sizes.NameStyleFull, false,
 	)
 	require.NoError(t, err)
 
@@ -368,7 +614,7 @@ func TestTaggedTags(t *testing.T) {
 
 	h, err := sizes.ScanRepositoryUsingGraph(
 		repo.Repository(t),
-		git.AllReferencesFilter, sizes.NameStyleNone, false,
+		refGrouper{}, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(3), h.MaxTagDepth, "tag depth")
@@ -390,7 +636,7 @@ func TestFromSubdir(t *testing.T) {
 
 	h, err := sizes.ScanRepositoryUsingGraph(
 		repo.Repository(t),
-		git.AllReferencesFilter, sizes.NameStyleNone, false,
+		refGrouper{}, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.MaxPathDepth, "max path depth")
@@ -443,7 +689,7 @@ func TestSubmodule(t *testing.T) {
 	// Analyze the main repo:
 	h, err := sizes.ScanRepositoryUsingGraph(
 		mainRepo.Repository(t),
-		git.AllReferencesFilter, sizes.NameStyleNone, false,
+		refGrouper{}, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")
@@ -456,7 +702,7 @@ func TestSubmodule(t *testing.T) {
 	}
 	h, err = sizes.ScanRepositoryUsingGraph(
 		submRepo2.Repository(t),
-		git.AllReferencesFilter, sizes.NameStyleNone, false,
+		refGrouper{}, sizes.NameStyleNone, false,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")

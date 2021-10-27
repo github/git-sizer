@@ -9,11 +9,12 @@ import (
 	"runtime/pprof"
 	"strconv"
 
+	"github.com/spf13/pflag"
+
 	"github.com/github/git-sizer/git"
+	"github.com/github/git-sizer/internal/refopts"
 	"github.com/github/git-sizer/isatty"
 	"github.com/github/git-sizer/sizes"
-
-	"github.com/spf13/pflag"
 )
 
 const Usage = `usage: git-sizer [OPTS]
@@ -44,208 +45,50 @@ const Usage = `usage: git-sizer [OPTS]
 
  Reference selection:
 
- By default, git-sizer processes all Git objects that are reachable from any
- reference. The following options can be used to limit which references to
- include. The last rule matching a reference determines whether that reference
- is processed:
+ By default, git-sizer processes all Git objects that are reachable
+ from any reference. The following options can be used to limit which
+ references to process. The last rule matching a reference determines
+ whether that reference is processed.
 
       --[no-]branches          process [don't process] branches
       --[no-]tags              process [don't process] tags
-      --[no-]remotes           process [don't process] remote-tracking references
+      --[no-]remotes           process [don't process] remote-tracking
+                               references
       --[no-]notes             process [don't process] git-notes references
       --[no-]stash             process [don't process] refs/stash
-      --include PREFIX         process references with the specified PREFIX
-                               (e.g., '--include=refs/remotes/origin')
-      --include-regexp REGEXP  process references matching the specified
-                               regular expression (e.g.,
-                               '--include-regexp=refs/tags/release-.*')
-      --exclude PREFIX         don't process references with the specified
-                               PREFIX (e.g., '--exclude=refs/changes')
-      --exclude-regexp REGEXP  don't process references matching the specified
-                               regular expression
-      --refgroup=NAME          process reference in group defined by gitconfig:
-                               'refgroup.NAME.include',
-                               'refgroup.NAME.includeRegexp',
-                               'refgroup.NAME.exclude', and
-                               'refgroup.NAME.excludeRegexp' as above.
+      --include PREFIX, --exclude PREFIX
+                               process [don't process] references with the
+                               specified PREFIX (e.g.,
+                               '--include=refs/remotes/origin')
+      --include /REGEXP/, --exclude /REGEXP/
+                               process [don't process] references matching the
+                               specified regular expression (e.g.,
+                               '--include=refs/tags/release-.*')
+      --include @REFGROUP, --exclude @REFGROUP
+                               process [don't process] references in the
+                               specified reference group (see below)
       --show-refs              show which refs are being included/excluded
 
- Prefixes must match at a boundary; for example 'refs/foo' matches
- 'refs/foo' and 'refs/foo/bar' but not 'refs/foobar'. Regular
- expression patterns must match the full reference name.
+ PREFIX must match at a boundary; for example 'refs/foo' matches
+ 'refs/foo' and 'refs/foo/bar' but not 'refs/foobar'.
+
+ REGEXP patterns must match the full reference name.
+
+ REFGROUP can be the name of a predefined reference group ('branches',
+ 'tags', 'remotes', 'pulls', 'changes', 'notes', or 'stash'), or one
+ defined via gitconfig settings like the following (the
+ include/exclude settings can be repeated):
+
+   * 'refgroup.REFGROUP.name=NAME'
+   * 'refgroup.REFGROUP.include=PREFIX'
+   * 'refgroup.REFGROUP.includeRegexp=REGEXP'
+   * 'refgroup.REFGROUP.exclude=PREFIX'
+   * 'refgroup.REFGROUP.excludeRegexp=REGEXP'
 
 `
 
 var ReleaseVersion string
 var BuildVersion string
-
-type NegatedBoolValue struct {
-	value *bool
-}
-
-func (v *NegatedBoolValue) Set(s string) error {
-	b, err := strconv.ParseBool(s)
-	*v.value = !b
-	return err
-}
-
-func (v *NegatedBoolValue) Get() interface{} {
-	return !*v.value
-}
-
-func (v *NegatedBoolValue) String() string {
-	if v == nil || v.value == nil {
-		return "true"
-	} else {
-		return strconv.FormatBool(!*v.value)
-	}
-}
-
-func (v *NegatedBoolValue) Type() string {
-	return "bool"
-}
-
-type filterValue struct {
-	// The filter to which values will be appended:
-	filter *git.IncludeExcludeFilter
-
-	// The polarity of this option (i.e., does it cause the things
-	// that it references to be included or excluded?):
-	polarity git.Polarity
-
-	// If this is set, then it is used as the pattern. If not, then
-	// the user should supply the pattern.
-	pattern string
-
-	// Should `pattern` be interpreted as a regexp (as opposed to a
-	// prefix)?
-	regexp bool
-}
-
-func (v *filterValue) Set(s string) error {
-	var filter git.ReferenceFilter
-	polarity := v.polarity
-
-	var pattern string
-	if v.pattern != "" {
-		// The pattern is fixed for this option:
-		pattern = v.pattern
-
-		// It's not really expected, but if the user supplied a
-		// `false` boolean value, invert the polarity:
-		b, err := strconv.ParseBool(s)
-		if err != nil {
-			return err
-		}
-		if !b {
-			polarity = polarity.Inverted()
-		}
-	} else {
-		// The user must supply the pattern.
-		pattern = s
-	}
-
-	if v.regexp {
-		var err error
-		filter, err = git.RegexpFilter(pattern)
-		if err != nil {
-			return fmt.Errorf("invalid regexp: %q", s)
-		}
-	} else {
-		filter = git.PrefixFilter(pattern)
-	}
-
-	switch polarity {
-	case git.Include:
-		v.filter.Include(filter)
-	case git.Exclude:
-		v.filter.Exclude(filter)
-	}
-
-	return nil
-}
-
-func (v *filterValue) Get() interface{} {
-	return nil
-}
-
-func (v *filterValue) String() string {
-	return ""
-}
-
-func (v *filterValue) Type() string {
-	if v.pattern != "" {
-		return "bool"
-	} else if v.regexp {
-		return "regexp"
-	} else {
-		return "prefix"
-	}
-}
-
-type filterGroupValue struct {
-	filter *git.IncludeExcludeFilter
-	repo   *git.Repository
-}
-
-func (v *filterGroupValue) Set(name string) error {
-	// At this point, it is not yet certain that the command was run
-	// inside a Git repository. If not, ignore this option (the
-	// command will error out anyway).
-	if v.repo == nil {
-		fmt.Fprintf(
-			os.Stderr,
-			"warning: not in Git repository; ignoring '--refgroup' option.\n",
-		)
-		return nil
-	}
-
-	config, err := v.repo.Config(fmt.Sprintf("refgroup.%s", name))
-	if err != nil {
-		return err
-	}
-	for _, entry := range config.Entries {
-		switch entry.Key {
-		case "include":
-			v.filter.Include(git.PrefixFilter(entry.Value))
-		case "includeregexp":
-			filter, err := git.RegexpFilter(entry.Value)
-			if err != nil {
-				return fmt.Errorf(
-					"invalid regular expression for 'refgroup.%s.%s': %w",
-					name, entry.Key, err,
-				)
-			}
-			v.filter.Include(filter)
-		case "exclude":
-			v.filter.Exclude(git.PrefixFilter(entry.Value))
-		case "excluderegexp":
-			filter, err := git.RegexpFilter(entry.Value)
-			if err != nil {
-				return fmt.Errorf(
-					"invalid regular expression for 'refgroup.%s.%s': %w",
-					name, entry.Key, err,
-				)
-			}
-			v.filter.Exclude(filter)
-		default:
-			// Ignore unrecognized keys.
-		}
-	}
-	return nil
-}
-
-func (v *filterGroupValue) Get() interface{} {
-	return nil
-}
-
-func (v *filterGroupValue) String() string {
-	return ""
-}
-
-func (v *filterGroupValue) Type() string {
-	return "name"
-}
 
 func main() {
 	err := mainImplementation(os.Args[1:])
@@ -263,8 +106,6 @@ func mainImplementation(args []string) error {
 	var threshold sizes.Threshold = 1
 	var progress bool
 	var version bool
-	var filter git.IncludeExcludeFilter
-	var showRefs bool
 
 	// Try to open the repository, but it's not an error yet if this
 	// fails, because the user might only be asking for `--help`.
@@ -277,88 +118,6 @@ func mainImplementation(args []string) error {
 	flags.Usage = func() {
 		fmt.Print(Usage)
 	}
-
-	flags.Var(
-		&filterValue{&filter, git.Include, "", false}, "include",
-		"include specified references",
-	)
-	flags.Var(
-		&filterValue{&filter, git.Include, "", true}, "include-regexp",
-		"include references matching the specified regular expression",
-	)
-	flags.Var(
-		&filterValue{&filter, git.Exclude, "", false}, "exclude",
-		"exclude specified references",
-	)
-	flags.Var(
-		&filterValue{&filter, git.Exclude, "", true}, "exclude-regexp",
-		"exclude references matching the specified regular expression",
-	)
-
-	flag := flags.VarPF(
-		&filterValue{&filter, git.Include, "refs/heads", false}, "branches", "",
-		"process all branches",
-	)
-	flag.NoOptDefVal = "true"
-
-	flag = flags.VarPF(
-		&filterValue{&filter, git.Exclude, "refs/heads", false}, "no-branches", "",
-		"exclude all branches",
-	)
-	flag.NoOptDefVal = "true"
-
-	flag = flags.VarPF(
-		&filterValue{&filter, git.Include, "refs/tags", false}, "tags", "",
-		"process all tags",
-	)
-	flag.NoOptDefVal = "true"
-
-	flag = flags.VarPF(
-		&filterValue{&filter, git.Exclude, "refs/tags", false}, "no-tags", "",
-		"exclude all tags",
-	)
-	flag.NoOptDefVal = "true"
-
-	flag = flags.VarPF(
-		&filterValue{&filter, git.Include, "refs/remotes", false}, "remotes", "",
-		"process all remote-tracking references",
-	)
-	flag.NoOptDefVal = "true"
-
-	flag = flags.VarPF(
-		&filterValue{&filter, git.Exclude, "refs/remotes", false}, "no-remotes", "",
-		"exclude all remote-tracking references",
-	)
-	flag.NoOptDefVal = "true"
-
-	flag = flags.VarPF(
-		&filterValue{&filter, git.Include, "refs/notes", false}, "notes", "",
-		"process all git-notes references",
-	)
-	flag.NoOptDefVal = "true"
-
-	flag = flags.VarPF(
-		&filterValue{&filter, git.Exclude, "refs/notes", false}, "no-notes", "",
-		"exclude all git-notes references",
-	)
-	flag.NoOptDefVal = "true"
-
-	flag = flags.VarPF(
-		&filterValue{&filter, git.Include, "refs/stash", true}, "stash", "",
-		"process refs/stash",
-	)
-	flag.NoOptDefVal = "true"
-
-	flag = flags.VarPF(
-		&filterValue{&filter, git.Exclude, "refs/stash", true}, "no-stash", "",
-		"exclude refs/stash",
-	)
-	flag.NoOptDefVal = "true"
-
-	flag = flags.VarPF(
-		&filterGroupValue{&filter, repo}, "refgroup", "",
-		"process references in refgroup defined by gitconfig",
-	)
 
 	flags.VarP(
 		sizes.NewThresholdFlagValue(&threshold, 0),
@@ -400,13 +159,24 @@ func mainImplementation(args []string) error {
 		atty = false
 	}
 	flags.BoolVar(&progress, "progress", atty, "report progress to stderr")
-	flags.BoolVar(&showRefs, "show-refs", false, "list the references being processed")
 	flags.BoolVar(&version, "version", false, "report the git-sizer version number")
 	flags.Var(&NegatedBoolValue{&progress}, "no-progress", "suppress progress output")
 	flags.Lookup("no-progress").NoOptDefVal = "true"
 
 	flags.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 	flags.MarkHidden("cpuprofile")
+
+	var configger refopts.Configger
+	if repo != nil {
+		configger = repo
+	}
+
+	rgb, err := refopts.NewRefGroupBuilder(configger)
+	if err != nil {
+		return err
+	}
+
+	rgb.AddRefopts(flags)
 
 	flags.SortFlags = false
 
@@ -493,25 +263,12 @@ func mainImplementation(args []string) error {
 		progress = v
 	}
 
-	var historySize sizes.HistorySize
-
-	var refFilter git.ReferenceFilter = filter.Filter
-
-	if showRefs {
-		oldRefFilter := refFilter
-		fmt.Fprintf(os.Stderr, "References (included references marked with '+'):\n")
-		refFilter = func(refname string) bool {
-			b := oldRefFilter(refname)
-			if b {
-				fmt.Fprintf(os.Stderr, "+ %s\n", refname)
-			} else {
-				fmt.Fprintf(os.Stderr, "  %s\n", refname)
-			}
-			return b
-		}
+	rg, err := rgb.Finish()
+	if err != nil {
+		return err
 	}
 
-	historySize, err = sizes.ScanRepositoryUsingGraph(repo, refFilter, nameStyle, progress)
+	historySize, err := sizes.ScanRepositoryUsingGraph(repo, rg, nameStyle, progress)
 	if err != nil {
 		return fmt.Errorf("error scanning repository: %s", err)
 	}
@@ -523,7 +280,7 @@ func mainImplementation(args []string) error {
 		case 1:
 			j, err = json.MarshalIndent(historySize, "", "    ")
 		case 2:
-			j, err = historySize.JSON(threshold, nameStyle)
+			j, err = historySize.JSON(rg.Groups(), threshold, nameStyle)
 		default:
 			return fmt.Errorf("JSON version must be 1 or 2")
 		}
@@ -532,7 +289,10 @@ func mainImplementation(args []string) error {
 		}
 		fmt.Printf("%s\n", j)
 	} else {
-		io.WriteString(os.Stdout, historySize.TableString(threshold, nameStyle))
+		io.WriteString(
+			os.Stdout,
+			historySize.TableString(rg.Groups(), threshold, nameStyle),
+		)
 	}
 
 	return nil

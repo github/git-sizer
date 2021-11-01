@@ -134,12 +134,13 @@ func (p *Path) TreePrefix() string {
 			return "???"
 		}
 	case "commit", "tag":
-		if p.parent != nil {
+		switch {
+		case p.parent != nil:
 			// The parent is a tag.
 			return fmt.Sprintf("%s^{%s}", p.parent.BestPath(), p.objectType)
-		} else if p.relativePath != "" {
+		case p.relativePath != "":
 			return p.relativePath + ":"
-		} else {
+		default:
 			return p.OID.String() + ":"
 		}
 	default:
@@ -164,12 +165,13 @@ func (p *Path) Path() string {
 			return ""
 		}
 	case "commit", "tag":
-		if p.parent != nil {
+		switch {
+		case p.parent != nil:
 			// The parent is a tag.
 			return fmt.Sprintf("%s^{%s}", p.parent.BestPath(), p.objectType)
-		} else if p.relativePath != "" {
+		case p.relativePath != "":
 			return p.relativePath
-		} else {
+		default:
 			return ""
 		}
 	default:

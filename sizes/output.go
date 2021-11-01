@@ -141,30 +141,30 @@ func newItem(
 	}
 }
 
-func (l *item) Emit(t *table) {
-	levelOfConcern, interesting := l.levelOfConcern(t.threshold)
+func (i *item) Emit(t *table) {
+	levelOfConcern, interesting := i.levelOfConcern(t.threshold)
 	if !interesting {
 		return
 	}
-	valueString, unitString := l.humaner.Format(l.value, l.unit)
+	valueString, unitString := i.humaner.Format(i.value, i.unit)
 	t.formatRow(
-		l.name, t.footnotes.CreateCitation(l.Footnote(t.nameStyle)),
+		i.name, t.footnotes.CreateCitation(i.Footnote(t.nameStyle)),
 		valueString, unitString,
 		levelOfConcern,
 	)
 }
 
-func (l *item) Footnote(nameStyle NameStyle) string {
-	if l.path == nil || l.path.OID == git.NullOID {
+func (i *item) Footnote(nameStyle NameStyle) string {
+	if i.path == nil || i.path.OID == git.NullOID {
 		return ""
 	}
 	switch nameStyle {
 	case NameStyleNone:
 		return ""
 	case NameStyleHash:
-		return l.path.OID.String()
+		return i.path.OID.String()
 	case NameStyleFull:
-		return l.path.String()
+		return i.path.String()
 	default:
 		panic("unexpected NameStyle")
 	}
@@ -173,12 +173,12 @@ func (l *item) Footnote(nameStyle NameStyle) string {
 // If this item's alert level is at least as high as the threshold,
 // return the string that should be used as its "level of concern" and
 // `true`; otherwise, return `"", false`.
-func (l *item) levelOfConcern(threshold Threshold) (string, bool) {
-	value, overflow := l.value.ToUint64()
+func (i *item) levelOfConcern(threshold Threshold) (string, bool) {
+	value, overflow := i.value.ToUint64()
 	if overflow {
 		return "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", true
 	}
-	alert := Threshold(float64(value) / l.scale)
+	alert := Threshold(float64(value) / i.scale)
 	if alert < threshold {
 		return "", false
 	}

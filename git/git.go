@@ -101,6 +101,8 @@ func NewRepository(path string) (*Repository, error) {
 		)
 	}
 
+	//nolint:gosec // `gitBin` is chosen carefully, and `path` is the
+	// path to the repository.
 	cmd := exec.Command(gitBin, "-C", path, "rev-parse", "--git-dir")
 	out, err := cmd.Output()
 	if err != nil {
@@ -119,6 +121,7 @@ func NewRepository(path string) (*Repository, error) {
 	}
 	gitDir := smartJoin(path, string(bytes.TrimSpace(out)))
 
+	//nolint:gosec // `gitBin` is chosen carefully.
 	cmd = exec.Command(gitBin, "rev-parse", "--git-path", "shallow")
 	cmd.Dir = gitDir
 	out, err = cmd.Output()
@@ -152,6 +155,8 @@ func (repo *Repository) gitCommand(callerArgs ...string) *exec.Cmd {
 
 	args = append(args, callerArgs...)
 
+	//nolint:gosec // `gitBin` is chosen carefully, and the rest of
+	// the args have been checked.
 	cmd := exec.Command(repo.gitBin, args...)
 
 	cmd.Env = append(

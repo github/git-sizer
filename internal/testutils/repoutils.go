@@ -49,8 +49,10 @@ func (repo *TestRepo) Init(t *testing.T, bare bool) {
 	// exist yet:
 	var cmd *exec.Cmd
 	if bare {
+		//nolint:gosec // `repo.Path` is a path that we created.
 		cmd = exec.Command("git", "init", "--bare", repo.Path)
 	} else {
+		//nolint:gosec // `repo.Path` is a path that we created.
 		cmd = exec.Command("git", "init", repo.Path)
 	}
 	cmd.Env = CleanGitEnv()
@@ -143,6 +145,8 @@ func (repo *TestRepo) GitCommand(t *testing.T, args ...string) *exec.Cmd {
 
 	gitArgs := []string{"-C", repo.Path}
 	gitArgs = append(gitArgs, args...)
+
+	//nolint:gosec // The args all come from the test code.
 	cmd := exec.Command("git", gitArgs...)
 	cmd.Env = CleanGitEnv()
 	return cmd

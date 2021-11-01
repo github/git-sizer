@@ -74,20 +74,22 @@ func (h *Humaner) FormatNumber(n uint64, unit string) (string, string) {
 
 	if prefix.Multiplier == 1 {
 		return fmt.Sprintf("%d", n), unit
-	} else {
-		mantissa := float64(n) / float64(prefix.Multiplier)
-		var format string
-
-		if wholePart >= 100 {
-			// `mantissa` can actually be up to 1023.999.
-			format = "%.0f"
-		} else if wholePart >= 10 {
-			format = "%.1f"
-		} else {
-			format = "%.2f"
-		}
-		return fmt.Sprintf(format, mantissa), prefix.Name + unit
 	}
+
+	mantissa := float64(n) / float64(prefix.Multiplier)
+	var format string
+
+	switch {
+	case wholePart >= 100:
+		// `mantissa` can actually be up to 1023.999.
+		format = "%.0f"
+	case wholePart >= 10:
+		format = "%.1f"
+	default:
+		format = "%.2f"
+	}
+
+	return fmt.Sprintf(format, mantissa), prefix.Name + unit
 }
 
 // Format formats values, aligned, in `len(unit) + 10` or fewer

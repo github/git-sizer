@@ -294,7 +294,7 @@ func ScanRepositoryUsingGraph(
 	}()
 
 	progressMeter.Start("Processing trees: %d")
-	for _ = range trees {
+	for range trees {
 		oid, objectType, _, data, err := objectIter.Next()
 		if err != nil {
 			if err != io.EOF {

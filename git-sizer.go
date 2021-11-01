@@ -164,7 +164,9 @@ func mainImplementation(args []string) error {
 	flags.Lookup("no-progress").NoOptDefVal = "true"
 
 	flags.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
-	flags.MarkHidden("cpuprofile")
+	if err := flags.MarkHidden("cpuprofile"); err != nil {
+		return fmt.Errorf("marking option hidden: %w", err)
+	}
 
 	var configger refopts.Configger
 	if repo != nil {
@@ -193,7 +195,9 @@ func mainImplementation(args []string) error {
 		if err != nil {
 			return fmt.Errorf("couldn't set up cpuprofile file: %w", err)
 		}
-		pprof.StartCPUProfile(f)
+		if err := pprof.StartCPUProfile(f); err != nil {
+			return fmt.Errorf("starting CPU profiling: %w", err)
+		}
 		defer pprof.StopCPUProfile()
 	}
 
@@ -289,10 +293,12 @@ func mainImplementation(args []string) error {
 		}
 		fmt.Printf("%s\n", j)
 	} else {
-		io.WriteString(
+		if _, err := io.WriteString(
 			os.Stdout,
 			historySize.TableString(rg.Groups(), threshold, nameStyle),
-		)
+		); err != nil {
+			return fmt.Errorf("writing output: %w", err)
+		}
 	}
 
 	return nil

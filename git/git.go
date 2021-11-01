@@ -169,11 +169,6 @@ func (repo *Repository) Path() string {
 	return repo.path
 }
 
-// Close closes `repo`, possibly freeing up resources.
-func (repo *Repository) Close() error {
-	return nil
-}
-
 // Reference represents a Git reference.
 type Reference struct {
 	// Refname is the full reference name of the reference.

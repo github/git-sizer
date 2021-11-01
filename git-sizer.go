@@ -110,9 +110,6 @@ func mainImplementation(args []string) error {
 	// Try to open the repository, but it's not an error yet if this
 	// fails, because the user might only be asking for `--help`.
 	repo, repoErr := git.NewRepository(".")
-	if repoErr == nil {
-		defer repo.Close()
-	}
 
 	flags := pflag.NewFlagSet("git-sizer", pflag.ContinueOnError)
 	flags.Usage = func() {

@@ -460,8 +460,8 @@ func (repo *Repository) NewObjectIter(
 
 // Next returns the next object: its OID, type, and size. When no more
 // data are available, it returns an `io.EOF` error.
-func (l *ObjectIter) Next() (OID, ObjectType, counts.Count32, error) {
-	line, err := l.f.ReadString('\n')
+func (iter *ObjectIter) Next() (OID, ObjectType, counts.Count32, error) {
+	line, err := iter.f.ReadString('\n')
 	if err != nil {
 		return OID{}, "", 0, err
 	}
@@ -470,15 +470,15 @@ func (l *ObjectIter) Next() (OID, ObjectType, counts.Count32, error) {
 }
 
 // Close closes the iterator and frees up resources.
-func (l *ObjectIter) Close() error {
-	l.out1.Close()
-	err := <-l.errChan
-	l.out2.Close()
-	err2 := l.cmd1.Wait()
+func (iter *ObjectIter) Close() error {
+	iter.out1.Close()
+	err := <-iter.errChan
+	iter.out2.Close()
+	err2 := iter.cmd1.Wait()
 	if err == nil {
 		err = err2
 	}
-	err2 = l.cmd2.Wait()
+	err2 = iter.cmd2.Wait()
 	if err == nil {
 		err = err2
 	}

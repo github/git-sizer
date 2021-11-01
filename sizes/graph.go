@@ -400,8 +400,6 @@ func ScanRepositoryUsingGraph(
 
 // Graph is an object graph that is being built up.
 type Graph struct {
-	repo *git.Repository
-
 	rg RefGrouper
 
 	blobLock  sync.Mutex

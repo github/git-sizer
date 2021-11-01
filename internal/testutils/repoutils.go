@@ -112,8 +112,9 @@ var localEnvVars = func() map[string]bool {
 // CleanGitEnv returns a clean environment for running `git` commands
 // so that they won't be affected by the local environment.
 func CleanGitEnv() []string {
-	var env []string
-	for _, e := range os.Environ() {
+	osEnv := os.Environ()
+	env := make([]string, 0, len(osEnv)+3)
+	for _, e := range osEnv {
 		i := strings.IndexByte(e, '=')
 		if i == -1 {
 			// This shouldn't happen, but if it does,

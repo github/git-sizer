@@ -245,6 +245,7 @@ func (i *indentedItem) Emit(t *table) {
 type Threshold float64
 
 // Methods to implement pflag.Value:
+
 func (t *Threshold) String() string {
 	if t == nil {
 		return "UNSET"
@@ -325,6 +326,7 @@ const (
 )
 
 // Methods to implement pflag.Value:
+
 func (n *NameStyle) String() string {
 	if n == nil {
 		return "UNSET"

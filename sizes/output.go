@@ -41,7 +41,7 @@ func (s TagSize) String() string {
 	return fmt.Sprintf("tag_depth=%d", s.TagDepth)
 }
 
-func (s HistorySize) String() string {
+func (s *HistorySize) String() string {
 	return fmt.Sprintf(
 		"unique_commit_count=%d, unique_commit_count = %d, max_commit_size = %d, "+
 			"max_history_depth=%d, max_parent_count=%d, "+
@@ -369,7 +369,7 @@ type table struct {
 	buf           bytes.Buffer
 }
 
-func (s HistorySize) TableString(
+func (s *HistorySize) TableString(
 	refGroups []RefGroup, threshold Threshold, nameStyle NameStyle,
 ) string {
 	contents := s.contents(refGroups)
@@ -452,7 +452,7 @@ func (t *table) formatRow(
 	)
 }
 
-func (s HistorySize) JSON(
+func (s *HistorySize) JSON(
 	refGroups []RefGroup, threshold Threshold, nameStyle NameStyle,
 ) ([]byte, error) {
 	contents := s.contents(refGroups)
@@ -462,7 +462,7 @@ func (s HistorySize) JSON(
 	return j, err
 }
 
-func (s HistorySize) contents(refGroups []RefGroup) tableContents {
+func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
 	S := newSection
 	I := newItem
 	metric := counts.Metric

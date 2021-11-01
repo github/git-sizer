@@ -1,3 +1,4 @@
+//go:build isatty
 // +build isatty
 
 package isatty

@@ -97,7 +97,7 @@ func NewRepository(path string) (*Repository, error) {
 	gitBin, err := findGitBin()
 	if err != nil {
 		return nil, fmt.Errorf(
-			"could not find 'git' executable (is it in your PATH?): %v", err,
+			"could not find 'git' executable (is it in your PATH?): %w", err,
 		)
 	}
 
@@ -107,7 +107,7 @@ func NewRepository(path string) (*Repository, error) {
 		switch err := err.(type) {
 		case *exec.Error:
 			return nil, fmt.Errorf(
-				"could not run '%s': %v", gitBin, err.Err,
+				"could not run '%s': %w", gitBin, err.Err,
 			)
 		case *exec.ExitError:
 			return nil, fmt.Errorf(
@@ -124,7 +124,7 @@ func NewRepository(path string) (*Repository, error) {
 	out, err = cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf(
-			"could not run 'git rev-parse --git-path shallow': %s", err,
+			"could not run 'git rev-parse --git-path shallow': %w", err,
 		)
 	}
 	shallow := smartJoin(gitDir, string(bytes.TrimSpace(out)))

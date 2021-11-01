@@ -191,7 +191,7 @@ func mainImplementation(args []string) error {
 	if cpuprofile != "" {
 		f, err := os.Create(cpuprofile)
 		if err != nil {
-			return fmt.Errorf("couldn't set up cpuprofile file: %s", err)
+			return fmt.Errorf("couldn't set up cpuprofile file: %w", err)
 		}
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
@@ -211,7 +211,7 @@ func mainImplementation(args []string) error {
 	}
 
 	if repoErr != nil {
-		return fmt.Errorf("couldn't open Git repository: %s", repoErr)
+		return fmt.Errorf("couldn't open Git repository: %w", repoErr)
 	}
 
 	if jsonOutput {
@@ -270,7 +270,7 @@ func mainImplementation(args []string) error {
 
 	historySize, err := sizes.ScanRepositoryUsingGraph(repo, rg, nameStyle, progress)
 	if err != nil {
-		return fmt.Errorf("error scanning repository: %s", err)
+		return fmt.Errorf("error scanning repository: %w", err)
 	}
 
 	if jsonOutput {
@@ -285,7 +285,7 @@ func mainImplementation(args []string) error {
 			return fmt.Errorf("JSON version must be 1 or 2")
 		}
 		if err != nil {
-			return fmt.Errorf("could not convert %v to json: %s", historySize, err)
+			return fmt.Errorf("could not convert %v to json: %w", historySize, err)
 		}
 		fmt.Printf("%s\n", j)
 	} else {

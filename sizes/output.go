@@ -262,7 +262,7 @@ func (t *Threshold) String() string {
 func (t *Threshold) Set(s string) error {
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return fmt.Errorf("error parsing floating-point value %q: %s", s, err)
+		return fmt.Errorf("error parsing floating-point value %q: %w", s, err)
 	}
 	*t = Threshold(v)
 	return nil

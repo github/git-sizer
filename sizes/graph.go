@@ -13,6 +13,14 @@ import (
 	"github.com/github/git-sizer/meter"
 )
 
+// RefGroupSymbol is the string "identifier" that is used to refer to
+// a refgroup, for example in the gitconfig. Nesting of refgroups is
+// inferred from their names, using "." as separator between
+// components. For example, if there are three refgroups with symbols
+// "tags", "tags.releases", and "foo.bar", then "tags.releases" is
+// considered to be nested within "tags", and "foo.bar" is considered
+// to be nested within "foo", the latter being created automatically
+// if it was not configured explicitly.
 type RefGroupSymbol string
 
 // RefGroup is a group of references, for example "branches" or
@@ -29,6 +37,8 @@ type RefGroup struct {
 	Name string
 }
 
+// RefGrouper describes a type that can collate reference names into
+// groups and decide which ones to walk.
 type RefGrouper interface {
 	// Categorize tells whether `refname` should be walked at all,
 	// and if so, the symbols of the reference groups to which it
@@ -47,6 +57,13 @@ type refSeen struct {
 	groups []RefGroupSymbol
 }
 
+// ScanRepositoryUsingGraph scans `repo`, using `rg` to decide which
+// references to scan and how to group them. `nameStyle` specifies
+// whether the output should include full names, hashes only, or
+// nothing in the footnotes. `progress` tells whether a progress meter
+// should be displayed while it works.
+//
+// It returns the size data for the repository.
 func ScanRepositoryUsingGraph(
 	repo *git.Repository, rg RefGrouper, nameStyle NameStyle, progress bool,
 ) (HistorySize, error) {
@@ -381,7 +398,7 @@ func ScanRepositoryUsingGraph(
 	return graph.HistorySize(), nil
 }
 
-// An object graph that is being built up.
+// Graph is an object graph that is being built up.
 type Graph struct {
 	repo *git.Repository
 
@@ -408,6 +425,7 @@ type Graph struct {
 	pathResolver PathResolver
 }
 
+// NewGraph creates and returns a new `*Graph` instance.
 func NewGraph(rg RefGrouper, nameStyle NameStyle) *Graph {
 	return &Graph{
 		rg: rg,
@@ -430,6 +448,7 @@ func NewGraph(rg RefGrouper, nameStyle NameStyle) *Graph {
 	}
 }
 
+// RegisterReference records the specified reference in `g`.
 func (g *Graph) RegisterReference(ref git.Reference, walked bool, groups []RefGroupSymbol) {
 	g.historyLock.Lock()
 	g.historySize.recordReference(g, ref)
@@ -443,6 +462,7 @@ func (g *Graph) RegisterReference(ref git.Reference, walked bool, groups []RefGr
 	}
 }
 
+// HistorySize returns the size data that have been collected.
 func (g *Graph) HistorySize() HistorySize {
 	g.treeLock.Lock()
 	defer g.treeLock.Unlock()
@@ -459,7 +479,8 @@ func (g *Graph) HistorySize() HistorySize {
 	return g.historySize
 }
 
-// Record that the specified `oid` is a blob with the specified size.
+// RegisterBlob records that the specified `oid` is a blob with the
+// specified size.
 func (g *Graph) RegisterBlob(oid git.OID, objectSize counts.Count32) {
 	size := BlobSize{Size: objectSize}
 	// There are no listeners. Since this is a blob, we know all that

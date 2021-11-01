@@ -109,9 +109,8 @@ var localEnvVars = func() map[string]bool {
 	return m
 }()
 
-// GitEnv returns an appropriate environment for running `git`
-// commands without being confused by any existing environment or
-// gitconfig.
+// CleanGitEnv returns a clean environment for running `git` commands
+// so that they won't be affected by the local environment.
 func CleanGitEnv() []string {
 	var env []string
 	for _, e := range os.Environ() {
@@ -147,6 +146,7 @@ func (repo *TestRepo) GitCommand(t *testing.T, args ...string) *exec.Cmd {
 	return cmd
 }
 
+// UpdateRef updates the reference named `refname` to the value `oid`.
 func (repo *TestRepo) UpdateRef(t *testing.T, refname string, oid git.OID) {
 	t.Helper()
 
@@ -160,9 +160,9 @@ func (repo *TestRepo) UpdateRef(t *testing.T, refname string, oid git.OID) {
 	require.NoError(t, cmd.Run())
 }
 
-// createObject creates a new Git object, of the specified type, in
-// the repository at `repoPath`. `writer` is a function that writes
-// the object in `git hash-object` input format.
+// CreateObject creates a new Git object, of the specified type, in
+// the repository at `repoPath`. `writer` is a function that generates
+// the object contents in `git hash-object` input format.
 func (repo *TestRepo) CreateObject(
 	t *testing.T, otype git.ObjectType, writer func(io.Writer) error,
 ) git.OID {
@@ -258,6 +258,10 @@ func (repo *TestRepo) CreateReferencedOrphan(t *testing.T, refname string) {
 	repo.UpdateRef(t, refname, oid)
 }
 
+// AddAuthorInfo adds environment variables to `cmd.Env` that set the
+// Git author and committer to known values and set the timestamp to
+// `*timestamp`. Then `*timestamp` is moved forward by a minute, so
+// that each commit gets a unique timestamp.
 func AddAuthorInfo(cmd *exec.Cmd, timestamp *time.Time) {
 	cmd.Env = append(cmd.Env,
 		"GIT_AUTHOR_NAME=Arthur",

@@ -8,13 +8,25 @@ import (
 	"strings"
 )
 
+// ConfigEntry represents an entry in the gitconfig.
 type ConfigEntry struct {
-	Key   string
+	// Key is the entry's key, with any common `prefix` removed (see
+	// `Config()`).
+	Key string
+
+	// Value is the entry's value, as a string.
 	Value string
 }
 
+// Config represents the gitconfig, or part of the gitconfig, read by
+// `ReadConfig()`.
 type Config struct {
-	Prefix  string
+	// Prefix is the key prefix that was read to fill this `Config`.
+	Prefix string
+
+	// Entries contains the configuration entries that matched
+	// `Prefix`, in the order that they are reported by `git config
+	// --list`.
 	Entries []ConfigEntry
 }
 

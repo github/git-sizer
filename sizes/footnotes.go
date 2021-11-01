@@ -5,17 +5,23 @@ import (
 	"fmt"
 )
 
+// Footnotes collects and numbers footnotes for a `table`.
 type Footnotes struct {
 	footnotes []string
 	indexes   map[string]int
 }
 
+// NewFootnotes creates and returns a new `Footnotes` instance.
 func NewFootnotes() *Footnotes {
 	return &Footnotes{
 		indexes: make(map[string]int),
 	}
 }
 
+// CreateCitation adds a footnote with the specified text and returns
+// the string that should be used to refer to it (e.g., "[2]"). If
+// there is already a footnote with the exact same text, reuse its
+// number.
 func (f *Footnotes) CreateCitation(footnote string) string {
 	if footnote == "" {
 		return ""
@@ -30,6 +36,8 @@ func (f *Footnotes) CreateCitation(footnote string) string {
 	return fmt.Sprintf("[%d]", index)
 }
 
+// String returns a string representation of the footnote, including a
+// trailing LF.
 func (f *Footnotes) String() string {
 	if len(f.footnotes) == 0 {
 		return ""

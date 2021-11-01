@@ -11,6 +11,7 @@ import (
 	"github.com/github/git-sizer/sizes"
 )
 
+// Configger is an abstraction for a thing that can read gitconfig.
 type Configger interface {
 	GetConfig(prefix string) (*git.Config, error)
 }
@@ -24,6 +25,8 @@ type RefGroupBuilder struct {
 	ShowRefs bool
 }
 
+// NewRefGroupBuilder creates and returns a `RefGroupBuilder`
+// instance.
 func NewRefGroupBuilder(configger Configger) (*RefGroupBuilder, error) {
 	tlg := refGroup{
 		RefGroup: sizes.RefGroup{
@@ -69,6 +72,8 @@ func (rgb *RefGroupBuilder) getGroup(symbol sizes.RefGroupSymbol) *refGroup {
 	return &rg
 }
 
+// parentName returns the symbol of the refgroup that is the parent of
+// `symbol`, or "" if `symbol` is the top-level group.
 func parentName(symbol sizes.RefGroupSymbol) sizes.RefGroupSymbol {
 	i := strings.LastIndexByte(string(symbol), '.')
 	if i == -1 {
@@ -77,6 +82,8 @@ func parentName(symbol sizes.RefGroupSymbol) sizes.RefGroupSymbol {
 	return symbol[:i]
 }
 
+// initializeStandardRefgroups initializes the built-in refgroups
+// ("branches", "tags", etc).
 func (rgb *RefGroupBuilder) initializeStandardRefgroups() {
 	initializeGroup := func(
 		symbol sizes.RefGroupSymbol, name string, filter git.ReferenceFilter,
@@ -106,6 +113,9 @@ func (rgb *RefGroupBuilder) initializeStandardRefgroups() {
 	initializeGroup("stash", "Git stash", filter)
 }
 
+// readRefgroupsFromGitconfig reads any refgroups defined in the
+// gitconfig into `rgb`. Any configuration settings for the built-in
+// groups are added to the pre-existing definitions of those groups.
 func (rgb *RefGroupBuilder) readRefgroupsFromGitconfig(configger Configger) error {
 	if configger == nil {
 		// At this point, it is not yet certain that the command was
@@ -140,6 +150,9 @@ func (rgb *RefGroupBuilder) readRefgroupsFromGitconfig(configger Configger) erro
 	return nil
 }
 
+// splitKey splits `key`, which is part of a gitconfig key, into the
+// refgroup symbol to which it applies and the field name within that
+// section.
 func splitKey(key string) (sizes.RefGroupSymbol, string) {
 	i := strings.LastIndexByte(key, '.')
 	if i == -1 {
@@ -148,7 +161,7 @@ func splitKey(key string) (sizes.RefGroupSymbol, string) {
 	return sizes.RefGroupSymbol(key[:i]), key[i+1:]
 }
 
-// Add some reference-related options to `flags`.
+// AddRefopts adds the reference-related options to `flags`.
 func (rgb *RefGroupBuilder) AddRefopts(flags *pflag.FlagSet) {
 	flags.Var(
 		&filterValue{rgb, git.Include, "", false}, "include",
@@ -275,6 +288,8 @@ func (rgb *RefGroupBuilder) Finish() (sizes.RefGrouper, error) {
 	return &refGrouper, nil
 }
 
+// refGrouper is a `sizes.RefGrouper` based on a hierarchy of nested
+// refgroups.
 type refGrouper struct {
 	topLevelGroup *refGroup
 	refGroups     []sizes.RefGroup
@@ -284,6 +299,10 @@ type refGrouper struct {
 	ignoredRefGroup *sizes.RefGroup
 }
 
+// fillInTree processes the refgroups in the tree rooted at `rg`,
+// setting default names where they are missing, verifying that they
+// are all defined, adding "Other" groups where needed, and adding the
+// refgroups in depth-first-traversal order to `refGrouper.refGroups`.
 func (refGrouper *refGrouper) fillInTree(rg *refGroup) error {
 	if rg.Name == "" {
 		_, rg.Name = splitKey(string(rg.Symbol))
@@ -318,6 +337,8 @@ func (refGrouper *refGrouper) fillInTree(rg *refGroup) error {
 	return nil
 }
 
+// Categorize decides whether to walk the reference named `refname`
+// and which refgroup(s) it should be counted in.
 func (refGrouper *refGrouper) Categorize(refname string) (bool, []sizes.RefGroupSymbol) {
 	walk, symbols := refGrouper.topLevelGroup.collectSymbols(refname)
 	if !walk && refGrouper.ignoredRefGroup != nil {
@@ -326,6 +347,8 @@ func (refGrouper *refGrouper) Categorize(refname string) (bool, []sizes.RefGroup
 	return walk, symbols
 }
 
+// Groups returns a list of all defined refgroups, in the order that
+// they should be output.
 func (refGrouper *refGrouper) Groups() []sizes.RefGroup {
 	return refGrouper.refGroups
 }

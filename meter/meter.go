@@ -24,6 +24,9 @@ type Progress interface {
 	Done()
 }
 
+// Spinners is a slice of short strings that are repeatedly output in
+// order to show the user that we are working, before we have any
+// actual information to show.
 var Spinners = []string{"|", "(", "<", "-", "<", "(", "|", ")", ">", "-", ">", ")"}
 
 // progressMeter is a `Progress` that reports the current state every
@@ -42,6 +45,9 @@ type progressMeter struct {
 	count int64
 }
 
+// NewProgressMeter returns a progress meter that can be used to show
+// progress to a TTY periodically, including an increasing int64
+// value.
 func NewProgressMeter(period time.Duration) Progress {
 	return &progressMeter{
 		period: period,

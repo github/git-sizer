@@ -4,6 +4,9 @@ import (
 	"strconv"
 )
 
+// NegatedBoolValue is a `pflag.Value` that set a boolean variable to
+// the inverse of what the argument would normally indicate (e.g., to
+// implement `--no-foo`-style arguments).
 type NegatedBoolValue struct {
 	value *bool
 }

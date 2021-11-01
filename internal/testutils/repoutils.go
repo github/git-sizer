@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/github/git-sizer/git"
@@ -182,13 +183,13 @@ func (repo *TestRepo) CreateObject(
 
 	err = writer(in)
 	err2 := in.Close()
-	if err != nil {
-		cmd.Wait()
-		require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		_ = cmd.Wait()
+		t.FailNow()
 	}
-	if err2 != nil {
-		cmd.Wait()
-		require.NoError(t, err2)
+	if !assert.NoError(t, err2) {
+		_ = cmd.Wait()
+		t.FailNow()
 	}
 
 	output, err := ioutil.ReadAll(out)

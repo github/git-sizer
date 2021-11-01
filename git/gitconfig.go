@@ -18,11 +18,12 @@ type Config struct {
 	Entries []ConfigEntry
 }
 
-// Config returns the entries from gitconfig. If `prefix` is provided,
-// then only include entries in that section, which must match the at
-// a component boundary (as defined by `configKeyMatchesPrefix()`),
-// and strip off the prefix in the keys that are returned.
-func (repo *Repository) Config(prefix string) (*Config, error) {
+// GetConfig returns the entries from gitconfig. If `prefix` is
+// provided, then only include entries in that section, which must
+// match the at a component boundary (as defined by
+// `configKeyMatchesPrefix()`), and strip off the prefix in the keys
+// that are returned.
+func (repo *Repository) GetConfig(prefix string) (*Config, error) {
 	cmd := repo.gitCommand("config", "--list", "-z")
 
 	out, err := cmd.Output()

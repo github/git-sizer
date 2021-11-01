@@ -12,7 +12,7 @@ import (
 )
 
 type Configger interface {
-	Config(prefix string) (*git.Config, error)
+	GetConfig(prefix string) (*git.Config, error)
 }
 
 // RefGroupBuilder handles reference-related options and puts together
@@ -114,7 +114,7 @@ func (rgb *RefGroupBuilder) readRefgroupsFromGitconfig(configger Configger) erro
 		return nil
 	}
 
-	config, err := configger.Config("refgroup")
+	config, err := configger.GetConfig("refgroup")
 	if err != nil {
 		return err
 	}

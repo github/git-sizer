@@ -60,7 +60,7 @@ func (h *Humaner) Name() string {
 // FormatNumber formats n, aligned, in `len(unit) + 10` or fewer
 // characters (except for extremely large numbers). It returns strings
 // representing the numeral and the unit string.
-func (h *Humaner) FormatNumber(n uint64, unit string) (string, string) {
+func (h *Humaner) FormatNumber(n uint64, unit string) (numeral string, unitString string) {
 	prefix := h.prefixes[0]
 
 	wholePart := n
@@ -95,7 +95,7 @@ func (h *Humaner) FormatNumber(n uint64, unit string) (string, string) {
 // Format formats values, aligned, in `len(unit) + 10` or fewer
 // characters (except for extremely large numbers). It returns strings
 // representing the numeral and the unit string.
-func (h *Humaner) Format(value Humanable, unit string) (string, string) {
+func (h *Humaner) Format(value Humanable, unit string) (numeral string, unitString string) {
 	n, overflow := value.ToUint64()
 	if overflow {
 		return "∞", unit

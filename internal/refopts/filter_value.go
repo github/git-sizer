@@ -113,11 +113,12 @@ func (v *filterValue) String() string {
 }
 
 func (v *filterValue) Type() string {
-	if v.pattern != "" {
+	switch {
+	case v.pattern != "":
 		return "bool"
-	} else if v.regexp {
+	case v.regexp:
 		return "regexp"
-	} else {
+	default:
 		return "prefix"
 	}
 }

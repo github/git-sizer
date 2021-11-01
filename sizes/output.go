@@ -248,17 +248,17 @@ type Threshold float64
 func (t *Threshold) String() string {
 	if t == nil {
 		return "UNSET"
-	} else {
-		switch *t {
-		case 0:
-			return "--verbose"
-		case 1:
-			return "--threshold=1"
-		case 30:
-			return "--critical"
-		default:
-			return fmt.Sprintf("--threshold=%g", *t)
-		}
+	}
+
+	switch *t {
+	case 0:
+		return "--verbose"
+	case 1:
+		return "--threshold=1"
+	case 30:
+		return "--critical"
+	default:
+		return fmt.Sprintf("--threshold=%g", *t)
 	}
 }
 
@@ -328,17 +328,17 @@ const (
 func (n *NameStyle) String() string {
 	if n == nil {
 		return "UNSET"
-	} else {
-		switch *n {
-		case NameStyleNone:
-			return "none"
-		case NameStyleHash:
-			return "hash"
-		case NameStyleFull:
-			return "full"
-		default:
-			panic("Unexpected NameStyle value")
-		}
+	}
+
+	switch *n {
+	case NameStyleNone:
+		return "none"
+	case NameStyleHash:
+		return "hash"
+	case NameStyleFull:
+		return "full"
+	default:
+		panic("Unexpected NameStyle value")
 	}
 }
 

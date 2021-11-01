@@ -17,7 +17,7 @@ import (
 	"github.com/github/git-sizer/sizes"
 )
 
-const Usage = `usage: git-sizer [OPTS]
+const usage = `usage: git-sizer [OPTS]
 
       --threshold THRESHOLD    minimum level of concern (i.e., number of stars)
                                that should be reported. Default:
@@ -116,7 +116,7 @@ func mainImplementation(args []string) error {
 
 	flags := pflag.NewFlagSet("git-sizer", pflag.ContinueOnError)
 	flags.Usage = func() {
-		fmt.Print(Usage)
+		fmt.Print(usage)
 	}
 
 	flags.VarP(

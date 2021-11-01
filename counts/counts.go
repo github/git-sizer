@@ -40,23 +40,23 @@ func (n1 *Count32) Increment(n2 Count32) {
 // AdjustMaxIfNecessary adjusts `*n1` to be `max(*n1, n2)`. Return
 // true iff `n2` was greater than `*n1`.
 func (n1 *Count32) AdjustMaxIfNecessary(n2 Count32) bool {
-	if n2 > *n1 {
-		*n1 = n2
-		return true
-	} else {
+	if n2 <= *n1 {
 		return false
 	}
+
+	*n1 = n2
+	return true
 }
 
 // AdjustMaxIfPossible adjusts `*n1` to be `max(*n1, n2)`. Return true
 // iff `n2` was greater than or equal to `*n1`.
 func (n1 *Count32) AdjustMaxIfPossible(n2 Count32) bool {
-	if n2 >= *n1 {
-		*n1 = n2
-		return true
-	} else {
+	if n2 < *n1 {
 		return false
 	}
+
+	*n1 = n2
+	return true
 }
 
 // Count64 is a count of something, capped at math.MaxUint64.
@@ -91,21 +91,21 @@ func (n1 *Count64) Increment(n2 Count64) {
 // AdjustMaxIfNecessary adjusts `*n1` to be `max(*n1, n2)`. Return
 // true iff `n2` was greater than `*n1`.
 func (n1 *Count64) AdjustMaxIfNecessary(n2 Count64) bool {
-	if n2 > *n1 {
-		*n1 = n2
-		return true
-	} else {
+	if n2 <= *n1 {
 		return false
 	}
+
+	*n1 = n2
+	return true
 }
 
 // AdjustMaxIfPossible adjusts `*n1` to be `max(*n1, n2)`. Return true
 // iff `n2` was greater than or equal to `*n1`.
 func (n1 *Count64) AdjustMaxIfPossible(n2 Count64) bool {
-	if n2 > *n1 {
-		*n1 = n2
-		return true
-	} else {
+	if n2 <= *n1 {
 		return false
 	}
+
+	*n1 = n2
+	return true
 }

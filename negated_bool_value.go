@@ -24,9 +24,9 @@ func (v *NegatedBoolValue) Get() interface{} {
 func (v *NegatedBoolValue) String() string {
 	if v == nil || v.value == nil {
 		return "true"
-	} else {
-		return strconv.FormatBool(!*v.value)
 	}
+
+	return strconv.FormatBool(!*v.value)
 }
 
 func (v *NegatedBoolValue) Type() string {

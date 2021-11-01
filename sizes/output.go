@@ -174,7 +174,10 @@ func (l *item) Footnote(nameStyle NameStyle) string {
 // return the string that should be used as its "level of concern" and
 // `true`; otherwise, return `"", false`.
 func (l *item) levelOfConcern(threshold Threshold) (string, bool) {
-	value, _ := l.value.ToUint64()
+	value, overflow := l.value.ToUint64()
+	if overflow {
+		return "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", true
+	}
 	alert := Threshold(float64(value) / l.scale)
 	if alert < threshold {
 		return "", false

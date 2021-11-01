@@ -219,7 +219,7 @@ func ScanRepositoryUsingGraph(
 		case "tag":
 			tags = append(tags, ObjectHeader{oid, objectSize})
 		default:
-			err = fmt.Errorf("unexpected object type: %s", objectType)
+			return HistorySize{}, fmt.Errorf("unexpected object type: %s", objectType)
 		}
 	}
 	progressMeter.Done()

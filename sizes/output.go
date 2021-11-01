@@ -470,6 +470,7 @@ func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
 	metric := counts.Metric
 	binary := counts.Binary
 
+	//nolint:prealloc // The length is not known in advance.
 	var rgis []tableContents
 	for _, rg := range refGroups {
 		if rg.Symbol == "" {

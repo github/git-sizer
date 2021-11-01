@@ -90,6 +90,7 @@ func TestRefSelections(t *testing.T) {
 
 		refname string
 	}{
+		//nolint:gocritic // Want columns in comment to match initializers.
 		//          111111111
 		//0123456789012345678
 		{"+ + + + + + +   + +", "refs/barfoo"},

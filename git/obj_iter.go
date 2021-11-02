@@ -6,8 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-
-	"github.com/github/git-sizer/counts"
 )
 
 // ObjectIter iterates over objects in a Git repository.
@@ -105,13 +103,13 @@ func (repo *Repository) NewObjectIter(
 
 // Next returns the next object: its OID, type, and size. When no more
 // data are available, it returns an `io.EOF` error.
-func (iter *ObjectIter) Next() (OID, ObjectType, counts.Count32, error) {
+func (iter *ObjectIter) Next() (BatchHeader, error) {
 	line, err := iter.f.ReadString('\n')
 	if err != nil {
-		return OID{}, "", 0, err
+		return missingHeader, err
 	}
 
-	return parseBatchHeader("", line)
+	return ParseBatchHeader("", line)
 }
 
 // Close closes the iterator and frees up resources.

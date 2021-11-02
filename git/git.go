@@ -84,7 +84,7 @@ func NewRepository(path string) (*Repository, error) {
 	}, nil
 }
 
-func (repo *Repository) gitCommand(callerArgs ...string) *exec.Cmd {
+func (repo *Repository) GitCommand(callerArgs ...string) *exec.Cmd {
 	args := []string{
 		// Disable replace references when running our commands:
 		"--no-replace-objects",

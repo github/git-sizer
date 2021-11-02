@@ -27,7 +27,7 @@ type BatchObjectIter struct {
 // `io.WriteCloser` should normally be closed and the iterator's
 // output drained before `Close()` is called.
 func (repo *Repository) NewBatchObjectIter() (*BatchObjectIter, io.WriteCloser, error) {
-	cmd := repo.gitCommand("cat-file", "--batch", "--buffer")
+	cmd := repo.GitCommand("cat-file", "--batch", "--buffer")
 
 	in, err := cmd.StdinPipe()
 	if err != nil {

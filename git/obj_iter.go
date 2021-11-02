@@ -27,7 +27,7 @@ type ObjectIter struct {
 func (repo *Repository) NewObjectIter(
 	args ...string,
 ) (*ObjectIter, io.WriteCloser, error) {
-	cmd1 := repo.gitCommand(append([]string{"rev-list", "--objects"}, args...)...)
+	cmd1 := repo.GitCommand(append([]string{"rev-list", "--objects"}, args...)...)
 	in1, err := cmd1.StdinPipe()
 	if err != nil {
 		return nil, nil, err
@@ -45,7 +45,7 @@ func (repo *Repository) NewObjectIter(
 		return nil, nil, err
 	}
 
-	cmd2 := repo.gitCommand("cat-file", "--batch-check", "--buffer")
+	cmd2 := repo.GitCommand("cat-file", "--batch-check", "--buffer")
 	in2, err := cmd2.StdinPipe()
 	if err != nil {
 		out1.Close()

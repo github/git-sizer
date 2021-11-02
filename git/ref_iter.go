@@ -23,7 +23,7 @@ type ReferenceIter struct {
 // NewReferenceIter returns an iterator that iterates over all of the
 // references in `repo`.
 func (repo *Repository) NewReferenceIter() (*ReferenceIter, error) {
-	cmd := repo.gitCommand(
+	cmd := repo.GitCommand(
 		"for-each-ref", "--format=%(objectname) %(objecttype) %(objectsize) %(refname)",
 	)
 

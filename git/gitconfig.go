@@ -36,7 +36,7 @@ type Config struct {
 // `configKeyMatchesPrefix()`), and strip off the prefix in the keys
 // that are returned.
 func (repo *Repository) GetConfig(prefix string) (*Config, error) {
-	cmd := repo.gitCommand("config", "--list", "-z")
+	cmd := repo.GitCommand("config", "--list", "-z")
 
 	out, err := cmd.Output()
 	if err != nil {
@@ -114,7 +114,7 @@ func configKeyMatchesPrefix(key, prefix string) (bool, string) {
 }
 
 func (repo *Repository) ConfigStringDefault(key string, defaultValue string) (string, error) {
-	cmd := repo.gitCommand(
+	cmd := repo.GitCommand(
 		"config",
 		"--default", defaultValue,
 		key,
@@ -133,7 +133,7 @@ func (repo *Repository) ConfigStringDefault(key string, defaultValue string) (st
 }
 
 func (repo *Repository) ConfigBoolDefault(key string, defaultValue bool) (bool, error) {
-	cmd := repo.gitCommand(
+	cmd := repo.GitCommand(
 		"config",
 		"--type", "bool",
 		"--default", strconv.FormatBool(defaultValue),
@@ -155,7 +155,7 @@ func (repo *Repository) ConfigBoolDefault(key string, defaultValue bool) (bool, 
 }
 
 func (repo *Repository) ConfigIntDefault(key string, defaultValue int) (int, error) {
-	cmd := repo.gitCommand(
+	cmd := repo.GitCommand(
 		"config",
 		"--type", "int",
 		"--default", strconv.Itoa(defaultValue),

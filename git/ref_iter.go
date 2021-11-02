@@ -2,14 +2,9 @@ package git
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
-	"strconv"
-	"strings"
-
-	"github.com/github/git-sizer/counts"
 )
 
 // ReferenceIter is an iterator that interates over references.
@@ -58,27 +53,12 @@ func (iter *ReferenceIter) Next() (Reference, bool, error) {
 		}
 		return Reference{}, false, nil
 	}
-	line = line[:len(line)-1]
-	words := strings.Split(line, " ")
-	if len(words) != 4 {
-		return Reference{}, false, fmt.Errorf("line improperly formatted: %#v", line)
-	}
-	oid, err := NewOID(words[0])
+	ref, err := ParseReference(line[:len(line)-1])
 	if err != nil {
-		return Reference{}, false, fmt.Errorf("SHA-1 improperly formatted: %#v", words[0])
+		return ref, false, err
 	}
-	objectType := ObjectType(words[1])
-	objectSize, err := strconv.ParseUint(words[2], 10, 32)
-	if err != nil {
-		return Reference{}, false, fmt.Errorf("object size improperly formatted: %#v", words[2])
-	}
-	refname := words[3]
-	return Reference{
-		Refname:    refname,
-		ObjectType: objectType,
-		ObjectSize: counts.Count32(objectSize),
-		OID:        oid,
-	}, true, nil
+
+	return ref, true, nil
 }
 
 // Close closes the iterator and frees up resources.

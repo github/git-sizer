@@ -16,15 +16,21 @@ import (
 	"github.com/github/git-sizer/counts"
 )
 
-// The type of an object ("blob", "tree", "commit", "tag", "missing").
+// ObjectType represents the type of a Git object ("blob", "tree",
+// "commit", "tag", or "missing").
 type ObjectType string
 
+// OID represents the SHA-1 object ID of a Git object, in binary
+// format.
 type OID struct {
 	v [20]byte
 }
 
+// NullOID is the null object ID; i.e., all zeros.
 var NullOID OID
 
+// OIDFromBytes converts a byte slice containing an object ID in
+// binary format into an `OID`.
 func OIDFromBytes(oidBytes []byte) (OID, error) {
 	var oid OID
 	if len(oidBytes) != len(oid.v) {
@@ -34,6 +40,8 @@ func OIDFromBytes(oidBytes []byte) (OID, error) {
 	return oid, nil
 }
 
+// NewOID converts an object ID in hex format (i.e., `[0-9a-f]{40}`)
+// into an `OID`.
 func NewOID(s string) (OID, error) {
 	oidBytes, err := hex.DecodeString(s)
 	if err != nil {
@@ -42,14 +50,18 @@ func NewOID(s string) (OID, error) {
 	return OIDFromBytes(oidBytes)
 }
 
+// String formats `oid` as a string in hex format.
 func (oid OID) String() string {
 	return hex.EncodeToString(oid.v[:])
 }
 
+// Bytes returns a byte slice view of `oid`, in binary format.
 func (oid OID) Bytes() []byte {
 	return oid.v[:]
 }
 
+// MarshalJSON expresses `oid` as a JSON string with its enclosing
+// quotation marks.
 func (oid OID) MarshalJSON() ([]byte, error) {
 	src := oid.v[:]
 	dst := make([]byte, hex.EncodedLen(len(src))+2)
@@ -59,6 +71,7 @@ func (oid OID) MarshalJSON() ([]byte, error) {
 	return dst, nil
 }
 
+// Repository represents a Git repository on disk.
 type Repository struct {
 	path string
 
@@ -84,17 +97,19 @@ func NewRepository(path string) (*Repository, error) {
 	gitBin, err := findGitBin()
 	if err != nil {
 		return nil, fmt.Errorf(
-			"could not find 'git' executable (is it in your PATH?): %v", err,
+			"could not find 'git' executable (is it in your PATH?): %w", err,
 		)
 	}
 
+	//nolint:gosec // `gitBin` is chosen carefully, and `path` is the
+	// path to the repository.
 	cmd := exec.Command(gitBin, "-C", path, "rev-parse", "--git-dir")
 	out, err := cmd.Output()
 	if err != nil {
 		switch err := err.(type) {
 		case *exec.Error:
 			return nil, fmt.Errorf(
-				"could not run '%s': %v", gitBin, err.Err,
+				"could not run '%s': %w", gitBin, err.Err,
 			)
 		case *exec.ExitError:
 			return nil, fmt.Errorf(
@@ -106,12 +121,13 @@ func NewRepository(path string) (*Repository, error) {
 	}
 	gitDir := smartJoin(path, string(bytes.TrimSpace(out)))
 
+	//nolint:gosec // `gitBin` is chosen carefully.
 	cmd = exec.Command(gitBin, "rev-parse", "--git-path", "shallow")
 	cmd.Dir = gitDir
 	out, err = cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf(
-			"could not run 'git rev-parse --git-path shallow': %s", err,
+			"could not run 'git rev-parse --git-path shallow': %w", err,
 		)
 	}
 	shallow := smartJoin(gitDir, string(bytes.TrimSpace(out)))
@@ -139,6 +155,8 @@ func (repo *Repository) gitCommand(callerArgs ...string) *exec.Cmd {
 
 	args = append(args, callerArgs...)
 
+	//nolint:gosec // `gitBin` is chosen carefully, and the rest of
+	// the args have been checked.
 	cmd := exec.Command(repo.gitBin, args...)
 
 	cmd.Env = append(
@@ -151,21 +169,27 @@ func (repo *Repository) gitCommand(callerArgs ...string) *exec.Cmd {
 	return cmd
 }
 
+// Path returns the path to `repo`.
 func (repo *Repository) Path() string {
 	return repo.path
 }
 
-func (repo *Repository) Close() error {
-	return nil
-}
-
+// Reference represents a Git reference.
 type Reference struct {
-	Refname    string
+	// Refname is the full reference name of the reference.
+	Refname string
+
+	// ObjectType is the type of the object referenced.
 	ObjectType ObjectType
+
+	// ObjectSize is the size of the referred-to object, in bytes.
 	ObjectSize counts.Count32
-	OID        OID
+
+	// OID is the OID of the referred-to object.
+	OID OID
 }
 
+// ReferenceIter is an iterator that interates over references.
 type ReferenceIter struct {
 	cmd     *exec.Cmd
 	out     io.ReadCloser
@@ -200,6 +224,9 @@ func (repo *Repository) NewReferenceIter() (*ReferenceIter, error) {
 	}, nil
 }
 
+// Next returns either the next reference or a boolean `false` value
+// indicating that the iteration is over. On errors, return an error
+// (in this case, the caller must still call `Close()`).
 func (iter *ReferenceIter) Next() (Reference, bool, error) {
 	line, err := iter.f.ReadString('\n')
 	if err != nil {
@@ -231,24 +258,30 @@ func (iter *ReferenceIter) Next() (Reference, bool, error) {
 	}, true, nil
 }
 
-func (l *ReferenceIter) Close() error {
-	err := l.out.Close()
-	err2 := l.cmd.Wait()
+// Close closes the iterator and frees up resources.
+func (iter *ReferenceIter) Close() error {
+	err := iter.out.Close()
+	err2 := iter.cmd.Wait()
 	if err == nil {
 		err = err2
 	}
 	return err
 }
 
+// BatchObjectIter iterates over objects whose names are fed into its
+// stdin. The output is buffered, so it has to be closed before you
+// can be sure that you have gotten all of the objects.
 type BatchObjectIter struct {
 	cmd *exec.Cmd
 	out io.ReadCloser
 	f   *bufio.Reader
 }
 
-// NewBatchObjectIter returns iterates over objects whose names are
-// fed into its stdin. The output is buffered, so it has to be closed
-// before you can be sure to read all of the objects.
+// NewBatchObjectIter returns a `*BatchObjectIterator` and an
+// `io.WriteCloser`. The iterator iterates over objects whose names
+// are fed into the `io.WriteCloser`, one per line. The
+// `io.WriteCloser` should normally be closed and the iterator's
+// output drained before `Close()` is called.
 func (repo *Repository) NewBatchObjectIter() (*BatchObjectIter, io.WriteCloser, error) {
 	cmd := repo.gitCommand("cat-file", "--batch", "--buffer")
 
@@ -276,6 +309,8 @@ func (repo *Repository) NewBatchObjectIter() (*BatchObjectIter, io.WriteCloser, 
 	}, in, nil
 }
 
+// Next returns the next object: its OID, type, size, and contents.
+// When no more data are available, it returns an `io.EOF` error.
 func (iter *BatchObjectIter) Next() (OID, ObjectType, counts.Count32, []byte, error) {
 	header, err := iter.f.ReadString('\n')
 	if err != nil {
@@ -295,9 +330,11 @@ func (iter *BatchObjectIter) Next() (OID, ObjectType, counts.Count32, []byte, er
 	return oid, objectType, objectSize, data, nil
 }
 
-func (l *BatchObjectIter) Close() error {
-	err := l.out.Close()
-	err2 := l.cmd.Wait()
+// Close closes the iterator and frees up resources. If any iterator
+// output hasn't been read yet, it will be lost.
+func (iter *BatchObjectIter) Close() error {
+	err := iter.out.Close()
+	err2 := iter.cmd.Wait()
 	if err == nil {
 		err = err2
 	}
@@ -328,10 +365,10 @@ func parseBatchHeader(spec string, header string) (OID, ObjectType, counts.Count
 	return oid, ObjectType(words[1]), counts.NewCount32(size), nil
 }
 
+// ObjectIter iterates over objects in a Git repository.
 type ObjectIter struct {
 	cmd1    *exec.Cmd
 	cmd2    *exec.Cmd
-	in1     io.Writer
 	out1    io.ReadCloser
 	out2    io.ReadCloser
 	f       *bufio.Reader
@@ -339,12 +376,12 @@ type ObjectIter struct {
 }
 
 // NewObjectIter returns an iterator that iterates over objects in
-// `repo`. The second return value is the stdin of the `rev-list`
-// command. The caller can feed values into it but must close it in
-// any case.
-func (repo *Repository) NewObjectIter(args ...string) (
-	*ObjectIter, io.WriteCloser, error,
-) {
+// `repo`. The arguments are passed to `git rev-list --objects`. The
+// second return value is the stdin of the `rev-list` command. The
+// caller can feed values into it but must close it in any case.
+func (repo *Repository) NewObjectIter(
+	args ...string,
+) (*ObjectIter, io.WriteCloser, error) {
 	cmd1 := repo.gitCommand(append([]string{"rev-list", "--objects"}, args...)...)
 	in1, err := cmd1.StdinPipe()
 	if err != nil {
@@ -421,9 +458,10 @@ func (repo *Repository) NewObjectIter(args ...string) (
 	}, in1, nil
 }
 
-// Next returns the next object, or EOF when done.
-func (l *ObjectIter) Next() (OID, ObjectType, counts.Count32, error) {
-	line, err := l.f.ReadString('\n')
+// Next returns the next object: its OID, type, and size. When no more
+// data are available, it returns an `io.EOF` error.
+func (iter *ObjectIter) Next() (OID, ObjectType, counts.Count32, error) {
+	line, err := iter.f.ReadString('\n')
 	if err != nil {
 		return OID{}, "", 0, err
 	}
@@ -431,27 +469,31 @@ func (l *ObjectIter) Next() (OID, ObjectType, counts.Count32, error) {
 	return parseBatchHeader("", line)
 }
 
-func (l *ObjectIter) Close() error {
-	l.out1.Close()
-	err := <-l.errChan
-	l.out2.Close()
-	err2 := l.cmd1.Wait()
+// Close closes the iterator and frees up resources.
+func (iter *ObjectIter) Close() error {
+	iter.out1.Close()
+	err := <-iter.errChan
+	iter.out2.Close()
+	err2 := iter.cmd1.Wait()
 	if err == nil {
 		err = err2
 	}
-	err2 = l.cmd2.Wait()
+	err2 = iter.cmd2.Wait()
 	if err == nil {
 		err = err2
 	}
 	return err
 }
 
+// ObjectHeaderIter iterates over the headers within a commit or tag
+// object.
 type ObjectHeaderIter struct {
 	name string
 	data string
 }
 
-// Iterate over a commit or tag object header. `data` should be the
+// NewObjectHeaderIter returns an `ObjectHeaderIter` that iterates
+// over the headers in a commit or tag object. `data` should be the
 // object's contents, which is usually terminated by a blank line that
 // separates the header from the comment. However, annotated tags
 // don't always include comments, and Git even tolerates commits
@@ -473,10 +515,12 @@ func NewObjectHeaderIter(name string, data []byte) (ObjectHeaderIter, error) {
 	return ObjectHeaderIter{name, string(data[:headerEnd+1])}, nil
 }
 
+// HasNext returns true iff there are more headers to retrieve.
 func (iter *ObjectHeaderIter) HasNext() bool {
 	return len(iter.data) > 0
 }
 
+// Next returns the key and value of the next header.
 func (iter *ObjectHeaderIter) Next() (string, string, error) {
 	if len(iter.data) == 0 {
 		return "", "", fmt.Errorf("header for %s read past end", iter.name)
@@ -497,12 +541,15 @@ func (iter *ObjectHeaderIter) Next() (string, string, error) {
 	return key, value, nil
 }
 
+// Commit represents the parts of a commit object that we need.
 type Commit struct {
 	Size    counts.Count32
 	Parents []OID
 	Tree    OID
 }
 
+// ParseCommit parses the commit object whose contents are in `data`.
+// `oid` is used only in error messages.
 func ParseCommit(oid OID, data []byte) (*Commit, error) {
 	var parents []OID
 	var tree OID
@@ -544,38 +591,46 @@ func ParseCommit(oid OID, data []byte) (*Commit, error) {
 	}, nil
 }
 
+// Tree represents a Git tree object.
 type Tree struct {
 	data string
 }
 
+// ParseTree parses the tree object whose contents are contained in
+// `data`. `oid` is currently unused.
 func ParseTree(oid OID, data []byte) (*Tree, error) {
 	return &Tree{string(data)}, nil
 }
 
+// Size returns the size of the tree object.
 func (tree Tree) Size() counts.Count32 {
 	return counts.NewCount32(uint64(len(tree.data)))
 }
 
-// Note that Name shares memory with the tree data that were
-// originally read; i.e., retaining a pointer to Name keeps the tree
-// data reachable.
+// TreeEntry represents an entry in a Git tree object. Note that Name
+// shares memory with the tree data that were originally read; i.e.,
+// retaining a pointer to Name keeps the tree data reachable.
 type TreeEntry struct {
 	Name     string
 	OID      OID
 	Filemode uint
 }
 
+// TreeIter is an iterator over the entries in a Git tree object.
 type TreeIter struct {
 	// The as-yet-unread part of the tree's data.
 	data string
 }
 
+// Iter returns an iterator over the entries in `tree`.
 func (tree *Tree) Iter() *TreeIter {
 	return &TreeIter{
 		data: tree.data,
 	}
 }
 
+// NextEntry returns either the next entry in a Git tree, or a `false`
+// boolean value if there are no more entries.
 func (iter *TreeIter) NextEntry() (TreeEntry, bool, error) {
 	var entry TreeEntry
 
@@ -612,12 +667,15 @@ func (iter *TreeIter) NextEntry() (TreeEntry, bool, error) {
 	return entry, true, nil
 }
 
+// Tag represents the information that we need about a Git tag object.
 type Tag struct {
 	Size         counts.Count32
 	Referent     OID
 	ReferentType ObjectType
 }
 
+// ParseTag parses the Git tag object whose contents are contained in
+// `data`. `oid` is used only in error messages.
 func ParseTag(oid OID, data []byte) (*Tag, error) {
 	var referent OID
 	var referentFound bool

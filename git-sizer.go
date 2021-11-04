@@ -17,7 +17,7 @@ import (
 	"github.com/github/git-sizer/sizes"
 )
 
-const Usage = `usage: git-sizer [OPTS]
+const usage = `usage: git-sizer [OPTS]
 
       --threshold THRESHOLD    minimum level of concern (i.e., number of stars)
                                that should be reported. Default:
@@ -110,13 +110,10 @@ func mainImplementation(args []string) error {
 	// Try to open the repository, but it's not an error yet if this
 	// fails, because the user might only be asking for `--help`.
 	repo, repoErr := git.NewRepository(".")
-	if repoErr == nil {
-		defer repo.Close()
-	}
 
 	flags := pflag.NewFlagSet("git-sizer", pflag.ContinueOnError)
 	flags.Usage = func() {
-		fmt.Print(Usage)
+		fmt.Print(usage)
 	}
 
 	flags.VarP(
@@ -164,7 +161,9 @@ func mainImplementation(args []string) error {
 	flags.Lookup("no-progress").NoOptDefVal = "true"
 
 	flags.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
-	flags.MarkHidden("cpuprofile")
+	if err := flags.MarkHidden("cpuprofile"); err != nil {
+		return fmt.Errorf("marking option hidden: %w", err)
+	}
 
 	var configger refopts.Configger
 	if repo != nil {
@@ -191,9 +190,11 @@ func mainImplementation(args []string) error {
 	if cpuprofile != "" {
 		f, err := os.Create(cpuprofile)
 		if err != nil {
-			return fmt.Errorf("couldn't set up cpuprofile file: %s", err)
+			return fmt.Errorf("couldn't set up cpuprofile file: %w", err)
 		}
-		pprof.StartCPUProfile(f)
+		if err := pprof.StartCPUProfile(f); err != nil {
+			return fmt.Errorf("starting CPU profiling: %w", err)
+		}
 		defer pprof.StopCPUProfile()
 	}
 
@@ -211,7 +212,7 @@ func mainImplementation(args []string) error {
 	}
 
 	if repoErr != nil {
-		return fmt.Errorf("couldn't open Git repository: %s", repoErr)
+		return fmt.Errorf("couldn't open Git repository: %w", repoErr)
 	}
 
 	if jsonOutput {
@@ -270,7 +271,7 @@ func mainImplementation(args []string) error {
 
 	historySize, err := sizes.ScanRepositoryUsingGraph(repo, rg, nameStyle, progress)
 	if err != nil {
-		return fmt.Errorf("error scanning repository: %s", err)
+		return fmt.Errorf("error scanning repository: %w", err)
 	}
 
 	if jsonOutput {
@@ -285,14 +286,16 @@ func mainImplementation(args []string) error {
 			return fmt.Errorf("JSON version must be 1 or 2")
 		}
 		if err != nil {
-			return fmt.Errorf("could not convert %v to json: %s", historySize, err)
+			return fmt.Errorf("could not convert %v to json: %w", historySize, err)
 		}
 		fmt.Printf("%s\n", j)
 	} else {
-		io.WriteString(
+		if _, err := io.WriteString(
 			os.Stdout,
 			historySize.TableString(rg.Groups(), threshold, nameStyle),
-		)
+		); err != nil {
+			return fmt.Errorf("writing output: %w", err)
+		}
 	}
 
 	return nil

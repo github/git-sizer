@@ -134,12 +134,13 @@ func (p *Path) TreePrefix() string {
 			return "???"
 		}
 	case "commit", "tag":
-		if p.parent != nil {
+		switch {
+		case p.parent != nil:
 			// The parent is a tag.
 			return fmt.Sprintf("%s^{%s}", p.parent.BestPath(), p.objectType)
-		} else if p.relativePath != "" {
+		case p.relativePath != "":
 			return p.relativePath + ":"
-		} else {
+		default:
 			return p.OID.String() + ":"
 		}
 	default:
@@ -164,12 +165,13 @@ func (p *Path) Path() string {
 			return ""
 		}
 	case "commit", "tag":
-		if p.parent != nil {
+		switch {
+		case p.parent != nil:
 			// The parent is a tag.
 			return fmt.Sprintf("%s^{%s}", p.parent.BestPath(), p.objectType)
-		} else if p.relativePath != "" {
+		case p.relativePath != "":
 			return p.relativePath
-		} else {
+		default:
 			return ""
 		}
 	default:
@@ -254,10 +256,13 @@ func (pr *InOrderPathResolver) forgetPathLocked(p *Path) {
 		panic("forgetPathLocked() called when refcount zero")
 	}
 	p.seekerCount--
+
 	if p.seekerCount > 0 {
 		// The path is still wanted (by another seeker).
 		return
-	} else if p.parent != nil {
+	}
+
+	if p.parent != nil {
 		// We already found the object's parent, and the parent's path
 		// is wanted on account if this object. Decrement its
 		// seekerCount.

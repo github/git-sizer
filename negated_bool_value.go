@@ -4,6 +4,9 @@ import (
 	"strconv"
 )
 
+// NegatedBoolValue is a `pflag.Value` that set a boolean variable to
+// the inverse of what the argument would normally indicate (e.g., to
+// implement `--no-foo`-style arguments).
 type NegatedBoolValue struct {
 	value *bool
 }
@@ -21,9 +24,9 @@ func (v *NegatedBoolValue) Get() interface{} {
 func (v *NegatedBoolValue) String() string {
 	if v == nil || v.value == nil {
 		return "true"
-	} else {
-		return strconv.FormatBool(!*v.value)
 	}
+
+	return strconv.FormatBool(!*v.value)
 }
 
 func (v *NegatedBoolValue) Type() string {

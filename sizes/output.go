@@ -41,7 +41,7 @@ func (s TagSize) String() string {
 	return fmt.Sprintf("tag_depth=%d", s.TagDepth)
 }
 
-func (s HistorySize) String() string {
+func (s *HistorySize) String() string {
 	return fmt.Sprintf(
 		"unique_commit_count=%d, unique_commit_count = %d, max_commit_size = %d, "+
 			"max_history_depth=%d, max_parent_count=%d, "+
@@ -141,30 +141,30 @@ func newItem(
 	}
 }
 
-func (l *item) Emit(t *table) {
-	levelOfConcern, interesting := l.levelOfConcern(t.threshold)
+func (i *item) Emit(t *table) {
+	levelOfConcern, interesting := i.levelOfConcern(t.threshold)
 	if !interesting {
 		return
 	}
-	valueString, unitString := l.humaner.Format(l.value, l.unit)
+	valueString, unitString := i.humaner.Format(i.value, i.unit)
 	t.formatRow(
-		l.name, t.footnotes.CreateCitation(l.Footnote(t.nameStyle)),
+		i.name, t.footnotes.CreateCitation(i.Footnote(t.nameStyle)),
 		valueString, unitString,
 		levelOfConcern,
 	)
 }
 
-func (l *item) Footnote(nameStyle NameStyle) string {
-	if l.path == nil || l.path.OID == git.NullOID {
+func (i *item) Footnote(nameStyle NameStyle) string {
+	if i.path == nil || i.path.OID == git.NullOID {
 		return ""
 	}
 	switch nameStyle {
 	case NameStyleNone:
 		return ""
 	case NameStyleHash:
-		return l.path.OID.String()
+		return i.path.OID.String()
 	case NameStyleFull:
-		return l.path.String()
+		return i.path.String()
 	default:
 		panic("unexpected NameStyle")
 	}
@@ -173,9 +173,12 @@ func (l *item) Footnote(nameStyle NameStyle) string {
 // If this item's alert level is at least as high as the threshold,
 // return the string that should be used as its "level of concern" and
 // `true`; otherwise, return `"", false`.
-func (l *item) levelOfConcern(threshold Threshold) (string, bool) {
-	value, _ := l.value.ToUint64()
-	alert := Threshold(float64(value) / l.scale)
+func (i *item) levelOfConcern(threshold Threshold) (string, bool) {
+	value, overflow := i.value.ToUint64()
+	if overflow {
+		return "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", true
+	}
+	alert := Threshold(float64(value) / i.scale)
 	if alert < threshold {
 		return "", false
 	}
@@ -242,27 +245,28 @@ func (i *indentedItem) Emit(t *table) {
 type Threshold float64
 
 // Methods to implement pflag.Value:
+
 func (t *Threshold) String() string {
 	if t == nil {
 		return "UNSET"
-	} else {
-		switch *t {
-		case 0:
-			return "--verbose"
-		case 1:
-			return "--threshold=1"
-		case 30:
-			return "--critical"
-		default:
-			return fmt.Sprintf("--threshold=%g", *t)
-		}
+	}
+
+	switch *t {
+	case 0:
+		return "--verbose"
+	case 1:
+		return "--threshold=1"
+	case 30:
+		return "--critical"
+	default:
+		return fmt.Sprintf("--threshold=%g", *t)
 	}
 }
 
 func (t *Threshold) Set(s string) error {
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return fmt.Errorf("error parsing floating-point value %q: %s", s, err)
+		return fmt.Errorf("error parsing floating-point value %q: %w", s, err)
 	}
 	*t = Threshold(v)
 	return nil
@@ -322,20 +326,21 @@ const (
 )
 
 // Methods to implement pflag.Value:
+
 func (n *NameStyle) String() string {
 	if n == nil {
 		return "UNSET"
-	} else {
-		switch *n {
-		case NameStyleNone:
-			return "none"
-		case NameStyleHash:
-			return "hash"
-		case NameStyleFull:
-			return "full"
-		default:
-			panic("Unexpected NameStyle value")
-		}
+	}
+
+	switch *n {
+	case NameStyleNone:
+		return "none"
+	case NameStyleHash:
+		return "hash"
+	case NameStyleFull:
+		return "full"
+	default:
+		panic("Unexpected NameStyle value")
 	}
 }
 
@@ -366,7 +371,7 @@ type table struct {
 	buf           bytes.Buffer
 }
 
-func (s HistorySize) TableString(
+func (s *HistorySize) TableString(
 	refGroups []RefGroup, threshold Threshold, nameStyle NameStyle,
 ) string {
 	contents := s.contents(refGroups)
@@ -449,7 +454,7 @@ func (t *table) formatRow(
 	)
 }
 
-func (s HistorySize) JSON(
+func (s *HistorySize) JSON(
 	refGroups []RefGroup, threshold Threshold, nameStyle NameStyle,
 ) ([]byte, error) {
 	contents := s.contents(refGroups)
@@ -459,12 +464,13 @@ func (s HistorySize) JSON(
 	return j, err
 }
 
-func (s HistorySize) contents(refGroups []RefGroup) tableContents {
+func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
 	S := newSection
 	I := newItem
 	metric := counts.Metric
 	binary := counts.Binary
 
+	//nolint:prealloc // The length is not known in advance.
 	var rgis []tableContents
 	for _, rg := range refGroups {
 		if rg.Symbol == "" {

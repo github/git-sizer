@@ -1,3 +1,4 @@
+//go:build isatty
 // +build isatty
 
 package isatty
@@ -12,6 +13,7 @@ import (
 	"syscall"
 )
 
+// Isatty tries to determine whether `fd` is a TTY.
 func Isatty(fd uintptr) (bool, error) {
 	result, err := C.isatty(C.int(fd))
 	if err != nil && err != syscall.EINVAL {

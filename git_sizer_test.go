@@ -90,6 +90,7 @@ func TestRefSelections(t *testing.T) {
 
 		refname string
 	}{
+		//nolint:gocritic // Want columns in comment to match initializers.
 		//          111111111
 		//0123456789012345678
 		{"+ + + + + + +   + +", "refs/barfoo"},
@@ -126,7 +127,7 @@ func TestRefSelections(t *testing.T) {
 
 	// Create a test repo with one orphan commit per refname:
 	repo := testutils.NewTestRepo(t, true, "ref-selection")
-	defer repo.Remove(t)
+	t.Cleanup(func() { repo.Remove(t) })
 
 	for _, p := range references {
 		repo.CreateReferencedOrphan(t, p.refname)
@@ -236,9 +237,12 @@ func TestRefSelections(t *testing.T) {
 			},
 		},
 	} {
+		i, p := i, p
 		t.Run(
 			p.name,
 			func(t *testing.T) {
+				t.Parallel()
+
 				repo := repo.Clone(t, "ref-selection")
 				defer repo.Remove(t)
 
@@ -254,7 +258,7 @@ func TestRefSelections(t *testing.T) {
 				cmd.Stdout = &stdout
 				var stderr bytes.Buffer
 				cmd.Stderr = &stderr
-				err = cmd.Run()
+				err := cmd.Run()
 				assert.NoError(t, err)
 
 				expectedStderr, expectedUniqueCommitCount := computeExpectations(i)
@@ -306,7 +310,7 @@ func TestRefgroups(t *testing.T) {
 
 	// Create a test repo with one orphan commit per refname:
 	repo := testutils.NewTestRepo(t, true, "refgroups")
-	defer repo.Remove(t)
+	t.Cleanup(func() { repo.Remove(t) })
 
 	for _, refname := range references {
 		repo.CreateReferencedOrphan(t, refname)
@@ -484,9 +488,12 @@ References (included references marked with '+'):
 `[1:],
 		},
 	} {
+		p := p
 		t.Run(
 			p.name,
 			func(t *testing.T) {
+				t.Parallel()
+
 				repo := repo.Clone(t, "refgroups")
 				defer repo.Remove(t)
 
@@ -535,7 +542,7 @@ func TestBomb(t *testing.T) {
 	t.Parallel()
 
 	repo := testutils.NewTestRepo(t, true, "bomb")
-	defer repo.Remove(t)
+	t.Cleanup(func() { repo.Remove(t) })
 
 	newGitBomb(t, repo, 10, 10, "boom!\n")
 

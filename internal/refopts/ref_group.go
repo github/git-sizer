@@ -78,7 +78,7 @@ func (rg *refGroup) collectSymbols(refname string) (bool, []sizes.RefGroupSymbol
 // gitconfig and returns the result. It is not considered an error if
 // there are no usable config entries for the filter.
 func (rg *refGroup) augmentFromConfig(configger Configger) error {
-	config, err := configger.Config(fmt.Sprintf("refgroup.%s", rg.Symbol))
+	config, err := configger.GetConfig(fmt.Sprintf("refgroup.%s", rg.Symbol))
 	if err != nil {
 		return err
 	}

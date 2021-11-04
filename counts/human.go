@@ -4,24 +4,28 @@ import (
 	"fmt"
 )
 
-// A quantity that can be made human-readable using Human().
+// Humanable is a quantity that can be made human-readable using
+// `Humaner.Format()`.
 type Humanable interface {
-	// Return the value as a uint64, and a boolean telling whether it
-	// overflowed.
+	// ToUint64 returns the value as a uint64, and a boolean telling
+	// whether it overflowed.
 	ToUint64() (uint64, bool)
 }
 
-// An object that can format a Humanable in human-readable format.
+// Humaner is an object that can format a Humanable in human-readable
+// format.
 type Humaner struct {
 	name     string
 	prefixes []Prefix
 }
 
+// Prefix is a metric-like prefix that implies a scaling factor.
 type Prefix struct {
 	Name       string
 	Multiplier uint64
 }
 
+// Metric is a Humaner representing metric prefixes.
 var Metric = Humaner{
 	name: "metric",
 	prefixes: []Prefix{
@@ -34,6 +38,8 @@ var Metric = Humaner{
 	},
 }
 
+// Binary is a Humaner representing power-of-1024 based prefixes,
+// typically used for bytes.
 var Binary = Humaner{
 	name: "binary",
 	prefixes: []Prefix{
@@ -46,13 +52,15 @@ var Binary = Humaner{
 	},
 }
 
+// Name returns the name of `h` ("metric" or "binary").
 func (h *Humaner) Name() string {
 	return h.name
 }
 
-// Format n, aligned, in `len(unit) + 10` or fewer characters (except
-// for extremely large numbers).
-func (h *Humaner) FormatNumber(n uint64, unit string) (string, string) {
+// FormatNumber formats n, aligned, in `len(unit) + 10` or fewer
+// characters (except for extremely large numbers). It returns strings
+// representing the numeral and the unit string.
+func (h *Humaner) FormatNumber(n uint64, unit string) (numeral string, unitString string) {
 	prefix := h.prefixes[0]
 
 	wholePart := n
@@ -66,25 +74,28 @@ func (h *Humaner) FormatNumber(n uint64, unit string) (string, string) {
 
 	if prefix.Multiplier == 1 {
 		return fmt.Sprintf("%d", n), unit
-	} else {
-		mantissa := float64(n) / float64(prefix.Multiplier)
-		var format string
-
-		if wholePart >= 100 {
-			// `mantissa` can actually be up to 1023.999.
-			format = "%.0f"
-		} else if wholePart >= 10 {
-			format = "%.1f"
-		} else {
-			format = "%.2f"
-		}
-		return fmt.Sprintf(format, mantissa), prefix.Name + unit
 	}
+
+	mantissa := float64(n) / float64(prefix.Multiplier)
+	var format string
+
+	switch {
+	case wholePart >= 100:
+		// `mantissa` can actually be up to 1023.999.
+		format = "%.0f"
+	case wholePart >= 10:
+		format = "%.1f"
+	default:
+		format = "%.2f"
+	}
+
+	return fmt.Sprintf(format, mantissa), prefix.Name + unit
 }
 
-// Format values, aligned, in `len(unit) + 10` or fewer characters
-// (except for extremely large numbers).
-func (h *Humaner) Format(value Humanable, unit string) (string, string) {
+// Format formats values, aligned, in `len(unit) + 10` or fewer
+// characters (except for extremely large numbers). It returns strings
+// representing the numeral and the unit string.
+func (h *Humaner) Format(value Humanable, unit string) (numeral string, unitString string) {
 	n, overflow := value.ToUint64()
 	if overflow {
 		return "∞", unit

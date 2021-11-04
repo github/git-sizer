@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/github/git-sizer/git"
@@ -48,8 +49,10 @@ func (repo *TestRepo) Init(t *testing.T, bare bool) {
 	// exist yet:
 	var cmd *exec.Cmd
 	if bare {
+		//nolint:gosec // `repo.Path` is a path that we created.
 		cmd = exec.Command("git", "init", "--bare", repo.Path)
 	} else {
+		//nolint:gosec // `repo.Path` is a path that we created.
 		cmd = exec.Command("git", "init", repo.Path)
 	}
 	cmd.Env = CleanGitEnv()
@@ -109,12 +112,12 @@ var localEnvVars = func() map[string]bool {
 	return m
 }()
 
-// GitEnv returns an appropriate environment for running `git`
-// commands without being confused by any existing environment or
-// gitconfig.
+// CleanGitEnv returns a clean environment for running `git` commands
+// so that they won't be affected by the local environment.
 func CleanGitEnv() []string {
-	var env []string
-	for _, e := range os.Environ() {
+	osEnv := os.Environ()
+	env := make([]string, 0, len(osEnv)+3)
+	for _, e := range osEnv {
 		i := strings.IndexByte(e, '=')
 		if i == -1 {
 			// This shouldn't happen, but if it does,
@@ -142,11 +145,14 @@ func (repo *TestRepo) GitCommand(t *testing.T, args ...string) *exec.Cmd {
 
 	gitArgs := []string{"-C", repo.Path}
 	gitArgs = append(gitArgs, args...)
+
+	//nolint:gosec // The args all come from the test code.
 	cmd := exec.Command("git", gitArgs...)
 	cmd.Env = CleanGitEnv()
 	return cmd
 }
 
+// UpdateRef updates the reference named `refname` to the value `oid`.
 func (repo *TestRepo) UpdateRef(t *testing.T, refname string, oid git.OID) {
 	t.Helper()
 
@@ -160,9 +166,9 @@ func (repo *TestRepo) UpdateRef(t *testing.T, refname string, oid git.OID) {
 	require.NoError(t, cmd.Run())
 }
 
-// createObject creates a new Git object, of the specified type, in
-// the repository at `repoPath`. `writer` is a function that writes
-// the object in `git hash-object` input format.
+// CreateObject creates a new Git object, of the specified type, in
+// the repository at `repoPath`. `writer` is a function that generates
+// the object contents in `git hash-object` input format.
 func (repo *TestRepo) CreateObject(
 	t *testing.T, otype git.ObjectType, writer func(io.Writer) error,
 ) git.OID {
@@ -173,6 +179,7 @@ func (repo *TestRepo) CreateObject(
 	require.NoError(t, err)
 
 	out, err := cmd.StdoutPipe()
+	require.NoError(t, err)
 	cmd.Stderr = os.Stderr
 
 	err = cmd.Start()
@@ -180,13 +187,13 @@ func (repo *TestRepo) CreateObject(
 
 	err = writer(in)
 	err2 := in.Close()
-	if err != nil {
-		cmd.Wait()
-		require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		_ = cmd.Wait()
+		t.FailNow()
 	}
-	if err2 != nil {
-		cmd.Wait()
-		require.NoError(t, err2)
+	if !assert.NoError(t, err2) {
+		_ = cmd.Wait()
+		t.FailNow()
 	}
 
 	output, err := ioutil.ReadAll(out)
@@ -257,6 +264,10 @@ func (repo *TestRepo) CreateReferencedOrphan(t *testing.T, refname string) {
 	repo.UpdateRef(t, refname, oid)
 }
 
+// AddAuthorInfo adds environment variables to `cmd.Env` that set the
+// Git author and committer to known values and set the timestamp to
+// `*timestamp`. Then `*timestamp` is moved forward by a minute, so
+// that each commit gets a unique timestamp.
 func AddAuthorInfo(cmd *exec.Cmd, timestamp *time.Time) {
 	cmd.Env = append(cmd.Env,
 		"GIT_AUTHOR_NAME=Arthur",

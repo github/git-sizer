@@ -185,12 +185,17 @@ func (p *Pipeline) Wait() error {
 	for i := len(p.stages) - 1; i >= 0; i-- {
 		s := p.stages[i]
 		err := s.Wait()
-		if err != nil {
+
+		// We want to report the error that is most informative. We
+		// take that to be the error from the earliest pipeline stage
+		// that failed of a non-pipe error. If that didn't happen,
+		// take the error from the last pipeline stage that failed due
+		// to a pipe error.
+		if err != nil && (earliestStageErr == nil || !IsPipeError(err)) {
 			// Overwrite any existing values here so that we end up
 			// retaining the last error that we see; i.e., the error
 			// that happened earliest in the pipeline.
-			earliestStageErr = err
-			earliestFailedStage = s
+			earliestFailedStage, earliestStageErr = s, err
 		}
 	}
 

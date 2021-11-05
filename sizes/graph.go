@@ -2,6 +2,7 @@ package sizes
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -69,15 +70,13 @@ func ScanRepositoryUsingGraph(
 ) (HistorySize, error) {
 	graph := NewGraph(rg, nameStyle)
 
-	refIter, err := repo.NewReferenceIter()
+	ctx, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+
+	refIter, err := repo.NewReferenceIter(ctx)
 	if err != nil {
 		return HistorySize{}, err
 	}
-	defer func() {
-		if refIter != nil {
-			refIter.Close()
-		}
-	}()
 
 	iter, in, err := repo.NewObjectIter("--stdin", "--date-order")
 	if err != nil {
@@ -134,8 +133,6 @@ func ScanRepositoryUsingGraph(
 				return
 			}
 		}
-		err := refIter.Close()
-		refIter = nil
 		errChan <- err
 	}()
 

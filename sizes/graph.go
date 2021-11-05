@@ -68,10 +68,10 @@ func ScanRepositoryUsingGraph(
 	repo *git.Repository, rg RefGrouper, nameStyle NameStyle,
 	progressMeter meter.Progress,
 ) (HistorySize, error) {
-	graph := NewGraph(rg, nameStyle)
-
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
+
+	graph := NewGraph(rg, nameStyle)
 
 	refIter, err := repo.NewReferenceIter(ctx)
 	if err != nil {
@@ -226,78 +226,52 @@ func ScanRepositoryUsingGraph(
 		return HistorySize{}, err
 	}
 
-	objectIter, objectIn, err := repo.NewBatchObjectIter()
+	objectIter, err := repo.NewBatchObjectIter(ctx)
 	if err != nil {
 		return HistorySize{}, err
 	}
-	defer func() {
-		if objectIter != nil {
-			objectIter.Close()
-		}
-	}()
 
 	go func() {
-		defer objectIn.Close()
-		bufin := bufio.NewWriter(objectIn)
-		defer bufin.Flush()
+		defer objectIter.Close()
 
-		for _, obj := range trees {
-			_, err := bufin.WriteString(obj.oid.String())
-			if err != nil {
-				errChan <- err
-				return
+		errChan <- func() error {
+			for _, obj := range trees {
+				if err := objectIter.RequestObject(obj.oid); err != nil {
+					return fmt.Errorf("requesting tree '%s': %w", obj.oid, err)
+				}
 			}
-			err = bufin.WriteByte('\n')
-			if err != nil {
-				errChan <- err
-				return
-			}
-		}
 
-		for i := len(commits); i > 0; i-- {
-			obj := commits[i-1]
-			_, err := bufin.WriteString(obj.oid.String())
-			if err != nil {
-				errChan <- err
-				return
+			for i := len(commits); i > 0; i-- {
+				obj := commits[i-1]
+				if err := objectIter.RequestObject(obj.oid); err != nil {
+					return fmt.Errorf("requesting commit '%s': %w", obj.oid, err)
+				}
 			}
-			err = bufin.WriteByte('\n')
-			if err != nil {
-				errChan <- err
-				return
-			}
-		}
 
-		for _, obj := range tags {
-			_, err := bufin.WriteString(obj.oid.String())
-			if err != nil {
-				errChan <- err
-				return
+			for _, obj := range tags {
+				if err := objectIter.RequestObject(obj.oid); err != nil {
+					return fmt.Errorf("requesting tag '%s': %w", obj.oid, err)
+				}
 			}
-			err = bufin.WriteByte('\n')
-			if err != nil {
-				errChan <- err
-				return
-			}
-		}
 
-		errChan <- nil
+			return nil
+		}()
 	}()
 
 	progressMeter.Start("Processing trees: %d")
 	for range trees {
-		obj, data, err := objectIter.Next()
+		obj, ok, err := objectIter.Next()
 		if err != nil {
-			if err != io.EOF {
-				return HistorySize{}, err
-			}
+			return HistorySize{}, err
+		}
+		if !ok {
 			return HistorySize{}, errors.New("fewer trees read than expected")
 		}
 		if obj.ObjectType != "tree" {
 			return HistorySize{}, fmt.Errorf("expected tree; read %#v", obj.ObjectType)
 		}
 		progressMeter.Inc()
-		tree, err := git.ParseTree(obj.OID, data)
+		tree, err := git.ParseTree(obj.OID, obj.Data)
 		if err != nil {
 			return HistorySize{}, err
 		}
@@ -313,17 +287,17 @@ func ScanRepositoryUsingGraph(
 	// time:
 	progressMeter.Start("Processing commits: %d")
 	for i := len(commits); i > 0; i-- {
-		obj, data, err := objectIter.Next()
+		obj, ok, err := objectIter.Next()
 		if err != nil {
-			if err != io.EOF {
-				return HistorySize{}, err
-			}
+			return HistorySize{}, err
+		}
+		if !ok {
 			return HistorySize{}, errors.New("fewer commits read than expected")
 		}
 		if obj.ObjectType != "commit" {
 			return HistorySize{}, fmt.Errorf("expected commit; read %#v", obj.ObjectType)
 		}
-		commit, err := git.ParseCommit(obj.OID, data)
+		commit, err := git.ParseCommit(obj.OID, obj.Data)
 		if err != nil {
 			return HistorySize{}, err
 		}
@@ -349,17 +323,17 @@ func ScanRepositoryUsingGraph(
 
 	progressMeter.Start("Processing annotated tags: %d")
 	for range tags {
-		obj, data, err := objectIter.Next()
+		obj, ok, err := objectIter.Next()
 		if err != nil {
-			if err != io.EOF {
-				return HistorySize{}, err
-			}
+			return HistorySize{}, err
+		}
+		if !ok {
 			return HistorySize{}, errors.New("fewer tags read than expected")
 		}
 		if obj.ObjectType != "tag" {
 			return HistorySize{}, fmt.Errorf("expected tag; read %#v", obj.ObjectType)
 		}
-		tag, err := git.ParseTag(obj.OID, data)
+		tag, err := git.ParseTag(obj.OID, obj.Data)
 		if err != nil {
 			return HistorySize{}, err
 		}
@@ -369,12 +343,6 @@ func ScanRepositoryUsingGraph(
 	progressMeter.Done()
 
 	err = <-errChan
-	if err != nil {
-		return HistorySize{}, err
-	}
-
-	err = objectIter.Close()
-	objectIter = nil
 	if err != nil {
 		return HistorySize{}, err
 	}

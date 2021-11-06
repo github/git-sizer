@@ -1,11 +1,9 @@
 package sizes
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 
 	"github.com/github/git-sizer/counts"
@@ -78,62 +76,48 @@ func ScanRepositoryUsingGraph(
 		return HistorySize{}, err
 	}
 
-	iter, in, err := repo.NewObjectIter("--stdin", "--date-order")
+	objIter, err := repo.NewObjectIter(context.TODO())
 	if err != nil {
 		return HistorySize{}, err
 	}
-	defer func() {
-		if iter != nil {
-			iter.Close()
-		}
-	}()
 
 	errChan := make(chan error, 1)
 	var refsSeen []refSeen
 	// Feed the references that we want into the stdin of the object
 	// iterator:
 	go func() {
-		defer in.Close()
-		bufin := bufio.NewWriter(in)
-		defer bufin.Flush()
+		defer objIter.Close()
 
-		for {
-			ref, ok, err := refIter.Next()
-			if err != nil {
-				errChan <- err
-				return
-			}
-			if !ok {
-				break
-			}
+		errChan <- func() error {
+			for {
+				ref, ok, err := refIter.Next()
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return nil
+				}
 
-			walk, groups := rg.Categorize(ref.Refname)
+				walk, groups := rg.Categorize(ref.Refname)
 
-			refsSeen = append(
-				refsSeen,
-				refSeen{
-					Reference: ref,
-					walked:    walk,
-					groups:    groups,
-				},
-			)
+				refsSeen = append(
+					refsSeen,
+					refSeen{
+						Reference: ref,
+						walked:    walk,
+						groups:    groups,
+					},
+				)
 
-			if !walk {
-				continue
-			}
+				if !walk {
+					continue
+				}
 
-			_, err = bufin.WriteString(ref.OID.String())
-			if err != nil {
-				errChan <- err
-				return
+				if err := objIter.AddRoot(ref.OID); err != nil {
+					return err
+				}
 			}
-			err = bufin.WriteByte('\n')
-			if err != nil {
-				errChan <- err
-				return
-			}
-		}
-		errChan <- err
+		}()
 	}()
 
 	type ObjectHeader struct {
@@ -192,11 +176,11 @@ func ScanRepositoryUsingGraph(
 
 	progressMeter.Start("Processing blobs: %d")
 	for {
-		obj, err := iter.Next()
+		obj, ok, err := objIter.Next()
 		if err != nil {
-			if err != io.EOF {
-				return HistorySize{}, err
-			}
+			return HistorySize{}, err
+		}
+		if !ok {
 			break
 		}
 		switch obj.ObjectType {
@@ -216,12 +200,6 @@ func ScanRepositoryUsingGraph(
 	progressMeter.Done()
 
 	err = <-errChan
-	if err != nil {
-		return HistorySize{}, err
-	}
-
-	err = iter.Close()
-	iter = nil
 	if err != nil {
 		return HistorySize{}, err
 	}

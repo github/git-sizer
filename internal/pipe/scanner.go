@@ -3,7 +3,6 @@ package pipe
 import (
 	"bufio"
 	"context"
-	"errors"
 	"io"
 )
 
@@ -16,12 +15,6 @@ type Scanner interface {
 	Err() error
 }
 
-// FinishEarly is an error that can be returned by a
-// `LinewiseStageFunc` to request that the iteration be ended early,
-// without an error.
-//nolint:revive
-var FinishEarly = errors.New("finish stage early")
-
 // NewScannerFunc is used to create a `Scanner` for scanning input
 // that is coming from `r`.
 type NewScannerFunc func(r io.Reader) (Scanner, error)
@@ -32,7 +25,7 @@ type NewScannerFunc func(r io.Reader) (Scanner, error)
 func ScannerFunction(
 	name string, newScanner NewScannerFunc, f LinewiseStageFunc,
 ) Stage {
-	stage := Function(
+	return Function(
 		name,
 		func(ctx context.Context, env Env, stdin io.Reader, stdout io.Writer) (theErr error) {
 			scanner, err := newScanner(stdin)
@@ -71,5 +64,4 @@ func ScannerFunction(
 			// `p.AddFunction()` arranges for `stdout` to be closed.
 		},
 	)
-	return IgnoreError(stage, IsError(FinishEarly))
 }

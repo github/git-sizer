@@ -3,6 +3,7 @@ package pipe
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,6 +17,13 @@ type Env struct {
 	// default.
 	Dir string
 }
+
+// FinishEarly is an error that can be returned by a `Stage` to
+// request that the iteration be ended early (possibly without reading
+// all of its input). This "error" is considered a successful return,
+// and is not reported to the caller.
+//nolint:revive
+var FinishEarly = errors.New("finish stage early")
 
 // Pipeline represents a Unix-like pipe that can include multiple
 // stages, including external processes but also and stages written in
@@ -186,12 +194,27 @@ func (p *Pipeline) Wait() error {
 		s := p.stages[i]
 		err := s.Wait()
 
-		// We want to report the error that is most informative. We
-		// take that to be the error from the earliest pipeline stage
-		// that failed of a non-pipe error. If that didn't happen,
-		// take the error from the last pipeline stage that failed due
-		// to a pipe error.
-		if err != nil && (earliestStageErr == nil || !IsPipeError(err)) {
+		// Error handling:
+
+		if err == nil {
+			// No error to handle.
+			continue
+		}
+
+		if err == FinishEarly {
+			// We ignore `FinishEarly` errors because that is how a
+			// stage informs us that it intentionally finished early.
+			continue
+		}
+
+		// If we reach this point, then the stage exited with a
+		// non-ignorable error. But multiple stages might report
+		// errors, and we want to report the one that is most
+		// informative. We take that to be the error from the earliest
+		// pipeline stage that failed from a non-pipe error. If that
+		// didn't happen, take the error from the last pipeline stage
+		// that failed due to a pipe error.
+		if earliestStageErr == nil || !IsPipeError(err) {
 			// Overwrite any existing values here so that we end up
 			// retaining the last error that we see; i.e., the error
 			// that happened earliest in the pipeline.

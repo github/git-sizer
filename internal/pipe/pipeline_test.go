@@ -514,14 +514,12 @@ func TestScannerFinishEarly(t *testing.T) {
 	var length int64
 
 	p := pipe.New()
-	// Print the numbers from 1 to 20 (generated from scratch):
 	p.Add(
-		pipe.IgnoreError(
-			seqFunction(20),
-			pipe.IsPipeError,
-		),
-		// Pass the numbers through up to 7, then exit with an
-		// ignored error:
+		// Print the numbers from 1 to 20 (generated from scratch):
+		seqFunction(20),
+
+		// Pass the numbers through up to 7, then exit with an ignored
+		// error:
 		pipe.LinewiseFunction(
 			"finish-after-7",
 			func(_ context.Context, _ pipe.Env, line []byte, w *bufio.Writer) error {
@@ -532,6 +530,7 @@ func TestScannerFinishEarly(t *testing.T) {
 				return nil
 			},
 		),
+
 		// Read the numbers and add them into the sum:
 		pipe.Function(
 			"compute-length",
@@ -571,6 +570,189 @@ func TestPrintf(t *testing.T) {
 	out, err := p.Output(ctx)
 	if assert.NoError(t, err) {
 		assert.EqualValues(t, "Strangely recursive: *pipe.Pipeline", out)
+	}
+}
+
+func TestErrors(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	err1 := errors.New("error1")
+	err2 := errors.New("error2")
+
+	for _, tc := range []struct {
+		name        string
+		stages      []pipe.Stage
+		expectedErr error
+	}{
+		{
+			name: "no-error",
+			stages: []pipe.Stage{
+				pipe.Function("noop1", genErr(nil)),
+				pipe.Function("noop2", genErr(nil)),
+				pipe.Function("noop3", genErr(nil)),
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "lonely-error",
+			stages: []pipe.Stage{
+				pipe.Function("err1", genErr(err1)),
+			},
+			expectedErr: err1,
+		},
+		{
+			name: "error",
+			stages: []pipe.Stage{
+				pipe.Function("noop1", genErr(nil)),
+				pipe.Function("err1", genErr(err1)),
+				pipe.Function("noop2", genErr(nil)),
+			},
+			expectedErr: err1,
+		},
+		{
+			name: "two-consecutive-errors",
+			stages: []pipe.Stage{
+				pipe.Function("noop1", genErr(nil)),
+				pipe.Function("err1", genErr(err1)),
+				pipe.Function("err2", genErr(err2)),
+				pipe.Function("noop2", genErr(nil)),
+			},
+			expectedErr: err1,
+		},
+		{
+			name: "pipe-then-error",
+			stages: []pipe.Stage{
+				pipe.Function("noop1", genErr(nil)),
+				pipe.Function("pipe-error", genErr(io.ErrClosedPipe)),
+				pipe.Function("err1", genErr(err1)),
+				pipe.Function("noop2", genErr(nil)),
+			},
+			expectedErr: err1,
+		},
+		{
+			name: "error-then-pipe",
+			stages: []pipe.Stage{
+				pipe.Function("noop1", genErr(nil)),
+				pipe.Function("err1", genErr(err1)),
+				pipe.Function("pipe-error", genErr(io.ErrClosedPipe)),
+				pipe.Function("noop2", genErr(nil)),
+			},
+			expectedErr: err1,
+		},
+		{
+			name: "two-spaced-errors",
+			stages: []pipe.Stage{
+				pipe.Function("noop1", genErr(nil)),
+				pipe.Function("err1", genErr(err1)),
+				pipe.Function("noop2", genErr(nil)),
+				pipe.Function("err2", genErr(err2)),
+				pipe.Function("noop3", genErr(nil)),
+			},
+			expectedErr: err1,
+		},
+		{
+			name: "finish-early-ignored",
+			stages: []pipe.Stage{
+				pipe.Function("noop1", genErr(nil)),
+				pipe.Function("finish-early1", genErr(pipe.FinishEarly)),
+				pipe.Function("noop2", genErr(nil)),
+				pipe.Function("finish-early2", genErr(pipe.FinishEarly)),
+				pipe.Function("noop3", genErr(nil)),
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "error-before-finish-early",
+			stages: []pipe.Stage{
+				pipe.Function("err1", genErr(err1)),
+				pipe.Function("finish-early", genErr(pipe.FinishEarly)),
+			},
+			expectedErr: err1,
+		},
+		{
+			name: "error-after-finish-early",
+			stages: []pipe.Stage{
+				pipe.Function("finish-early", genErr(pipe.FinishEarly)),
+				pipe.Function("err1", genErr(err1)),
+			},
+			expectedErr: err1,
+		},
+		{
+			name: "pipe-then-finish-early",
+			stages: []pipe.Stage{
+				pipe.Function("pipe-error", genErr(io.ErrClosedPipe)),
+				pipe.Function("finish-early", genErr(pipe.FinishEarly)),
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "pipe-then-two-finish-early",
+			stages: []pipe.Stage{
+				pipe.Function("pipe-error", genErr(io.ErrClosedPipe)),
+				pipe.Function("finish-early1", genErr(pipe.FinishEarly)),
+				pipe.Function("finish-early2", genErr(pipe.FinishEarly)),
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "two-pipe-then-finish-early",
+			stages: []pipe.Stage{
+				pipe.Function("pipe-error1", genErr(io.ErrClosedPipe)),
+				pipe.Function("pipe-error2", genErr(io.ErrClosedPipe)),
+				pipe.Function("finish-early", genErr(pipe.FinishEarly)),
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "pipe-then-finish-early-with-gap",
+			stages: []pipe.Stage{
+				pipe.Function("pipe-error", genErr(io.ErrClosedPipe)),
+				pipe.Function("noop", genErr(nil)),
+				pipe.Function("finish-early1", genErr(pipe.FinishEarly)),
+			},
+			expectedErr: io.ErrClosedPipe,
+		},
+		{
+			name: "finish-early-then-pipe",
+			stages: []pipe.Stage{
+				pipe.Function("finish-early", genErr(pipe.FinishEarly)),
+				pipe.Function("pipe-error", genErr(io.ErrClosedPipe)),
+			},
+			expectedErr: io.ErrClosedPipe,
+		},
+		{
+			name: "error-then-pipe-then-finish-early",
+			stages: []pipe.Stage{
+				pipe.Function("err1", genErr(err1)),
+				pipe.Function("pipe-error", genErr(io.ErrClosedPipe)),
+				pipe.Function("finish-early", genErr(pipe.FinishEarly)),
+			},
+			expectedErr: err1,
+		},
+		{
+			name: "pipe-then-error-then-finish-early",
+			stages: []pipe.Stage{
+				pipe.Function("pipe-error", genErr(io.ErrClosedPipe)),
+				pipe.Function("err1", genErr(err1)),
+				pipe.Function("finish-early", genErr(pipe.FinishEarly)),
+			},
+			expectedErr: err1,
+		},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			p := pipe.New()
+			p.Add(tc.stages...)
+			err := p.Run(ctx)
+			if tc.expectedErr == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorIs(t, err, tc.expectedErr)
+			}
+		})
 	}
 }
 
@@ -661,4 +843,10 @@ func BenchmarkTenMixedStages(b *testing.B) {
 func catFn(_ context.Context, _ pipe.Env, stdin io.Reader, stdout io.Writer) error {
 	_, err := io.Copy(stdout, stdin)
 	return err
+}
+
+func genErr(err error) pipe.StageFunc {
+	return func(_ context.Context, _ pipe.Env, _ io.Reader, _ io.Writer) error {
+		return err
+	}
 }

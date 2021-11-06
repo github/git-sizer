@@ -190,35 +190,69 @@ func (p *Pipeline) Wait() error {
 	var earliestStageErr error
 	var earliestFailedStage Stage
 
+	finishedEarly := false
 	for i := len(p.stages) - 1; i >= 0; i-- {
 		s := p.stages[i]
 		err := s.Wait()
 
-		// Error handling:
-
-		if err == nil {
-			// No error to handle.
+		// Handle errors:
+		switch {
+		case err == nil:
+			// No error to handle. But unset the `finishedEarly` flag,
+			// because earlier stages shouldn't be affected by the
+			// later stage that finished early.
+			finishedEarly = false
 			continue
-		}
 
-		if err == FinishEarly {
+		case err == FinishEarly:
 			// We ignore `FinishEarly` errors because that is how a
 			// stage informs us that it intentionally finished early.
+			// Moreover, if we see a `FinishEarly` error, ignore any
+			// pipe error from the immediately preceding stage,
+			// because it probably came from trying to write to this
+			// stage after this stage closed its stdin.
+			finishedEarly = true
 			continue
-		}
 
-		// If we reach this point, then the stage exited with a
-		// non-ignorable error. But multiple stages might report
-		// errors, and we want to report the one that is most
-		// informative. We take that to be the error from the earliest
-		// pipeline stage that failed from a non-pipe error. If that
-		// didn't happen, take the error from the last pipeline stage
-		// that failed due to a pipe error.
-		if earliestStageErr == nil || !IsPipeError(err) {
-			// Overwrite any existing values here so that we end up
-			// retaining the last error that we see; i.e., the error
-			// that happened earliest in the pipeline.
+		case IsPipeError(err):
+			switch {
+			case finishedEarly:
+				// A successor stage finished early. It is common for
+				// this to cause earlier stages to fail with pipe
+				// errors. Such errors are uninteresting, so ignore
+				// them. Leave the `finishedEarly` flag set, because
+				// the preceding stage might get a pipe error from
+				// trying to write to this one.
+			case earliestStageErr != nil:
+				// A later stage has already reported an error. This
+				// means that we don't want to report the error from
+				// this stage:
+				//
+				// * If the later error was also a pipe error: we want
+				//   to report the _last_ pipe error seen, which would
+				//   be the one already recorded.
+				//
+				// * If the later error was not a pipe error: non-pipe
+				//   errors are always considered more important than
+				//   pipe errors, so again we would want to keep the
+				//   error that is already recorded.
+			default:
+				// In this case, the pipe error from this stage is the
+				// most important error that we have seen so far, so
+				// remember it:
+				earliestFailedStage, earliestStageErr = s, err
+			}
+
+		default:
+			// This stage exited with a non-pipe error. If multiple
+			// stages exited with such errors, we want to report the
+			// one that is most informative. We take that to be the
+			// error from the earliest failing stage. Since we are
+			// iterating through stages in reverse order, overwrite
+			// any existing remembered errors (which would have come
+			// from a later stage):
 			earliestFailedStage, earliestStageErr = s, err
+			finishedEarly = false
 		}
 	}
 

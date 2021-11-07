@@ -216,7 +216,7 @@ func (repo *TestRepo) AddFile(t *testing.T, relativePath, contents string) {
 	if dirPath != "." {
 		require.NoError(
 			t,
-			os.MkdirAll(filepath.Join(repo.Path, dirPath), 0777),
+			os.MkdirAll(filepath.Join(repo.Path, dirPath), 0o777),
 			"creating subdir",
 		)
 	}

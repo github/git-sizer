@@ -21,7 +21,7 @@ type Env struct {
 // request that the iteration be ended early (possibly without reading
 // all of its input). This "error" is considered a successful return,
 // and is not reported to the caller.
-//nolint:revive
+//nolint:errname
 var FinishEarly = errors.New("finish stage early")
 
 // Pipeline represents a Unix-like pipe that can include multiple

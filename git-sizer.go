@@ -108,6 +108,7 @@ func mainImplementation(args []string) error {
 	var threshold sizes.Threshold = 1
 	var progress bool
 	var version bool
+	var showRefs bool
 
 	// Try to open the repository, but it's not an error yet if this
 	// fails, because the user might only be asking for `--help`.
@@ -178,6 +179,8 @@ func mainImplementation(args []string) error {
 	}
 
 	rgb.AddRefopts(flags)
+
+	flags.BoolVar(&showRefs, "show-refs", false, "list the references being processed")
 
 	flags.SortFlags = false
 
@@ -269,6 +272,11 @@ func mainImplementation(args []string) error {
 	rg, err := rgb.Finish()
 	if err != nil {
 		return err
+	}
+
+	if showRefs {
+		fmt.Fprintf(os.Stderr, "References (included references marked with '+'):\n")
+		rg = refopts.NewShowRefGrouper(rg, os.Stderr)
 	}
 
 	var progressMeter meter.Progress = meter.NoProgressMeter

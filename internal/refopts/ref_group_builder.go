@@ -2,7 +2,6 @@ package refopts
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -21,8 +20,6 @@ type Configger interface {
 type RefGroupBuilder struct {
 	topLevelGroup *refGroup
 	groups        map[sizes.RefGroupSymbol]*refGroup
-
-	ShowRefs bool
 }
 
 // NewRefGroupBuilder creates and returns a `RefGroupBuilder`
@@ -253,8 +250,6 @@ func (rgb *RefGroupBuilder) AddRefopts(flags *pflag.FlagSet) {
 	)
 	flag.Hidden = true
 	flag.Deprecated = "use --include=@REFGROUP"
-
-	flags.BoolVar(&rgb.ShowRefs, "show-refs", false, "list the references being processed")
 }
 
 // Finish collects the information gained from processing the options
@@ -278,11 +273,6 @@ func (rgb *RefGroupBuilder) Finish() (sizes.RefGrouper, error) {
 			Name:   "Ignored",
 		}
 		refGrouper.refGroups = append(refGrouper.refGroups, *refGrouper.ignoredRefGroup)
-	}
-
-	if rgb.ShowRefs {
-		fmt.Fprintf(os.Stderr, "References (included references marked with '+'):\n")
-		return showRefGrouper{&refGrouper, os.Stderr}, nil
 	}
 
 	return &refGrouper, nil

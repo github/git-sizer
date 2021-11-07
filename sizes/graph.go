@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sync"
-	"time"
 
 	"github.com/github/git-sizer/counts"
 	"github.com/github/git-sizer/git"
@@ -66,15 +64,10 @@ type refSeen struct {
 //
 // It returns the size data for the repository.
 func ScanRepositoryUsingGraph(
-	repo *git.Repository, rg RefGrouper, nameStyle NameStyle, progress bool,
+	repo *git.Repository, rg RefGrouper, nameStyle NameStyle,
+	progressMeter meter.Progress,
 ) (HistorySize, error) {
 	graph := NewGraph(rg, nameStyle)
-	var progressMeter meter.Progress
-	if progress {
-		progressMeter = meter.NewProgressMeter(os.Stderr, 100*time.Millisecond)
-	} else {
-		progressMeter = meter.NoProgressMeter
-	}
 
 	refIter, err := repo.NewReferenceIter()
 	if err != nil {

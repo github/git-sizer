@@ -8,12 +8,14 @@ import (
 	"os"
 	"runtime/pprof"
 	"strconv"
+	"time"
 
 	"github.com/spf13/pflag"
 
 	"github.com/github/git-sizer/git"
 	"github.com/github/git-sizer/internal/refopts"
 	"github.com/github/git-sizer/isatty"
+	"github.com/github/git-sizer/meter"
 	"github.com/github/git-sizer/sizes"
 )
 
@@ -269,7 +271,12 @@ func mainImplementation(args []string) error {
 		return err
 	}
 
-	historySize, err := sizes.ScanRepositoryUsingGraph(repo, rg, nameStyle, progress)
+	var progressMeter meter.Progress = meter.NoProgressMeter
+	if progress {
+		progressMeter = meter.NewProgressMeter(os.Stderr, 100*time.Millisecond)
+	}
+
+	historySize, err := sizes.ScanRepositoryUsingGraph(repo, rg, nameStyle, progressMeter)
 	if err != nil {
 		return fmt.Errorf("error scanning repository: %w", err)
 	}

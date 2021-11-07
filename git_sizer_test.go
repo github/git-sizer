@@ -19,6 +19,7 @@ import (
 	"github.com/github/git-sizer/counts"
 	"github.com/github/git-sizer/git"
 	"github.com/github/git-sizer/internal/testutils"
+	"github.com/github/git-sizer/meter"
 	"github.com/github/git-sizer/sizes"
 )
 
@@ -548,7 +549,7 @@ func TestBomb(t *testing.T) {
 
 	h, err := sizes.ScanRepositoryUsingGraph(
 		repo.Repository(t),
-		refGrouper{}, sizes.NameStyleFull, false,
+		refGrouper{}, sizes.NameStyleFull, meter.NoProgressMeter,
 	)
 	require.NoError(t, err)
 
@@ -621,7 +622,7 @@ func TestTaggedTags(t *testing.T) {
 
 	h, err := sizes.ScanRepositoryUsingGraph(
 		repo.Repository(t),
-		refGrouper{}, sizes.NameStyleNone, false,
+		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(3), h.MaxTagDepth, "tag depth")
@@ -643,7 +644,7 @@ func TestFromSubdir(t *testing.T) {
 
 	h, err := sizes.ScanRepositoryUsingGraph(
 		repo.Repository(t),
-		refGrouper{}, sizes.NameStyleNone, false,
+		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.MaxPathDepth, "max path depth")
@@ -696,7 +697,7 @@ func TestSubmodule(t *testing.T) {
 	// Analyze the main repo:
 	h, err := sizes.ScanRepositoryUsingGraph(
 		mainRepo.Repository(t),
-		refGrouper{}, sizes.NameStyleNone, false,
+		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")
@@ -709,7 +710,7 @@ func TestSubmodule(t *testing.T) {
 	}
 	h, err = sizes.ScanRepositoryUsingGraph(
 		submRepo2.Repository(t),
-		refGrouper{}, sizes.NameStyleNone, false,
+		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")

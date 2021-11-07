@@ -93,14 +93,14 @@ var ReleaseVersion string
 var BuildVersion string
 
 func main() {
-	err := mainImplementation(os.Args[1:])
+	err := mainImplementation(os.Stdout, os.Stderr, os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
 	}
 }
 
-func mainImplementation(args []string) error {
+func mainImplementation(stdout, stderr io.Writer, args []string) error {
 	var nameStyle sizes.NameStyle = sizes.NameStyleFull
 	var cpuprofile string
 	var jsonOutput bool
@@ -116,7 +116,7 @@ func mainImplementation(args []string) error {
 
 	flags := pflag.NewFlagSet("git-sizer", pflag.ContinueOnError)
 	flags.Usage = func() {
-		fmt.Print(usage)
+		fmt.Fprint(stdout, usage)
 	}
 
 	flags.VarP(
@@ -154,11 +154,15 @@ func mainImplementation(args []string) error {
 	flags.BoolVarP(&jsonOutput, "json", "j", false, "output results in JSON format")
 	flags.IntVar(&jsonVersion, "json-version", 1, "JSON format version to output (1 or 2)")
 
-	atty, err := isatty.Isatty(os.Stderr.Fd())
-	if err != nil {
-		atty = false
+	defaultProgress := false
+	if f, ok := stderr.(*os.File); ok {
+		atty, err := isatty.Isatty(f.Fd())
+		if err == nil && atty {
+			defaultProgress = true
+		}
 	}
-	flags.BoolVar(&progress, "progress", atty, "report progress to stderr")
+
+	flags.BoolVar(&progress, "progress", defaultProgress, "report progress to stderr")
 	flags.BoolVar(&version, "version", false, "report the git-sizer version number")
 	flags.Var(&NegatedBoolValue{&progress}, "no-progress", "suppress progress output")
 	flags.Lookup("no-progress").NoOptDefVal = "true"
@@ -205,9 +209,9 @@ func mainImplementation(args []string) error {
 
 	if version {
 		if ReleaseVersion != "" {
-			fmt.Printf("git-sizer release %s\n", ReleaseVersion)
+			fmt.Fprintf(stdout, "git-sizer release %s\n", ReleaseVersion)
 		} else {
-			fmt.Printf("git-sizer build %s\n", BuildVersion)
+			fmt.Fprintf(stdout, "git-sizer build %s\n", BuildVersion)
 		}
 		return nil
 	}
@@ -275,13 +279,13 @@ func mainImplementation(args []string) error {
 	}
 
 	if showRefs {
-		fmt.Fprintf(os.Stderr, "References (included references marked with '+'):\n")
-		rg = refopts.NewShowRefGrouper(rg, os.Stderr)
+		fmt.Fprintf(stderr, "References (included references marked with '+'):\n")
+		rg = refopts.NewShowRefGrouper(rg, stderr)
 	}
 
 	var progressMeter meter.Progress = meter.NoProgressMeter
 	if progress {
-		progressMeter = meter.NewProgressMeter(os.Stderr, 100*time.Millisecond)
+		progressMeter = meter.NewProgressMeter(stderr, 100*time.Millisecond)
 	}
 
 	historySize, err := sizes.ScanRepositoryUsingGraph(repo, rg, nameStyle, progressMeter)
@@ -303,11 +307,10 @@ func mainImplementation(args []string) error {
 		if err != nil {
 			return fmt.Errorf("could not convert %v to json: %w", historySize, err)
 		}
-		fmt.Printf("%s\n", j)
+		fmt.Fprintf(stdout, "%s\n", j)
 	} else {
 		if _, err := io.WriteString(
-			os.Stdout,
-			historySize.TableString(rg.Groups(), threshold, nameStyle),
+			stdout, historySize.TableString(rg.Groups(), threshold, nameStyle),
 		); err != nil {
 			return fmt.Errorf("writing output: %w", err)
 		}

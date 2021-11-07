@@ -109,7 +109,7 @@ func TestPipelineReadFromSlowly(t *testing.T) {
 	go func() {
 		time.Sleep(200 * time.Millisecond)
 		var err error
-		buf, err = ioutil.ReadAll(r)
+		buf, err = io.ReadAll(r)
 		readErr <- err
 	}()
 
@@ -361,7 +361,7 @@ func TestFunction(t *testing.T) {
 		pipe.Function(
 			"farewell",
 			func(_ context.Context, _ pipe.Env, stdin io.Reader, stdout io.Writer) error {
-				buf, err := ioutil.ReadAll(stdin)
+				buf, err := io.ReadAll(stdin)
 				if err != nil {
 					return err
 				}
@@ -389,7 +389,7 @@ func TestPipelineWithFunction(t *testing.T) {
 		pipe.Function(
 			"farewell",
 			func(_ context.Context, _ pipe.Env, stdin io.Reader, stdout io.Writer) error {
-				buf, err := ioutil.ReadAll(stdin)
+				buf, err := io.ReadAll(stdin)
 				if err != nil {
 					return err
 				}
@@ -419,7 +419,7 @@ func (s ErrorStartingStage) Name() string {
 func (s ErrorStartingStage) Start(
 	ctx context.Context, env pipe.Env, stdin io.ReadCloser,
 ) (io.ReadCloser, error) {
-	return ioutil.NopCloser(&bytes.Buffer{}), s.err
+	return io.NopCloser(&bytes.Buffer{}), s.err
 }
 
 func (s ErrorStartingStage) Wait() error {
@@ -525,7 +525,7 @@ func TestScannerAlwaysFlushes(t *testing.T) {
 			"compute-length",
 			func(_ context.Context, _ pipe.Env, stdin io.Reader, _ io.Writer) error {
 				var err error
-				length, err = io.Copy(ioutil.Discard, stdin)
+				length, err = io.Copy(io.Discard, stdin)
 				return err
 			},
 		),
@@ -567,7 +567,7 @@ func TestScannerFinishEarly(t *testing.T) {
 			"compute-length",
 			func(_ context.Context, _ pipe.Env, stdin io.Reader, _ io.Writer) error {
 				var err error
-				length, err = io.Copy(ioutil.Discard, stdin)
+				length, err = io.Copy(io.Discard, stdin)
 				return err
 			},
 		),

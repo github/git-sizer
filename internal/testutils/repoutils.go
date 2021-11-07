@@ -196,7 +196,7 @@ func (repo *TestRepo) CreateObject(
 		t.FailNow()
 	}
 
-	output, err := ioutil.ReadAll(out)
+	output, err := io.ReadAll(out)
 	err2 = cmd.Wait()
 	require.NoError(t, err)
 	require.NoError(t, err2)

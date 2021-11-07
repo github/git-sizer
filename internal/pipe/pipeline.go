@@ -204,7 +204,7 @@ func (p *Pipeline) Wait() error {
 			finishedEarly = false
 			continue
 
-		case err == FinishEarly:
+		case errors.Is(err, FinishEarly):
 			// We ignore `FinishEarly` errors because that is how a
 			// stage informs us that it intentionally finished early.
 			// Moreover, if we see a `FinishEarly` error, ignore any

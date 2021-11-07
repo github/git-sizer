@@ -190,7 +190,7 @@ func mainImplementation(stdout, stderr io.Writer, args []string) error {
 
 	err = flags.Parse(args)
 	if err != nil {
-		if err == pflag.ErrHelp {
+		if errors.Is(err, pflag.ErrHelp) {
 			return nil
 		}
 		return err

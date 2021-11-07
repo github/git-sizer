@@ -87,7 +87,10 @@ func IsError(target error) ErrorMatcher {
 
 // IsSIGPIPE returns an `ErrorMatcher` that matches `*exec.ExitError`s
 // that were caused by the specified signal. The match for
-// `*exec.ExitError`s uses `errors.As()`.
+// `*exec.ExitError`s uses `errors.As()`. Note that under Windows this
+// always returns false, because on that platform
+// `WaitStatus.Signaled()` isn't implemented (it is hardcoded to
+// return `false`).
 func IsSignal(signal syscall.Signal) ErrorMatcher {
 	return func(err error) bool {
 		var eErr *exec.ExitError

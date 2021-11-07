@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"sync/atomic"
 	"syscall"
-	"time"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -98,11 +97,8 @@ func (s *commandStage) Start(
 		})
 	}
 
-	// Put the command in its own process group:
-	if s.cmd.SysProcAttr == nil {
-		s.cmd.SysProcAttr = &syscall.SysProcAttr{}
-	}
-	s.cmd.SysProcAttr.Setpgid = true
+	// Put the command in its own process group, if possible:
+	s.runInOwnProcessGroup()
 
 	if err := s.cmd.Start(); err != nil {
 		return nil, err
@@ -122,53 +118,6 @@ func (s *commandStage) Start(
 	return stdout, nil
 }
 
-// kill is called to kill the process if the context expires. `err` is
-// the corresponding value of `Context.Err()`.
-func (s *commandStage) kill(err error) {
-	// I believe that the calls to `syscall.Kill()` in this method are
-	// racy. It could be that s.cmd.Wait() succeeds immediately before
-	// this call, in which case the process group wouldn't exist
-	// anymore. But I don't see any way to avoid this without
-	// duplicating a lot of code from `exec.Cmd`. (`os.Cmd.Kill()` and
-	// `os.Cmd.Signal()` appear to be race-free, but only because they
-	// use internal synchronization. But those methods only kill the
-	// process, not the process group, so they are not suitable here.
-
-	// We started the process with PGID == PID:
-	pid := s.cmd.Process.Pid
-	select {
-	case <-s.done:
-		// Process has ended; no need to kill it again.
-		return
-	default:
-	}
-
-	// Record the `ctx.Err()`, which will be used as the error result
-	// for this stage.
-	s.ctxErr.Store(err)
-
-	// First try to kill using a relatively gentle signal so that
-	// the processes have a chance to clean up after themselves:
-	_ = syscall.Kill(-pid, syscall.SIGTERM)
-
-	// Well-behaved processes should commit suicide after the above,
-	// but if they don't exit within 2s, murder the whole lot of them:
-	go func() {
-		// Use an explicit `time.Timer` rather than `time.After()` so
-		// that we can stop it (freeing resources) promptly if the
-		// command exits before the timer triggers.
-		timer := time.NewTimer(2 * time.Second)
-		defer timer.Stop()
-
-		select {
-		case <-s.done:
-			// Process has ended; no need to kill it again.
-		case <-timer.C:
-			_ = syscall.Kill(-pid, syscall.SIGKILL)
-		}
-	}()
-}
-
 // filterCmdError interprets `err`, which was returned by `Cmd.Wait()`
 // (possibly `nil`), possibly modifying it or ignoring it. It returns
 // the error that should actually be returned to the caller (possibly
@@ -186,7 +135,10 @@ func (s *commandStage) filterCmdError(err error) error {
 	ctxErr, ok := s.ctxErr.Load().(error)
 	if ok {
 		// If the process looks like it was killed by us, substitute
-		// `ctxErr` for the process's own exit error.
+		// `ctxErr` for the process's own exit error. Note that this
+		// doesn't do anything on Windows, where the `Signaled()`
+		// method isn't implemented (it is hardcoded to return
+		// `false`).
 		ps, ok := eErr.ProcessState.Sys().(syscall.WaitStatus)
 		if ok && ps.Signaled() &&
 			(ps.Signal() == syscall.SIGTERM || ps.Signal() == syscall.SIGKILL) {

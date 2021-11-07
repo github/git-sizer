@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -70,7 +71,7 @@ func ScanRepositoryUsingGraph(
 	graph := NewGraph(rg, nameStyle)
 	var progressMeter meter.Progress
 	if progress {
-		progressMeter = meter.NewProgressMeter(100 * time.Millisecond)
+		progressMeter = meter.NewProgressMeter(os.Stderr, 100*time.Millisecond)
 	} else {
 		progressMeter = meter.NoProgressMeter
 	}

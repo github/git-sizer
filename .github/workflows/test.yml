@@ -4,7 +4,7 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Setup go
@@ -19,13 +19,16 @@ jobs:
         run: git fetch --prune --unshallow --tags
 
       - name: Download dependencies
+        shell: bash
         run: go mod download
 
       - name: Build
+        shell: bash
         run: |
           mkdir -p bin
           go build -o bin .
           ls -la bin
 
       - name: Test
+        shell: bash
         run: go test -race -timeout 60s ./...

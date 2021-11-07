@@ -27,10 +27,12 @@ import (
 func sizerExe(t *testing.T) string {
 	t.Helper()
 
-	v := "bin/git-sizer"
+	var v string
 	switch runtime.GOOS {
 	case "windows":
 		v = `bin\git-sizer.exe`
+	default:
+		v = "bin/git-sizer"
 	}
 
 	v, err := exec.LookPath(v)

@@ -105,9 +105,11 @@ func (p *progressMeter) Done() {
 
 // NoProgressMeter is a `Progress` that doesn't actually report
 // anything.
-type NoProgressMeter struct{}
+var NoProgressMeter noProgressMeter
 
-func (p *NoProgressMeter) Start(string) {}
-func (p *NoProgressMeter) Inc()         {}
-func (p *NoProgressMeter) Add(int64)    {}
-func (p *NoProgressMeter) Done()        {}
+type noProgressMeter struct{}
+
+func (p noProgressMeter) Start(string) {}
+func (p noProgressMeter) Inc()         {}
+func (p noProgressMeter) Add(int64)    {}
+func (p noProgressMeter) Done()        {}

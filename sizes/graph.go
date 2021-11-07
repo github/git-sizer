@@ -72,7 +72,7 @@ func ScanRepositoryUsingGraph(
 	if progress {
 		progressMeter = meter.NewProgressMeter(100 * time.Millisecond)
 	} else {
-		progressMeter = &meter.NoProgressMeter{}
+		progressMeter = meter.NoProgressMeter
 	}
 
 	refIter, err := repo.NewReferenceIter()

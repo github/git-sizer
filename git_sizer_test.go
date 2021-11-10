@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -22,9 +23,27 @@ import (
 	"github.com/github/git-sizer/sizes"
 )
 
+func sizerExe(t *testing.T) string {
+	t.Helper()
+
+	v := "bin/git-sizer"
+	switch runtime.GOOS {
+	case "windows":
+		v = `bin\git-sizer.exe`
+	}
+
+	v, err := exec.LookPath(v)
+	require.NoError(t, err)
+
+	v, err = filepath.Abs(v)
+	require.NoError(t, err)
+
+	return v
+}
+
 // Smoke test that the program runs.
 func TestExec(t *testing.T) {
-	cmd := exec.Command("bin/git-sizer")
+	cmd := exec.Command(sizerExe(t))
 	output, err := cmd.CombinedOutput()
 	assert.NoErrorf(t, err, "command failed; output: %#v", string(output))
 }
@@ -133,10 +152,7 @@ func TestRefSelections(t *testing.T) {
 		repo.CreateReferencedOrphan(t, p.refname)
 	}
 
-	executable, err := exec.LookPath("bin/git-sizer")
-	require.NoError(t, err)
-	executable, err = filepath.Abs(executable)
-	require.NoError(t, err)
+	executable := sizerExe(t)
 
 	for i, p := range []struct {
 		name   string
@@ -316,10 +332,7 @@ func TestRefgroups(t *testing.T) {
 		repo.CreateReferencedOrphan(t, refname)
 	}
 
-	executable, err := exec.LookPath("bin/git-sizer")
-	require.NoError(t, err)
-	executable, err = filepath.Abs(executable)
-	require.NoError(t, err)
+	executable := sizerExe(t)
 
 	for _, p := range []struct {
 		name   string

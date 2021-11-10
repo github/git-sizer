@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -184,10 +185,6 @@ func TestPipelineTwoCommandsPiping(t *testing.T) {
 }
 
 func TestPipelineDir(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("FIXME: test skipped on Windows: 'pwd' incompatibility")
-	}
-
 	t.Parallel()
 	ctx := context.Background()
 
@@ -198,11 +195,16 @@ func TestPipelineDir(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	p := pipe.New(pipe.WithDir(dir))
-	p.Add(pipe.Command("pwd"))
+	switch runtime.GOOS {
+	case "windows":
+		p.Add(pipe.Command("bash", "-c", "pwd -W"))
+	default:
+		p.Add(pipe.Command("pwd"))
+	}
 
 	out, err := p.Output(ctx)
 	if assert.NoError(t, err) {
-		assert.Equal(t, dir, strings.TrimSuffix(string(out), "\n"))
+		assert.Equal(t, filepath.Clean(dir), filepath.Clean(strings.TrimSuffix(string(out), "\n")))
 	}
 }
 

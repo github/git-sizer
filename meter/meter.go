@@ -2,7 +2,7 @@ package meter
 
 import (
 	"fmt"
-	"os"
+	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,9 +30,10 @@ type Progress interface {
 var Spinners = []string{"|", "(", "<", "-", "<", "(", "|", ")", ">", "-", ">", ")"}
 
 // progressMeter is a `Progress` that reports the current state every
-// `period`.
+// `period` to an `io.Writer`.
 type progressMeter struct {
 	lock           sync.Mutex
+	w              io.Writer
 	format         string
 	period         time.Duration
 	lastShownCount int64
@@ -48,8 +49,9 @@ type progressMeter struct {
 // NewProgressMeter returns a progress meter that can be used to show
 // progress to a TTY periodically, including an increasing int64
 // value.
-func NewProgressMeter(period time.Duration) Progress {
+func NewProgressMeter(w io.Writer, period time.Duration) Progress {
 	return &progressMeter{
+		w:      w,
 		period: period,
 	}
 }
@@ -81,7 +83,7 @@ func (p *progressMeter) Start(format string) {
 			} else {
 				s = ""
 			}
-			fmt.Fprintf(os.Stderr, p.format, c, s, "\r")
+			fmt.Fprintf(p.w, p.format, c, s, "\r")
 			p.lock.Unlock()
 		}
 	}()
@@ -100,14 +102,16 @@ func (p *progressMeter) Done() {
 	defer p.lock.Unlock()
 	p.ticker = nil
 	c := atomic.LoadInt64(&p.count)
-	fmt.Fprintf(os.Stderr, p.format, c, " ", "\n")
+	fmt.Fprintf(p.w, p.format, c, " ", "\n")
 }
 
 // NoProgressMeter is a `Progress` that doesn't actually report
 // anything.
-type NoProgressMeter struct{}
+var NoProgressMeter noProgressMeter
 
-func (p *NoProgressMeter) Start(string) {}
-func (p *NoProgressMeter) Inc()         {}
-func (p *NoProgressMeter) Add(int64)    {}
-func (p *NoProgressMeter) Done()        {}
+type noProgressMeter struct{}
+
+func (p noProgressMeter) Start(string) {}
+func (p noProgressMeter) Inc()         {}
+func (p noProgressMeter) Add(int64)    {}
+func (p noProgressMeter) Done()        {}

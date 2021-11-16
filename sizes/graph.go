@@ -1,10 +1,9 @@
 package sizes
 
 import (
-	"bufio"
+	"context"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 
 	"github.com/github/git-sizer/counts"
@@ -67,76 +66,58 @@ func ScanRepositoryUsingGraph(
 	repo *git.Repository, rg RefGrouper, nameStyle NameStyle,
 	progressMeter meter.Progress,
 ) (HistorySize, error) {
+	ctx, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+
 	graph := NewGraph(rg, nameStyle)
 
-	refIter, err := repo.NewReferenceIter()
+	refIter, err := repo.NewReferenceIter(ctx)
 	if err != nil {
 		return HistorySize{}, err
 	}
-	defer func() {
-		if refIter != nil {
-			refIter.Close()
-		}
-	}()
 
-	iter, in, err := repo.NewObjectIter("--stdin", "--date-order")
+	objIter, err := repo.NewObjectIter(context.TODO())
 	if err != nil {
 		return HistorySize{}, err
 	}
-	defer func() {
-		if iter != nil {
-			iter.Close()
-		}
-	}()
 
 	errChan := make(chan error, 1)
 	var refsSeen []refSeen
 	// Feed the references that we want into the stdin of the object
 	// iterator:
 	go func() {
-		defer in.Close()
-		bufin := bufio.NewWriter(in)
-		defer bufin.Flush()
+		defer objIter.Close()
 
-		for {
-			ref, ok, err := refIter.Next()
-			if err != nil {
-				errChan <- err
-				return
-			}
-			if !ok {
-				break
-			}
+		errChan <- func() error {
+			for {
+				ref, ok, err := refIter.Next()
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return nil
+				}
 
-			walk, groups := rg.Categorize(ref.Refname)
+				walk, groups := rg.Categorize(ref.Refname)
 
-			refsSeen = append(
-				refsSeen,
-				refSeen{
-					Reference: ref,
-					walked:    walk,
-					groups:    groups,
-				},
-			)
+				refsSeen = append(
+					refsSeen,
+					refSeen{
+						Reference: ref,
+						walked:    walk,
+						groups:    groups,
+					},
+				)
 
-			if !walk {
-				continue
-			}
+				if !walk {
+					continue
+				}
 
-			_, err = bufin.WriteString(ref.OID.String())
-			if err != nil {
-				errChan <- err
-				return
+				if err := objIter.AddRoot(ref.OID); err != nil {
+					return err
+				}
 			}
-			err = bufin.WriteByte('\n')
-			if err != nil {
-				errChan <- err
-				return
-			}
-		}
-		err := refIter.Close()
-		refIter = nil
-		errChan <- err
+		}()
 	}()
 
 	type ObjectHeader struct {
@@ -195,25 +176,25 @@ func ScanRepositoryUsingGraph(
 
 	progressMeter.Start("Processing blobs: %d")
 	for {
-		oid, objectType, objectSize, err := iter.Next()
+		obj, ok, err := objIter.Next()
 		if err != nil {
-			if err != io.EOF {
-				return HistorySize{}, err
-			}
+			return HistorySize{}, err
+		}
+		if !ok {
 			break
 		}
-		switch objectType {
+		switch obj.ObjectType {
 		case "blob":
 			progressMeter.Inc()
-			graph.RegisterBlob(oid, objectSize)
+			graph.RegisterBlob(obj.OID, obj.ObjectSize)
 		case "tree":
-			trees = append(trees, ObjectHeader{oid, objectSize})
+			trees = append(trees, ObjectHeader{obj.OID, obj.ObjectSize})
 		case "commit":
-			commits = append(commits, CommitHeader{ObjectHeader{oid, objectSize}, git.NullOID})
+			commits = append(commits, CommitHeader{ObjectHeader{obj.OID, obj.ObjectSize}, git.NullOID})
 		case "tag":
-			tags = append(tags, ObjectHeader{oid, objectSize})
+			tags = append(tags, ObjectHeader{obj.OID, obj.ObjectSize})
 		default:
-			return HistorySize{}, fmt.Errorf("unexpected object type: %s", objectType)
+			return HistorySize{}, fmt.Errorf("unexpected object type: %s", obj.ObjectType)
 		}
 	}
 	progressMeter.Done()
@@ -223,88 +204,56 @@ func ScanRepositoryUsingGraph(
 		return HistorySize{}, err
 	}
 
-	err = iter.Close()
-	iter = nil
+	objectIter, err := repo.NewBatchObjectIter(ctx)
 	if err != nil {
 		return HistorySize{}, err
 	}
-
-	objectIter, objectIn, err := repo.NewBatchObjectIter()
-	if err != nil {
-		return HistorySize{}, err
-	}
-	defer func() {
-		if objectIter != nil {
-			objectIter.Close()
-		}
-	}()
 
 	go func() {
-		defer objectIn.Close()
-		bufin := bufio.NewWriter(objectIn)
-		defer bufin.Flush()
+		defer objectIter.Close()
 
-		for _, obj := range trees {
-			_, err := bufin.WriteString(obj.oid.String())
-			if err != nil {
-				errChan <- err
-				return
+		errChan <- func() error {
+			for _, obj := range trees {
+				if err := objectIter.RequestObject(obj.oid); err != nil {
+					return fmt.Errorf("requesting tree '%s': %w", obj.oid, err)
+				}
 			}
-			err = bufin.WriteByte('\n')
-			if err != nil {
-				errChan <- err
-				return
-			}
-		}
 
-		for i := len(commits); i > 0; i-- {
-			obj := commits[i-1]
-			_, err := bufin.WriteString(obj.oid.String())
-			if err != nil {
-				errChan <- err
-				return
+			for i := len(commits); i > 0; i-- {
+				obj := commits[i-1]
+				if err := objectIter.RequestObject(obj.oid); err != nil {
+					return fmt.Errorf("requesting commit '%s': %w", obj.oid, err)
+				}
 			}
-			err = bufin.WriteByte('\n')
-			if err != nil {
-				errChan <- err
-				return
-			}
-		}
 
-		for _, obj := range tags {
-			_, err := bufin.WriteString(obj.oid.String())
-			if err != nil {
-				errChan <- err
-				return
+			for _, obj := range tags {
+				if err := objectIter.RequestObject(obj.oid); err != nil {
+					return fmt.Errorf("requesting tag '%s': %w", obj.oid, err)
+				}
 			}
-			err = bufin.WriteByte('\n')
-			if err != nil {
-				errChan <- err
-				return
-			}
-		}
 
-		errChan <- nil
+			return nil
+		}()
 	}()
 
 	progressMeter.Start("Processing trees: %d")
 	for range trees {
-		oid, objectType, _, data, err := objectIter.Next()
-		if err != nil {
-			if err != io.EOF {
-				return HistorySize{}, err
-			}
-			return HistorySize{}, errors.New("fewer trees read than expected")
-		}
-		if objectType != "tree" {
-			return HistorySize{}, fmt.Errorf("expected tree; read %#v", objectType)
-		}
-		progressMeter.Inc()
-		tree, err := git.ParseTree(oid, data)
+		obj, ok, err := objectIter.Next()
 		if err != nil {
 			return HistorySize{}, err
 		}
-		err = graph.RegisterTree(oid, tree)
+		if !ok {
+			return HistorySize{}, errors.New("fewer trees read than expected")
+		}
+		if obj.ObjectType != "tree" {
+			return HistorySize{}, fmt.Errorf("expected tree; read %#v", obj.ObjectType)
+		}
+		progressMeter.Inc()
+		tree, err := git.ParseTree(obj.OID, obj.Data)
+		if err != nil {
+			return HistorySize{}, err
+		}
+		err = graph.RegisterTree(obj.OID, tree)
 		if err != nil {
 			return HistorySize{}, err
 		}
@@ -316,26 +265,26 @@ func ScanRepositoryUsingGraph(
 	// time:
 	progressMeter.Start("Processing commits: %d")
 	for i := len(commits); i > 0; i-- {
-		oid, objectType, _, data, err := objectIter.Next()
-		if err != nil {
-			if err != io.EOF {
-				return HistorySize{}, err
-			}
-			return HistorySize{}, errors.New("fewer commits read than expected")
-		}
-		if objectType != "commit" {
-			return HistorySize{}, fmt.Errorf("expected commit; read %#v", objectType)
-		}
-		commit, err := git.ParseCommit(oid, data)
+		obj, ok, err := objectIter.Next()
 		if err != nil {
 			return HistorySize{}, err
 		}
-		if oid != commits[i-1].oid {
+		if !ok {
+			return HistorySize{}, errors.New("fewer commits read than expected")
+		}
+		if obj.ObjectType != "commit" {
+			return HistorySize{}, fmt.Errorf("expected commit; read %#v", obj.ObjectType)
+		}
+		commit, err := git.ParseCommit(obj.OID, obj.Data)
+		if err != nil {
+			return HistorySize{}, err
+		}
+		if obj.OID != commits[i-1].oid {
 			panic("commits not read in same order as requested")
 		}
 		commits[i-1].tree = commit.Tree
 		progressMeter.Inc()
-		graph.RegisterCommit(oid, commit)
+		graph.RegisterCommit(obj.OID, commit)
 	}
 	progressMeter.Done()
 
@@ -352,32 +301,26 @@ func ScanRepositoryUsingGraph(
 
 	progressMeter.Start("Processing annotated tags: %d")
 	for range tags {
-		oid, objectType, _, data, err := objectIter.Next()
+		obj, ok, err := objectIter.Next()
 		if err != nil {
-			if err != io.EOF {
-				return HistorySize{}, err
-			}
+			return HistorySize{}, err
+		}
+		if !ok {
 			return HistorySize{}, errors.New("fewer tags read than expected")
 		}
-		if objectType != "tag" {
-			return HistorySize{}, fmt.Errorf("expected tag; read %#v", objectType)
+		if obj.ObjectType != "tag" {
+			return HistorySize{}, fmt.Errorf("expected tag; read %#v", obj.ObjectType)
 		}
-		tag, err := git.ParseTag(oid, data)
+		tag, err := git.ParseTag(obj.OID, obj.Data)
 		if err != nil {
 			return HistorySize{}, err
 		}
 		progressMeter.Inc()
-		graph.RegisterTag(oid, tag)
+		graph.RegisterTag(obj.OID, tag)
 	}
 	progressMeter.Done()
 
 	err = <-errChan
-	if err != nil {
-		return HistorySize{}, err
-	}
-
-	err = objectIter.Close()
-	objectIter = nil
 	if err != nil {
 		return HistorySize{}, err
 	}

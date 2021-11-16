@@ -22,7 +22,7 @@ type ObjectIter struct {
 // `repo`. The arguments are passed to `git rev-list --objects`. The
 // second return value is the stdin of the `rev-list` command. The
 // caller can feed values into it but must close it in any case.
-func (repo *Repository) NewObjectIter(ctx context.Context, args ...string) (*ObjectIter, error) {
+func (repo *Repository) NewObjectIter(ctx context.Context) (*ObjectIter, error) {
 	iter := ObjectIter{
 		ctx:      ctx,
 		p:        pipe.New(),

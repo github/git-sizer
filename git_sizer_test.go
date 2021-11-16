@@ -27,10 +27,12 @@ import (
 func sizerExe(t *testing.T) string {
 	t.Helper()
 
-	v := "bin/git-sizer"
+	var v string
 	switch runtime.GOOS {
 	case "windows":
 		v = `bin\git-sizer.exe`
+	default:
+		v = "bin/git-sizer"
 	}
 
 	v, err := exec.LookPath(v)
@@ -238,19 +240,19 @@ func TestRefSelections(t *testing.T) {
 			name: "branches-refgroup",
 			args: []string{"--include=@mygroup"},
 			config: []git.ConfigEntry{
-				{"refgroup.mygroup.include", "refs/heads"},
+				{Key: "refgroup.mygroup.include", Value: "refs/heads"},
 			},
 		},
 		{ // 18
 			name: "combination-refgroup",
 			args: []string{"--include=@mygroup"},
 			config: []git.ConfigEntry{
-				{"refgroup.mygroup.include", "refs/heads"},
-				{"refgroup.mygroup.include", "refs/tags"},
-				{"refgroup.mygroup.exclude", "refs/heads/foo"},
-				{"refgroup.mygroup.includeRegexp", ".*foo.*"},
-				{"refgroup.mygroup.exclude", "refs/foo"},
-				{"refgroup.mygroup.excludeRegexp", "refs/tags/release-.*"},
+				{Key: "refgroup.mygroup.include", Value: "refs/heads"},
+				{Key: "refgroup.mygroup.include", Value: "refs/tags"},
+				{Key: "refgroup.mygroup.exclude", Value: "refs/heads/foo"},
+				{Key: "refgroup.mygroup.includeRegexp", Value: ".*foo.*"},
+				{Key: "refgroup.mygroup.exclude", Value: "refs/foo"},
+				{Key: "refgroup.mygroup.excludeRegexp", Value: "refs/tags/release-.*"},
 			},
 		},
 	} {
@@ -387,14 +389,14 @@ References (included references marked with '+'):
 			config: []git.ConfigEntry{
 				// Note that refgroup "misc" is defined implicitly.
 
-				{"refgroup.misc.foo.includeRegexp", ".*foo.*"},
+				{Key: "refgroup.misc.foo.includeRegexp", Value: ".*foo.*"},
 
-				{"refgroup.misc.foo.oatend.includeRegexp", ".*o"},
+				{Key: "refgroup.misc.foo.oatend.includeRegexp", Value: ".*o"},
 
-				{"refgroup.misc.foo.bogus.include", "bogus"},
+				{Key: "refgroup.misc.foo.bogus.include", Value: "bogus"},
 
-				{"refgroup.tags.releases.name", "Releases"},
-				{"refgroup.tags.releases.includeRegexp", "refs/tags/release-.*"},
+				{Key: "refgroup.tags.releases.name", Value: "Releases"},
+				{Key: "refgroup.tags.releases.includeRegexp", Value: "refs/tags/release-.*"},
 			},
 			stdout: `
 | * References                 |           |                                |
@@ -420,10 +422,10 @@ References (included references marked with '+'):
 			name: "include-refgroups",
 			args: []string{"--include=@branches", "--include=@tags.releases", "--include=@oatend"},
 			config: []git.ConfigEntry{
-				{"refgroup.oatend.includeRegexp", ".*o"},
+				{Key: "refgroup.oatend.includeRegexp", Value: ".*o"},
 
-				{"refgroup.tags.releases.name", "Releases"},
-				{"refgroup.tags.releases.includeRegexp", "refs/tags/release-.*"},
+				{Key: "refgroup.tags.releases.name", Value: "Releases"},
+				{Key: "refgroup.tags.releases.includeRegexp", Value: "refs/tags/release-.*"},
 			},
 			stdout: `
 | * References                 |           |                                |

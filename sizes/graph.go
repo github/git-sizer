@@ -571,7 +571,7 @@ func (r *treeRecord) initialize(g *Graph, oid git.OID, tree *git.Tree) error {
 		name := entry.Name
 
 		switch {
-		case entry.Filemode&0170000 == 0040000:
+		case entry.Filemode&0o170000 == 0o40000:
 			// Tree
 			listener := func(size TreeSize) {
 				// This listener is called when the tree pointed to by
@@ -595,12 +595,12 @@ func (r *treeRecord) initialize(g *Graph, oid git.OID, tree *git.Tree) error {
 			}
 			r.entryCount.Increment(1)
 
-		case entry.Filemode&0170000 == 0160000:
+		case entry.Filemode&0o170000 == 0o160000:
 			// Commit (i.e., submodule)
 			r.size.addSubmodule(name)
 			r.entryCount.Increment(1)
 
-		case entry.Filemode&0170000 == 0120000:
+		case entry.Filemode&0o170000 == 0o120000:
 			// Symlink
 			g.pathResolver.RecordTreeEntry(oid, name, entry.OID)
 

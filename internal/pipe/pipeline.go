@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"sync/atomic"
 )
 
@@ -22,7 +21,7 @@ type Env struct {
 // request that the iteration be ended early (possibly without reading
 // all of its input). This "error" is considered a successful return,
 // and is not reported to the caller.
-//nolint:revive
+//nolint:errname
 var FinishEarly = errors.New("finish stage early")
 
 // Pipeline represents a Unix-like pipe that can include multiple
@@ -134,7 +133,7 @@ func (p *Pipeline) Start(ctx context.Context) error {
 	if p.stdin != nil {
 		// We don't want the first stage to actually close this, and
 		// it's not even an `io.ReadCloser`, so fake it:
-		nextStdin = ioutil.NopCloser(p.stdin)
+		nextStdin = io.NopCloser(p.stdin)
 	}
 
 	for i, s := range p.stages {
@@ -204,7 +203,7 @@ func (p *Pipeline) Wait() error {
 			finishedEarly = false
 			continue
 
-		case err == FinishEarly:
+		case errors.Is(err, FinishEarly):
 			// We ignore `FinishEarly` errors because that is how a
 			// stage informs us that it intentionally finished early.
 			// Moreover, if we see a `FinishEarly` error, ignore any

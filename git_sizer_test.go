@@ -701,7 +701,7 @@ func TestSubmodule(t *testing.T) {
 	require.NoError(t, cmd.Run(), "creating main commit")
 
 	// Make subm a submodule of main:
-	cmd = mainRepo.GitCommand(t, "submodule", "add", submRepo.Path, "sub")
+	cmd = mainRepo.GitCommand(t, "-c", "protocol.file.allow=always", "submodule", "add", submRepo.Path, "sub")
 	cmd.Dir = mainRepo.Path
 	require.NoError(t, cmd.Run(), "adding submodule")
 

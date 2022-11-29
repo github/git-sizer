@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/github/git-sizer/internal/pipe"
+	"github.com/github/go-pipe/pipe"
 )
 
 type ObjectRecord struct {

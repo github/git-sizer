@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/github/git-sizer/internal/pipe"
+	"github.com/github/go-pipe/pipe"
 )
 
 // ObjectIter iterates over objects in a Git repository.

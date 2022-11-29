@@ -4,8 +4,8 @@ github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ3
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/github/go-pipe v1.0.1 h1:EX3LIhOueA/GptjP8KoIQh/2tvKqKY5nn3QI5adpa+M=
-github.com/github/go-pipe v1.0.1/go.mod h1:/GvNLA516QlfGGMtfv4PC/5/CdzL9X4af/AJYhmLD54=
+github.com/github/go-pipe v1.0.2-0.20221129123738-3f37633cc05b h1:aPBpibgZUa5ITdtlMWWgkv9VrYAk5Kpd2Djo0E2Bo2w=
+github.com/github/go-pipe v1.0.2-0.20221129123738-3f37633cc05b/go.mod h1:/GvNLA516QlfGGMtfv4PC/5/CdzL9X4af/AJYhmLD54=
 github.com/kr/pretty v0.1.0 h1:L/CwN0zerZDmRFUapSPitk6f+Q3+0za1rQkzVuMiMFI=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=

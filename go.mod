@@ -10,7 +10,7 @@ require (
 	golang.org/x/sync v0.1.0 // indirect
 )
 
-require github.com/github/go-pipe v1.0.2-0.20221129123738-3f37633cc05b
+require github.com/github/go-pipe v1.0.2
 
 require (
 	github.com/kr/pretty v0.1.0 // indirect

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -114,14 +115,18 @@ func configKeyMatchesPrefix(key, prefix string) (bool, string) {
 }
 
 func (repo *Repository) ConfigStringDefault(key string, defaultValue string) (string, error) {
+	// Note that `git config --get` didn't get `--default` until Git
+	// 2.18 (released 2018-06-21).
 	cmd := repo.GitCommand(
-		"config",
-		"--default", defaultValue,
-		key,
+		"config", "--get", key,
 	)
 
 	out, err := cmd.Output()
 	if err != nil {
+		if err, ok := err.(*exec.ExitError); ok && err.ExitCode() == 1 {
+			// This indicates that the value was not found.
+			return defaultValue, nil
+		}
 		return defaultValue, fmt.Errorf("running 'git config': %w", err)
 	}
 
@@ -133,15 +138,18 @@ func (repo *Repository) ConfigStringDefault(key string, defaultValue string) (st
 }
 
 func (repo *Repository) ConfigBoolDefault(key string, defaultValue bool) (bool, error) {
+	// Note that `git config --get` didn't get `--type=bool` or
+	// `--default` until Git 2.18 (released 2018-06-21).
 	cmd := repo.GitCommand(
-		"config",
-		"--type", "bool",
-		"--default", strconv.FormatBool(defaultValue),
-		key,
+		"config", "--get", "--bool", key,
 	)
 
 	out, err := cmd.Output()
 	if err != nil {
+		if err, ok := err.(*exec.ExitError); ok && err.ExitCode() == 1 {
+			// This indicates that the value was not found.
+			return defaultValue, nil
+		}
 		return defaultValue, fmt.Errorf("running 'git config': %w", err)
 	}
 
@@ -155,15 +163,18 @@ func (repo *Repository) ConfigBoolDefault(key string, defaultValue bool) (bool, 
 }
 
 func (repo *Repository) ConfigIntDefault(key string, defaultValue int) (int, error) {
+	// Note that `git config --get` didn't get `--type=int` or
+	// `--default` until Git 2.18 (released 2018-06-21).
 	cmd := repo.GitCommand(
-		"config",
-		"--type", "int",
-		"--default", strconv.Itoa(defaultValue),
-		key,
+		"config", "--get", "--int", key,
 	)
 
 	out, err := cmd.Output()
 	if err != nil {
+		if err, ok := err.(*exec.ExitError); ok && err.ExitCode() == 1 {
+			// This indicates that the value was not found.
+			return defaultValue, nil
+		}
 		return defaultValue, fmt.Errorf("running 'git config': %w", err)
 	}
 

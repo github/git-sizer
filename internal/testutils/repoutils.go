@@ -165,7 +165,7 @@ func (repo *TestRepo) UpdateRef(t *testing.T, refname string, oid git.OID) {
 
 	var cmd *exec.Cmd
 
-	if oid == git.NullOID {
+	if git.IsNullOID(oid) {
 		cmd = repo.GitCommand(t, "update-ref", "-d", refname)
 	} else {
 		cmd = repo.GitCommand(t, "update-ref", refname, oid.String())

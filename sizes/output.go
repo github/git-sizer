@@ -155,7 +155,7 @@ func (i *item) Emit(t *table) {
 }
 
 func (i *item) Footnote(nameStyle NameStyle) string {
-	if i.path == nil || i.path.OID == git.NullOID {
+	if i.path == nil || git.IsNullOID(i.path.OID) {
 		return ""
 	}
 	switch nameStyle {
@@ -214,7 +214,7 @@ func (i *item) MarshalJSON() ([]byte, error) {
 		LevelOfConcern: float64(value) / i.scale,
 	}
 
-	if i.path != nil && i.path.OID != git.NullOID {
+	if i.path != nil && !git.IsNullOID(i.path.OID) {
 		stat.ObjectName = i.path.OID.String()
 		stat.ObjectDescription = i.path.Path()
 	}

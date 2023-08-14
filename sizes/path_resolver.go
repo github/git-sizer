@@ -12,15 +12,15 @@ import (
 // `rev-parse` input, including commit and/or file path) by which
 // specified objects are reachable. It is used as follows:
 //
-// * Request an object's path using `RequestPath()`. The returned
-//   `Path` object is a placeholder for the object's path.
+//   - Request an object's path using `RequestPath()`. The returned
+//     `Path` object is a placeholder for the object's path.
 //
-// * Tell the `PathResolver` about objects that might be along the
-//   object's reachability path, *in depth-first* order (i.e.,
-//   referents before referers) by calling `RecordTree()`,
-//   `RecordCommit()`, `RecordTag()`, and `RecordReference()`,.
+//   - Tell the `PathResolver` about objects that might be along the
+//     object's reachability path, *in depth-first* order (i.e.,
+//     referents before referers) by calling `RecordTree()`,
+//     `RecordCommit()`, `RecordTag()`, and `RecordReference()`,.
 //
-// * Read the path out of the `Path` object using `Path.Path()`.
+//   - Read the path out of the `Path` object using `Path.Path()`.
 //
 // Multiple objects can be processed at once.
 //
@@ -34,7 +34,7 @@ import (
 type PathResolver interface {
 	RequestPath(oid git.OID, objectType string) *Path
 	ForgetPath(p *Path)
-	RecordReference(ref git.Reference)
+	RecordName(name string, oid git.OID)
 	RecordTreeEntry(oid git.OID, name string, childOID git.OID)
 	RecordCommit(oid, tree git.OID)
 	RecordTag(oid git.OID, tag *git.Tag)
@@ -60,7 +60,7 @@ func (n NullPathResolver) RequestPath(oid git.OID, objectType string) *Path {
 
 func (_ NullPathResolver) ForgetPath(p *Path) {}
 
-func (_ NullPathResolver) RecordReference(ref git.Reference) {}
+func (_ NullPathResolver) RecordName(name string, oid git.OID) {}
 
 func (_ NullPathResolver) RecordTreeEntry(oid git.OID, name string, childOID git.OID) {}
 
@@ -77,19 +77,19 @@ type InOrderPathResolver struct {
 // (e.g., the biggest blob, or a tree containing the biggest blob, or
 // a commit whose tree contains the biggest blob). Valid states:
 //
-// * `parent == nil && relativePath == ""`—we have not yet found
-//   anything that refers to this object.
+//   - `parent == nil && relativePath == ""`—we have not yet found
+//     anything that refers to this object.
 //
-// * `parent != nil && relativePath == ""`—this object is a tree, and
-//   we have found a commit that refers to it.
+//   - `parent != nil && relativePath == ""`—this object is a tree, and
+//     we have found a commit that refers to it.
 //
-// * `parent == nil && relativePath != ""`—we have found a reference
-//   that points directly at this object; `relativePath` is the full
-//   name of the reference.
+//   - `parent == nil && relativePath != ""`—we have found a reference
+//     that points directly at this object; `relativePath` is the full
+//     name of the reference.
 //
-// * `parent != nil && relativePath != ""`—this object is a blob or
-//   tree, and we have found another tree that refers to it;
-//   `relativePath` is the corresponding tree entry name.
+//   - `parent != nil && relativePath != ""`—this object is a blob or
+//     tree, and we have found another tree that refers to it;
+//     `relativePath` is the corresponding tree entry name.
 type Path struct {
 	// The OID of the object whose path we seek. This member is always
 	// set.
@@ -122,7 +122,8 @@ type Path struct {
 func (p *Path) TreePrefix() string {
 	switch p.objectType {
 	case "blob", "tree":
-		if p.parent != nil {
+		switch {
+		case p.parent != nil:
 			if p.relativePath == "" {
 				// This is a top-level tree or blob.
 				return p.parent.TreePrefix()
@@ -130,7 +131,9 @@ func (p *Path) TreePrefix() string {
 				// The parent is also a tree.
 				return p.parent.TreePrefix() + p.relativePath + "/"
 			}
-		} else {
+		case p.relativePath != "":
+			return p.relativePath + "/"
+		default:
 			return "???"
 		}
 	case "commit", "tag":
@@ -153,7 +156,8 @@ func (p *Path) TreePrefix() string {
 func (p *Path) Path() string {
 	switch p.objectType {
 	case "blob", "tree":
-		if p.parent != nil {
+		switch {
+		case p.parent != nil:
 			if p.relativePath == "" {
 				// This is a top-level tree or blob.
 				return fmt.Sprintf("%s^{%s}", p.parent.BestPath(), p.objectType)
@@ -161,7 +165,9 @@ func (p *Path) Path() string {
 				// The parent is also a tree.
 				return p.parent.TreePrefix() + p.relativePath
 			}
-		} else {
+		case p.relativePath != "":
+			return p.relativePath
+		default:
 			return ""
 		}
 	case "commit", "tag":
@@ -274,18 +280,18 @@ func (pr *InOrderPathResolver) forgetPathLocked(p *Path) {
 	}
 }
 
-func (pr *InOrderPathResolver) RecordReference(ref git.Reference) {
+func (pr *InOrderPathResolver) RecordName(name string, oid git.OID) {
 	pr.lock.Lock()
 	defer pr.lock.Unlock()
 
-	p, ok := pr.soughtPaths[ref.OID]
+	p, ok := pr.soughtPaths[oid]
 	if !ok {
 		// Nobody is looking for the path to the referent.
 		return
 	}
 
-	p.relativePath = ref.Refname
-	delete(pr.soughtPaths, ref.OID)
+	p.relativePath = name
+	delete(pr.soughtPaths, oid)
 }
 
 // Record that the tree with OID `oid` has an entry with the specified

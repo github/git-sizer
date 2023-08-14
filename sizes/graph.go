@@ -11,6 +11,18 @@ import (
 	"github.com/github/git-sizer/meter"
 )
 
+type Root interface {
+	Name() string
+	OID() git.OID
+	Walk() bool
+}
+
+type ReferenceRoot interface {
+	Root
+	Reference() git.Reference
+	Groups() []RefGroupSymbol
+}
+
 // ScanRepositoryUsingGraph scans `repo`, using `rg` to decide which
 // references to scan and how to group them. `nameStyle` specifies
 // whether the output should include full names, hashes only, or
@@ -20,7 +32,9 @@ import (
 // It returns the size data for the repository.
 func ScanRepositoryUsingGraph(
 	ctx context.Context,
-	repo *git.Repository, refRoots []RefRoot, nameStyle NameStyle,
+	repo *git.Repository,
+	roots []Root,
+	nameStyle NameStyle,
 	progressMeter meter.Progress,
 ) (HistorySize, error) {
 	graph := NewGraph(nameStyle)
@@ -37,12 +51,12 @@ func ScanRepositoryUsingGraph(
 		defer objIter.Close()
 
 		errChan <- func() error {
-			for _, refRoot := range refRoots {
-				if !refRoot.Walk() {
+			for _, root := range roots {
+				if !root.Walk() {
 					continue
 				}
 
-				if err := objIter.AddRoot(refRoot.OID()); err != nil {
+				if err := objIter.AddRoot(root.OID()); err != nil {
 					return err
 				}
 			}
@@ -256,9 +270,15 @@ func ScanRepositoryUsingGraph(
 	}
 
 	progressMeter.Start("Processing references: %d")
-	for _, refRoot := range refRoots {
+	for _, root := range roots {
 		progressMeter.Inc()
-		graph.RegisterReference(refRoot.Reference(), refRoot.Walk(), refRoot.Groups())
+		if refRoot, ok := root.(ReferenceRoot); ok {
+			graph.RegisterReference(refRoot.Reference(), refRoot.Groups())
+		}
+
+		if root.Walk() {
+			graph.pathResolver.RecordName(root.Name(), root.OID())
+		}
 	}
 	progressMeter.Done()
 
@@ -310,17 +330,18 @@ func NewGraph(nameStyle NameStyle) *Graph {
 }
 
 // RegisterReference records the specified reference in `g`.
-func (g *Graph) RegisterReference(ref git.Reference, walked bool, groups []RefGroupSymbol) {
+func (g *Graph) RegisterReference(ref git.Reference, groups []RefGroupSymbol) {
 	g.historyLock.Lock()
 	g.historySize.recordReference(g, ref)
 	for _, group := range groups {
 		g.historySize.recordReferenceGroup(g, group)
 	}
 	g.historyLock.Unlock()
+}
 
-	if walked {
-		g.pathResolver.RecordReference(ref)
-	}
+// Register a name that can be used for the specified OID.
+func (g *Graph) RegisterName(name string, oid git.OID) {
+	g.pathResolver.RecordName(name, oid)
 }
 
 // HistorySize returns the size data that have been collected.

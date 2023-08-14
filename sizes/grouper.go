@@ -50,6 +50,7 @@ type RefRoot struct {
 	groups []RefGroupSymbol
 }
 
+func (rr RefRoot) Name() string             { return rr.ref.Refname }
 func (rr RefRoot) OID() git.OID             { return rr.ref.OID }
 func (rr RefRoot) Reference() git.Reference { return rr.ref }
 func (rr RefRoot) Walk() bool               { return rr.walk }

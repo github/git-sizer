@@ -20,7 +20,9 @@ import (
 	"github.com/github/git-sizer/sizes"
 )
 
-const usage = `usage: git-sizer [OPTS]
+const usage = `usage: git-sizer [OPTS] [ROOT...]
+
+ Scan objects in your Git repository and emit statistics about them.
 
       --threshold THRESHOLD    minimum level of concern (i.e., number of stars)
                                that should be reported. Default:
@@ -46,12 +48,29 @@ const usage = `usage: git-sizer [OPTS]
                                be set via gitconfig: 'sizer.progress'.
       --version                only report the git-sizer version number
 
+ Object selection:
+
+ git-sizer traverses through your Git history to find objects to
+ process. By default, it processes all objects that are reachable from
+ any reference. You can tell it to process only some of your
+ references; see "Reference selection" below.
+
+ If explicit ROOTs are specified on the command line, each one should
+ be a string that 'git rev-parse' can convert into a single Git object
+ ID, like 'main', 'main~:src', or an abbreviated SHA-1. See
+ git-rev-parse(1) for details. In that case, git-sizer also treats
+ those objects as starting points for its traversal, and also includes
+ the Git objects that are reachable from those roots in the analysis.
+
+ As a special case, if one or more ROOTs are specified on the command
+ line but _no_ reference selection options, then _only_ the specified
+ ROOTs are traversed, and no references.
+
  Reference selection:
 
- By default, git-sizer processes all Git objects that are reachable
- from any reference. The following options can be used to limit which
- references to process. The last rule matching a reference determines
- whether that reference is processed.
+ The following options can be used to limit which references to
+ process. The last rule matching a reference determines whether that
+ reference is processed.
 
       --[no-]branches          process [don't process] branches
       --[no-]tags              process [don't process] tags
@@ -220,10 +239,6 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		return nil
 	}
 
-	if len(flags.Args()) != 0 {
-		return errors.New("excess arguments")
-	}
-
 	if repoErr != nil {
 		return fmt.Errorf("couldn't open Git repository: %w", repoErr)
 	}
@@ -277,7 +292,7 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		progress = v
 	}
 
-	rg, err := rgb.Finish()
+	rg, err := rgb.Finish(len(flags.Args()) == 0)
 	if err != nil {
 		return err
 	}
@@ -297,8 +312,21 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		return fmt.Errorf("determining which reference to scan: %w", err)
 	}
 
+	roots := make([]sizes.Root, 0, len(refRoots)+len(flags.Args()))
+	for _, refRoot := range refRoots {
+		roots = append(roots, refRoot)
+	}
+
+	for _, arg := range flags.Args() {
+		oid, err := repo.ResolveObject(arg)
+		if err != nil {
+			return fmt.Errorf("resolving command-line argument %q: %w", arg, err)
+		}
+		roots = append(roots, sizes.NewExplicitRoot(arg, oid))
+	}
+
 	historySize, err := sizes.ScanRepositoryUsingGraph(
-		ctx, repo, refRoots, nameStyle, progressMeter,
+		ctx, repo, roots, nameStyle, progressMeter,
 	)
 	if err != nil {
 		return fmt.Errorf("error scanning repository: %w", err)

@@ -25,7 +25,7 @@ func ScanRepositoryUsingGraph(
 ) (HistorySize, error) {
 	graph := NewGraph(nameStyle)
 
-	refsSeen, err := CollectReferences(ctx, repo, rg)
+	refRoots, err := CollectReferences(ctx, repo, rg)
 	if err != nil {
 		return HistorySize{}, fmt.Errorf("reading references: %w", err)
 	}
@@ -42,12 +42,12 @@ func ScanRepositoryUsingGraph(
 		defer objIter.Close()
 
 		errChan <- func() error {
-			for _, refSeen := range refsSeen {
-				if !refSeen.walked {
+			for _, refRoot := range refRoots {
+				if !refRoot.Walk {
 					continue
 				}
 
-				if err := objIter.AddRoot(refSeen.OID); err != nil {
+				if err := objIter.AddRoot(refRoot.OID); err != nil {
 					return err
 				}
 			}
@@ -261,9 +261,9 @@ func ScanRepositoryUsingGraph(
 	}
 
 	progressMeter.Start("Processing references: %d")
-	for _, refSeen := range refsSeen {
+	for _, refRoot := range refRoots {
 		progressMeter.Inc()
-		graph.RegisterReference(refSeen.Reference, refSeen.walked, refSeen.groups)
+		graph.RegisterReference(refRoot.Reference, refRoot.Walk, refRoot.Groups)
 	}
 	progressMeter.Done()
 

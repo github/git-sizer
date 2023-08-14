@@ -44,21 +44,21 @@ type RefGrouper interface {
 	Groups() []RefGroup
 }
 
-type refSeen struct {
+type RefRoot struct {
 	git.Reference
-	walked bool
-	groups []RefGroupSymbol
+	Walk   bool
+	Groups []RefGroupSymbol
 }
 
 func CollectReferences(
 	ctx context.Context, repo *git.Repository, rg RefGrouper,
-) ([]refSeen, error) {
+) ([]RefRoot, error) {
 	refIter, err := repo.NewReferenceIter(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var refsSeen []refSeen
+	var refsSeen []RefRoot
 	for {
 		ref, ok, err := refIter.Next()
 		if err != nil {
@@ -72,10 +72,10 @@ func CollectReferences(
 
 		refsSeen = append(
 			refsSeen,
-			refSeen{
+			RefRoot{
 				Reference: ref,
-				walked:    walk,
-				groups:    groups,
+				Walk:      walk,
+				Groups:    groups,
 			},
 		)
 	}

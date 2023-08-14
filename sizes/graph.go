@@ -19,12 +19,10 @@ import (
 //
 // It returns the size data for the repository.
 func ScanRepositoryUsingGraph(
+	ctx context.Context,
 	repo *git.Repository, rg RefGrouper, nameStyle NameStyle,
 	progressMeter meter.Progress,
 ) (HistorySize, error) {
-	ctx, cancel := context.WithCancel(context.TODO())
-	defer cancel()
-
 	graph := NewGraph(nameStyle)
 
 	refsSeen, err := CollectReferences(ctx, repo, rg)
@@ -32,7 +30,7 @@ func ScanRepositoryUsingGraph(
 		return HistorySize{}, fmt.Errorf("reading references: %w", err)
 	}
 
-	objIter, err := repo.NewObjectIter(context.TODO())
+	objIter, err := repo.NewObjectIter(ctx)
 	if err != nil {
 		return HistorySize{}, err
 	}

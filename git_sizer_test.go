@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -563,7 +564,7 @@ func TestBomb(t *testing.T) {
 	newGitBomb(t, repo, 10, 10, "boom!\n")
 
 	h, err := sizes.ScanRepositoryUsingGraph(
-		repo.Repository(t),
+		context.Background(), repo.Repository(t),
 		refGrouper{}, sizes.NameStyleFull, meter.NoProgressMeter,
 	)
 	require.NoError(t, err)
@@ -636,7 +637,7 @@ func TestTaggedTags(t *testing.T) {
 	require.NoError(t, cmd.Run(), "creating tag 3")
 
 	h, err := sizes.ScanRepositoryUsingGraph(
-		repo.Repository(t),
+		context.Background(), repo.Repository(t),
 		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
@@ -658,7 +659,7 @@ func TestFromSubdir(t *testing.T) {
 	require.NoError(t, cmd.Run(), "creating commit")
 
 	h, err := sizes.ScanRepositoryUsingGraph(
-		repo.Repository(t),
+		context.Background(), repo.Repository(t),
 		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
@@ -711,7 +712,7 @@ func TestSubmodule(t *testing.T) {
 
 	// Analyze the main repo:
 	h, err := sizes.ScanRepositoryUsingGraph(
-		mainRepo.Repository(t),
+		context.Background(), mainRepo.Repository(t),
 		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
@@ -724,7 +725,7 @@ func TestSubmodule(t *testing.T) {
 		Path: filepath.Join(mainRepo.Path, "sub"),
 	}
 	h, err = sizes.ScanRepositoryUsingGraph(
-		submRepo2.Repository(t),
+		context.Background(), submRepo2.Repository(t),
 		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")

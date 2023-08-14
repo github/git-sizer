@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -93,14 +94,17 @@ var ReleaseVersion string
 var BuildVersion string
 
 func main() {
-	err := mainImplementation(os.Stdout, os.Stderr, os.Args[1:])
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := mainImplementation(ctx, os.Stdout, os.Stderr, os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
 	}
 }
 
-func mainImplementation(stdout, stderr io.Writer, args []string) error {
+func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []string) error {
 	var nameStyle sizes.NameStyle = sizes.NameStyleFull
 	var cpuprofile string
 	var jsonOutput bool
@@ -288,7 +292,7 @@ func mainImplementation(stdout, stderr io.Writer, args []string) error {
 		progressMeter = meter.NewProgressMeter(stderr, 100*time.Millisecond)
 	}
 
-	historySize, err := sizes.ScanRepositoryUsingGraph(repo, rg, nameStyle, progressMeter)
+	historySize, err := sizes.ScanRepositoryUsingGraph(ctx, repo, rg, nameStyle, progressMeter)
 	if err != nil {
 		return fmt.Errorf("error scanning repository: %w", err)
 	}

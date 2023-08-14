@@ -292,7 +292,14 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		progressMeter = meter.NewProgressMeter(stderr, 100*time.Millisecond)
 	}
 
-	historySize, err := sizes.ScanRepositoryUsingGraph(ctx, repo, rg, nameStyle, progressMeter)
+	refRoots, err := sizes.CollectReferences(ctx, repo, rg)
+	if err != nil {
+		return fmt.Errorf("determining which reference to scan: %w", err)
+	}
+
+	historySize, err := sizes.ScanRepositoryUsingGraph(
+		ctx, repo, refRoots, nameStyle, progressMeter,
+	)
 	if err != nil {
 		return fmt.Errorf("error scanning repository: %w", err)
 	}

@@ -558,14 +558,21 @@ func (rg refGrouper) Groups() []sizes.RefGroup {
 func TestBomb(t *testing.T) {
 	t.Parallel()
 
-	repo := testutils.NewTestRepo(t, true, "bomb")
-	t.Cleanup(func() { repo.Remove(t) })
+	ctx := context.Background()
 
-	newGitBomb(t, repo, 10, 10, "boom!\n")
+	testRepo := testutils.NewTestRepo(t, true, "bomb")
+	t.Cleanup(func() { testRepo.Remove(t) })
+
+	newGitBomb(t, testRepo, 10, 10, "boom!\n")
+
+	repo := testRepo.Repository(t)
+
+	refRoots, err := sizes.CollectReferences(ctx, repo, refGrouper{})
+	require.NoError(t, err)
 
 	h, err := sizes.ScanRepositoryUsingGraph(
-		context.Background(), repo.Repository(t),
-		refGrouper{}, sizes.NameStyleFull, meter.NoProgressMeter,
+		ctx, repo,
+		refRoots, sizes.NameStyleFull, meter.NoProgressMeter,
 	)
 	require.NoError(t, err)
 
@@ -613,32 +620,39 @@ func TestBomb(t *testing.T) {
 func TestTaggedTags(t *testing.T) {
 	t.Parallel()
 
-	repo := testutils.NewTestRepo(t, false, "tagged-tags")
-	defer repo.Remove(t)
+	ctx := context.Background()
+
+	testRepo := testutils.NewTestRepo(t, false, "tagged-tags")
+	defer testRepo.Remove(t)
 
 	timestamp := time.Unix(1112911993, 0)
 
-	cmd := repo.GitCommand(t, "commit", "-m", "initial", "--allow-empty")
+	cmd := testRepo.GitCommand(t, "commit", "-m", "initial", "--allow-empty")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating commit")
 
 	// The lexicographical order of these tags is important, hence
 	// their strange names.
-	cmd = repo.GitCommand(t, "tag", "-m", "tag 1", "tag", "master")
+	cmd = testRepo.GitCommand(t, "tag", "-m", "tag 1", "tag", "master")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 1")
 
-	cmd = repo.GitCommand(t, "tag", "-m", "tag 2", "bag", "tag")
+	cmd = testRepo.GitCommand(t, "tag", "-m", "tag 2", "bag", "tag")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 2")
 
-	cmd = repo.GitCommand(t, "tag", "-m", "tag 3", "wag", "bag")
+	cmd = testRepo.GitCommand(t, "tag", "-m", "tag 3", "wag", "bag")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 3")
 
+	repo := testRepo.Repository(t)
+
+	refRoots, err := sizes.CollectReferences(ctx, repo, refGrouper{})
+	require.NoError(t, err)
+
 	h, err := sizes.ScanRepositoryUsingGraph(
-		context.Background(), repo.Repository(t),
-		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
+		context.Background(), repo,
+		refRoots, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(3), h.MaxTagDepth, "tag depth")
@@ -647,20 +661,27 @@ func TestTaggedTags(t *testing.T) {
 func TestFromSubdir(t *testing.T) {
 	t.Parallel()
 
-	repo := testutils.NewTestRepo(t, false, "subdir")
-	defer repo.Remove(t)
+	ctx := context.Background()
+
+	testRepo := testutils.NewTestRepo(t, false, "subdir")
+	defer testRepo.Remove(t)
 
 	timestamp := time.Unix(1112911993, 0)
 
-	repo.AddFile(t, "subdir/file.txt", "Hello, world!\n")
+	testRepo.AddFile(t, "subdir/file.txt", "Hello, world!\n")
 
-	cmd := repo.GitCommand(t, "commit", "-m", "initial")
+	cmd := testRepo.GitCommand(t, "commit", "-m", "initial")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating commit")
 
+	repo := testRepo.Repository(t)
+
+	refRoots, err := sizes.CollectReferences(ctx, repo, refGrouper{})
+	require.NoError(t, err)
+
 	h, err := sizes.ScanRepositoryUsingGraph(
-		context.Background(), repo.Repository(t),
-		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
+		context.Background(), testRepo.Repository(t),
+		refRoots, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.MaxPathDepth, "max path depth")
@@ -668,6 +689,8 @@ func TestFromSubdir(t *testing.T) {
 
 func TestSubmodule(t *testing.T) {
 	t.Parallel()
+
+	ctx := context.Background()
 
 	tmp, err := ioutil.TempDir("", "submodule")
 	require.NoError(t, err, "creating temporary directory")
@@ -678,42 +701,47 @@ func TestSubmodule(t *testing.T) {
 
 	timestamp := time.Unix(1112911993, 0)
 
-	submRepo := testutils.TestRepo{
+	submTestRepo := testutils.TestRepo{
 		Path: filepath.Join(tmp, "subm"),
 	}
-	submRepo.Init(t, false)
-	submRepo.AddFile(t, "submfile1.txt", "Hello, submodule!\n")
-	submRepo.AddFile(t, "submfile2.txt", "Hello again, submodule!\n")
-	submRepo.AddFile(t, "submfile3.txt", "Hello again, submodule!\n")
+	submTestRepo.Init(t, false)
+	submTestRepo.AddFile(t, "submfile1.txt", "Hello, submodule!\n")
+	submTestRepo.AddFile(t, "submfile2.txt", "Hello again, submodule!\n")
+	submTestRepo.AddFile(t, "submfile3.txt", "Hello again, submodule!\n")
 
-	cmd := submRepo.GitCommand(t, "commit", "-m", "subm initial")
+	cmd := submTestRepo.GitCommand(t, "commit", "-m", "subm initial")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating subm commit")
 
-	mainRepo := testutils.TestRepo{
+	mainTestRepo := testutils.TestRepo{
 		Path: filepath.Join(tmp, "main"),
 	}
-	mainRepo.Init(t, false)
+	mainTestRepo.Init(t, false)
 
-	mainRepo.AddFile(t, "mainfile.txt", "Hello, main!\n")
+	mainTestRepo.AddFile(t, "mainfile.txt", "Hello, main!\n")
 
-	cmd = mainRepo.GitCommand(t, "commit", "-m", "main initial")
+	cmd = mainTestRepo.GitCommand(t, "commit", "-m", "main initial")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating main commit")
 
 	// Make subm a submodule of main:
-	cmd = mainRepo.GitCommand(t, "-c", "protocol.file.allow=always", "submodule", "add", submRepo.Path, "sub")
-	cmd.Dir = mainRepo.Path
+	cmd = mainTestRepo.GitCommand(t, "-c", "protocol.file.allow=always", "submodule", "add", submTestRepo.Path, "sub")
+	cmd.Dir = mainTestRepo.Path
 	require.NoError(t, cmd.Run(), "adding submodule")
 
-	cmd = mainRepo.GitCommand(t, "commit", "-m", "add submodule")
+	cmd = mainTestRepo.GitCommand(t, "commit", "-m", "add submodule")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "committing submodule to main")
 
+	mainRepo := mainTestRepo.Repository(t)
+
+	mainRefRoots, err := sizes.CollectReferences(ctx, mainRepo, refGrouper{})
+	require.NoError(t, err)
+
 	// Analyze the main repo:
 	h, err := sizes.ScanRepositoryUsingGraph(
-		context.Background(), mainRepo.Repository(t),
-		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
+		context.Background(), mainTestRepo.Repository(t),
+		mainRefRoots, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")
@@ -721,12 +749,18 @@ func TestSubmodule(t *testing.T) {
 	assert.Equal(t, counts.Count32(1), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
 
 	// Analyze the submodule:
-	submRepo2 := testutils.TestRepo{
-		Path: filepath.Join(mainRepo.Path, "sub"),
+	submTestRepo2 := testutils.TestRepo{
+		Path: filepath.Join(mainTestRepo.Path, "sub"),
 	}
+
+	submRepo2 := submTestRepo2.Repository(t)
+
+	submRefRoots2, err := sizes.CollectReferences(ctx, submRepo2, refGrouper{})
+	require.NoError(t, err)
+
 	h, err = sizes.ScanRepositoryUsingGraph(
-		context.Background(), submRepo2.Repository(t),
-		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
+		context.Background(), submRepo2,
+		submRefRoots2, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")

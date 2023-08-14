@@ -11,50 +11,6 @@ import (
 	"github.com/github/git-sizer/meter"
 )
 
-// RefGroupSymbol is the string "identifier" that is used to refer to
-// a refgroup, for example in the gitconfig. Nesting of refgroups is
-// inferred from their names, using "." as separator between
-// components. For example, if there are three refgroups with symbols
-// "tags", "tags.releases", and "foo.bar", then "tags.releases" is
-// considered to be nested within "tags", and "foo.bar" is considered
-// to be nested within "foo", the latter being created automatically
-// if it was not configured explicitly.
-type RefGroupSymbol string
-
-// RefGroup is a group of references, for example "branches" or
-// "tags". Reference groups might overlap.
-type RefGroup struct {
-	// Symbol is the unique string by which this `RefGroup` is
-	// identified and configured. It consists of dot-separated
-	// components, which implicitly makes a nested tree-like
-	// structure.
-	Symbol RefGroupSymbol
-
-	// Name is the name for this `ReferenceGroup` to be presented
-	// in user-readable output.
-	Name string
-}
-
-// RefGrouper describes a type that can collate reference names into
-// groups and decide which ones to walk.
-type RefGrouper interface {
-	// Categorize tells whether `refname` should be walked at all,
-	// and if so, the symbols of the reference groups to which it
-	// belongs.
-	Categorize(refname string) (bool, []RefGroupSymbol)
-
-	// Groups returns the list of `ReferenceGroup`s, in the order
-	// that they should be presented. The return value might
-	// depend on which references have been seen so far.
-	Groups() []RefGroup
-}
-
-type refSeen struct {
-	git.Reference
-	walked bool
-	groups []RefGroupSymbol
-}
-
 // ScanRepositoryUsingGraph scans `repo`, using `rg` to decide which
 // references to scan and how to group them. `nameStyle` specifies
 // whether the output should include full names, hashes only, or
@@ -71,9 +27,9 @@ func ScanRepositoryUsingGraph(
 
 	graph := NewGraph(nameStyle)
 
-	refIter, err := repo.NewReferenceIter(ctx)
+	refsSeen, err := CollectReferences(ctx, repo, rg)
 	if err != nil {
-		return HistorySize{}, err
+		return HistorySize{}, fmt.Errorf("reading references: %w", err)
 	}
 
 	objIter, err := repo.NewObjectIter(context.TODO())
@@ -82,41 +38,22 @@ func ScanRepositoryUsingGraph(
 	}
 
 	errChan := make(chan error, 1)
-	var refsSeen []refSeen
-	// Feed the references that we want into the stdin of the object
-	// iterator:
+	// Feed the references that we want to walk into the stdin of the
+	// object iterator:
 	go func() {
 		defer objIter.Close()
 
 		errChan <- func() error {
-			for {
-				ref, ok, err := refIter.Next()
-				if err != nil {
-					return err
-				}
-				if !ok {
-					return nil
-				}
-
-				walk, groups := rg.Categorize(ref.Refname)
-
-				refsSeen = append(
-					refsSeen,
-					refSeen{
-						Reference: ref,
-						walked:    walk,
-						groups:    groups,
-					},
-				)
-
-				if !walk {
+			for _, refSeen := range refsSeen {
+				if !refSeen.walked {
 					continue
 				}
 
-				if err := objIter.AddRoot(ref.OID); err != nil {
+				if err := objIter.AddRoot(refSeen.OID); err != nil {
 					return err
 				}
 			}
+			return nil
 		}()
 	}()
 

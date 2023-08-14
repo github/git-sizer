@@ -69,7 +69,7 @@ func ScanRepositoryUsingGraph(
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	graph := NewGraph(rg, nameStyle)
+	graph := NewGraph(nameStyle)
 
 	refIter, err := repo.NewReferenceIter(ctx)
 	if err != nil {
@@ -337,8 +337,6 @@ func ScanRepositoryUsingGraph(
 
 // Graph is an object graph that is being built up.
 type Graph struct {
-	rg RefGrouper
-
 	blobLock  sync.Mutex
 	blobSizes map[git.OID]BlobSize
 
@@ -361,10 +359,8 @@ type Graph struct {
 }
 
 // NewGraph creates and returns a new `*Graph` instance.
-func NewGraph(rg RefGrouper, nameStyle NameStyle) *Graph {
+func NewGraph(nameStyle NameStyle) *Graph {
 	return &Graph{
-		rg: rg,
-
 		blobSizes: make(map[git.OID]BlobSize),
 
 		treeRecords: make(map[git.OID]*treeRecord),

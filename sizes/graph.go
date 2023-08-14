@@ -38,11 +38,11 @@ func ScanRepositoryUsingGraph(
 
 		errChan <- func() error {
 			for _, refRoot := range refRoots {
-				if !refRoot.Walk {
+				if !refRoot.Walk() {
 					continue
 				}
 
-				if err := objIter.AddRoot(refRoot.OID); err != nil {
+				if err := objIter.AddRoot(refRoot.OID()); err != nil {
 					return err
 				}
 			}
@@ -258,7 +258,7 @@ func ScanRepositoryUsingGraph(
 	progressMeter.Start("Processing references: %d")
 	for _, refRoot := range refRoots {
 		progressMeter.Inc()
-		graph.RegisterReference(refRoot.Reference, refRoot.Walk, refRoot.Groups)
+		graph.RegisterReference(refRoot.Reference(), refRoot.Walk(), refRoot.Groups())
 	}
 	progressMeter.Done()
 

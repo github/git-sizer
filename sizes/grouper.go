@@ -45,10 +45,15 @@ type RefGrouper interface {
 }
 
 type RefRoot struct {
-	git.Reference
-	Walk   bool
-	Groups []RefGroupSymbol
+	ref    git.Reference
+	walk   bool
+	groups []RefGroupSymbol
 }
+
+func (rr RefRoot) OID() git.OID             { return rr.ref.OID }
+func (rr RefRoot) Reference() git.Reference { return rr.ref }
+func (rr RefRoot) Walk() bool               { return rr.walk }
+func (rr RefRoot) Groups() []RefGroupSymbol { return rr.groups }
 
 func CollectReferences(
 	ctx context.Context, repo *git.Repository, rg RefGrouper,
@@ -73,9 +78,9 @@ func CollectReferences(
 		refsSeen = append(
 			refsSeen,
 			RefRoot{
-				Reference: ref,
-				Walk:      walk,
-				Groups:    groups,
+				ref:    ref,
+				walk:   walk,
+				groups: groups,
 			},
 		)
 	}

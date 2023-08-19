@@ -113,8 +113,7 @@ var ReleaseVersion string
 var BuildVersion string
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
 
 	err := mainImplementation(ctx, os.Stdout, os.Stderr, os.Args[1:])
 	if err != nil {

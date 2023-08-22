@@ -254,9 +254,14 @@ func (rgb *RefGroupBuilder) AddRefopts(flags *pflag.FlagSet) {
 
 // Finish collects the information gained from processing the options
 // and returns a `sizes.RefGrouper`.
-func (rgb *RefGroupBuilder) Finish() (sizes.RefGrouper, error) {
+func (rgb *RefGroupBuilder) Finish(defaultAll bool) (sizes.RefGrouper, error) {
 	if rgb.topLevelGroup.filter == nil {
-		rgb.topLevelGroup.filter = git.AllReferencesFilter
+		// User didn't specify any reference options.
+		if defaultAll {
+			rgb.topLevelGroup.filter = git.AllReferencesFilter
+		} else {
+			rgb.topLevelGroup.filter = git.NoReferencesFilter
+		}
 	}
 
 	refGrouper := refGrouper{

@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -557,87 +558,164 @@ func (rg refGrouper) Groups() []sizes.RefGroup {
 func TestBomb(t *testing.T) {
 	t.Parallel()
 
-	repo := testutils.NewTestRepo(t, true, "bomb")
-	t.Cleanup(func() { repo.Remove(t) })
+	ctx := context.Background()
 
-	newGitBomb(t, repo, 10, 10, "boom!\n")
+	testRepo := testutils.NewTestRepo(t, true, "bomb")
+	t.Cleanup(func() { testRepo.Remove(t) })
 
-	h, err := sizes.ScanRepositoryUsingGraph(
-		repo.Repository(t),
-		refGrouper{}, sizes.NameStyleFull, meter.NoProgressMeter,
-	)
-	require.NoError(t, err)
+	newGitBomb(t, testRepo, 10, 10, "boom!\n")
 
-	assert.Equal(t, counts.Count32(1), h.UniqueCommitCount, "unique commit count")
-	assert.Equal(t, counts.Count64(172), h.UniqueCommitSize, "unique commit size")
-	assert.Equal(t, counts.Count32(172), h.MaxCommitSize, "max commit size")
-	assert.Equal(t, "refs/heads/master", h.MaxCommitSizeCommit.Path(), "max commit size commit")
-	assert.Equal(t, counts.Count32(1), h.MaxHistoryDepth, "max history depth")
-	assert.Equal(t, counts.Count32(0), h.MaxParentCount, "max parent count")
-	assert.Equal(t, "refs/heads/master", h.MaxParentCountCommit.Path(), "max parent count commit")
+	repo := testRepo.Repository(t)
 
-	assert.Equal(t, counts.Count32(10), h.UniqueTreeCount, "unique tree count")
-	assert.Equal(t, counts.Count64(2910), h.UniqueTreeSize, "unique tree size")
-	assert.Equal(t, counts.Count64(100), h.UniqueTreeEntries, "unique tree entries")
-	assert.Equal(t, counts.Count32(10), h.MaxTreeEntries, "max tree entries")
-	assert.Equal(t, "refs/heads/master:d0/d0/d0/d0/d0/d0/d0/d0/d0", h.MaxTreeEntriesTree.Path(), "max tree entries tree")
+	t.Run("full", func(t *testing.T) {
+		refRoots, err := sizes.CollectReferences(ctx, repo, refGrouper{})
+		require.NoError(t, err)
 
-	assert.Equal(t, counts.Count32(1), h.UniqueBlobCount, "unique blob count")
-	assert.Equal(t, counts.Count64(6), h.UniqueBlobSize, "unique blob size")
-	assert.Equal(t, counts.Count32(6), h.MaxBlobSize, "max blob size")
-	assert.Equal(t, "refs/heads/master:d0/d0/d0/d0/d0/d0/d0/d0/d0/f0", h.MaxBlobSizeBlob.Path(), "max blob size blob")
+		roots := make([]sizes.Root, 0, len(refRoots))
+		for _, refRoot := range refRoots {
+			roots = append(roots, refRoot)
+		}
 
-	assert.Equal(t, counts.Count32(0), h.UniqueTagCount, "unique tag count")
-	assert.Equal(t, counts.Count32(0), h.MaxTagDepth, "max tag depth")
+		h, err := sizes.ScanRepositoryUsingGraph(
+			ctx, repo, roots, sizes.NameStyleFull, meter.NoProgressMeter,
+		)
+		require.NoError(t, err)
 
-	assert.Equal(t, counts.Count32(1), h.ReferenceCount, "reference count")
+		assert.Equal(t, counts.Count32(1), h.UniqueCommitCount, "unique commit count")
+		assert.Equal(t, counts.Count64(172), h.UniqueCommitSize, "unique commit size")
+		assert.Equal(t, counts.Count32(172), h.MaxCommitSize, "max commit size")
+		assert.Equal(t, "refs/heads/master", h.MaxCommitSizeCommit.BestPath(), "max commit size commit")
+		assert.Equal(t, counts.Count32(1), h.MaxHistoryDepth, "max history depth")
+		assert.Equal(t, counts.Count32(0), h.MaxParentCount, "max parent count")
+		assert.Equal(t, "refs/heads/master", h.MaxParentCountCommit.BestPath(), "max parent count commit")
 
-	assert.Equal(t, counts.Count32(10), h.MaxPathDepth, "max path depth")
-	assert.Equal(t, "refs/heads/master^{tree}", h.MaxPathDepthTree.Path(), "max path depth tree")
-	assert.Equal(t, counts.Count32(29), h.MaxPathLength, "max path length")
-	assert.Equal(t, "refs/heads/master^{tree}", h.MaxPathLengthTree.Path(), "max path length tree")
+		assert.Equal(t, counts.Count32(10), h.UniqueTreeCount, "unique tree count")
+		assert.Equal(t, counts.Count64(2910), h.UniqueTreeSize, "unique tree size")
+		assert.Equal(t, counts.Count64(100), h.UniqueTreeEntries, "unique tree entries")
+		assert.Equal(t, counts.Count32(10), h.MaxTreeEntries, "max tree entries")
+		assert.Equal(t, "refs/heads/master:d0/d0/d0/d0/d0/d0/d0/d0/d0", h.MaxTreeEntriesTree.BestPath(), "max tree entries tree")
 
-	assert.Equal(t, counts.Count32((pow(10, 10)-1)/(10-1)), h.MaxExpandedTreeCount, "max expanded tree count")
-	assert.Equal(t, "refs/heads/master^{tree}", h.MaxExpandedTreeCountTree.Path(), "max expanded tree count tree")
-	assert.Equal(t, counts.Count32(0xffffffff), h.MaxExpandedBlobCount, "max expanded blob count")
-	assert.Equal(t, "refs/heads/master^{tree}", h.MaxExpandedBlobCountTree.Path(), "max expanded blob count tree")
-	assert.Equal(t, counts.Count64(6*pow(10, 10)), h.MaxExpandedBlobSize, "max expanded blob size")
-	assert.Equal(t, "refs/heads/master^{tree}", h.MaxExpandedBlobSizeTree.Path(), "max expanded blob size tree")
-	assert.Equal(t, counts.Count32(0), h.MaxExpandedLinkCount, "max expanded link count")
-	assert.Nil(t, h.MaxExpandedLinkCountTree, "max expanded link count tree")
-	assert.Equal(t, counts.Count32(0), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
-	assert.Nil(t, h.MaxExpandedSubmoduleCountTree, "max expanded submodule count tree")
+		assert.Equal(t, counts.Count32(1), h.UniqueBlobCount, "unique blob count")
+		assert.Equal(t, counts.Count64(6), h.UniqueBlobSize, "unique blob size")
+		assert.Equal(t, counts.Count32(6), h.MaxBlobSize, "max blob size")
+		assert.Equal(t, "refs/heads/master:d0/d0/d0/d0/d0/d0/d0/d0/d0/f0", h.MaxBlobSizeBlob.BestPath(), "max blob size blob")
+
+		assert.Equal(t, counts.Count32(0), h.UniqueTagCount, "unique tag count")
+		assert.Equal(t, counts.Count32(0), h.MaxTagDepth, "max tag depth")
+
+		assert.Equal(t, counts.Count32(1), h.ReferenceCount, "reference count")
+
+		assert.Equal(t, counts.Count32(10), h.MaxPathDepth, "max path depth")
+		assert.Equal(t, "refs/heads/master^{tree}", h.MaxPathDepthTree.BestPath(), "max path depth tree")
+		assert.Equal(t, counts.Count32(29), h.MaxPathLength, "max path length")
+		assert.Equal(t, "refs/heads/master^{tree}", h.MaxPathLengthTree.BestPath(), "max path length tree")
+
+		assert.Equal(t, counts.Count32((pow(10, 10)-1)/(10-1)), h.MaxExpandedTreeCount, "max expanded tree count")
+		assert.Equal(t, "refs/heads/master^{tree}", h.MaxExpandedTreeCountTree.BestPath(), "max expanded tree count tree")
+		assert.Equal(t, counts.Count32(0xffffffff), h.MaxExpandedBlobCount, "max expanded blob count")
+		assert.Equal(t, "refs/heads/master^{tree}", h.MaxExpandedBlobCountTree.BestPath(), "max expanded blob count tree")
+		assert.Equal(t, counts.Count64(6*pow(10, 10)), h.MaxExpandedBlobSize, "max expanded blob size")
+		assert.Equal(t, "refs/heads/master^{tree}", h.MaxExpandedBlobSizeTree.BestPath(), "max expanded blob size tree")
+		assert.Equal(t, counts.Count32(0), h.MaxExpandedLinkCount, "max expanded link count")
+		assert.Nil(t, h.MaxExpandedLinkCountTree, "max expanded link count tree")
+		assert.Equal(t, counts.Count32(0), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
+		assert.Nil(t, h.MaxExpandedSubmoduleCountTree, "max expanded submodule count tree")
+	})
+
+	t.Run("partial", func(t *testing.T) {
+		name := "master:d0/d0"
+		oid, err := repo.ResolveObject(name)
+		require.NoError(t, err)
+		roots := []sizes.Root{sizes.NewExplicitRoot(name, oid)}
+
+		h, err := sizes.ScanRepositoryUsingGraph(
+			ctx, repo, roots, sizes.NameStyleFull, meter.NoProgressMeter,
+		)
+		require.NoError(t, err)
+
+		assert.Equal(t, counts.Count32(0), h.UniqueCommitCount, "unique commit count")
+		assert.Equal(t, counts.Count64(0), h.UniqueCommitSize, "unique commit size")
+		assert.Equal(t, counts.Count32(0), h.MaxCommitSize, "max commit size")
+		assert.Nil(t, h.MaxCommitSizeCommit)
+		assert.Equal(t, counts.Count32(0), h.MaxHistoryDepth, "max history depth")
+		assert.Equal(t, counts.Count32(0), h.MaxParentCount, "max parent count")
+		assert.Nil(t, h.MaxParentCountCommit, "max parent count commit")
+
+		assert.Equal(t, counts.Count32(8), h.UniqueTreeCount, "unique tree count")
+		assert.Equal(t, counts.Count64(2330), h.UniqueTreeSize, "unique tree size")
+		assert.Equal(t, counts.Count64(80), h.UniqueTreeEntries, "unique tree entries")
+		assert.Equal(t, counts.Count32(10), h.MaxTreeEntries, "max tree entries")
+		assert.Equal(t, "master:d0/d0/d0/d0/d0/d0/d0/d0/d0", h.MaxTreeEntriesTree.BestPath(), "max tree entries tree")
+
+		assert.Equal(t, counts.Count32(1), h.UniqueBlobCount, "unique blob count")
+		assert.Equal(t, counts.Count64(6), h.UniqueBlobSize, "unique blob size")
+		assert.Equal(t, counts.Count32(6), h.MaxBlobSize, "max blob size")
+		assert.Equal(t, "master:d0/d0/d0/d0/d0/d0/d0/d0/d0/f0", h.MaxBlobSizeBlob.BestPath(), "max blob size blob")
+
+		assert.Equal(t, counts.Count32(0), h.UniqueTagCount, "unique tag count")
+		assert.Equal(t, counts.Count32(0), h.MaxTagDepth, "max tag depth")
+
+		assert.Equal(t, counts.Count32(0), h.ReferenceCount, "reference count")
+
+		assert.Equal(t, counts.Count32(8), h.MaxPathDepth, "max path depth")
+		assert.Equal(t, "master:d0/d0", h.MaxPathDepthTree.BestPath(), "max path depth tree")
+		assert.Equal(t, counts.Count32(23), h.MaxPathLength, "max path length")
+		assert.Equal(t, "master:d0/d0", h.MaxPathLengthTree.BestPath(), "max path length tree")
+
+		assert.Equal(t, counts.Count32((pow(10, 8)-1)/(10-1)), h.MaxExpandedTreeCount, "max expanded tree count")
+		assert.Equal(t, "master:d0/d0", h.MaxExpandedTreeCountTree.BestPath(), "max expanded tree count tree")
+		assert.Equal(t, counts.Count32(pow(10, 8)), h.MaxExpandedBlobCount, "max expanded blob count")
+		assert.Equal(t, "master:d0/d0", h.MaxExpandedBlobCountTree.BestPath(), "max expanded blob count tree")
+		assert.Equal(t, counts.Count64(6*pow(10, 8)), h.MaxExpandedBlobSize, "max expanded blob size")
+		assert.Equal(t, "master:d0/d0", h.MaxExpandedBlobSizeTree.BestPath(), "max expanded blob size tree")
+		assert.Equal(t, counts.Count32(0), h.MaxExpandedLinkCount, "max expanded link count")
+		assert.Nil(t, h.MaxExpandedLinkCountTree, "max expanded link count tree")
+		assert.Equal(t, counts.Count32(0), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
+		assert.Nil(t, h.MaxExpandedSubmoduleCountTree, "max expanded submodule count tree")
+	})
 }
 
 func TestTaggedTags(t *testing.T) {
 	t.Parallel()
 
-	repo := testutils.NewTestRepo(t, false, "tagged-tags")
-	defer repo.Remove(t)
+	ctx := context.Background()
+
+	testRepo := testutils.NewTestRepo(t, false, "tagged-tags")
+	defer testRepo.Remove(t)
 
 	timestamp := time.Unix(1112911993, 0)
 
-	cmd := repo.GitCommand(t, "commit", "-m", "initial", "--allow-empty")
+	cmd := testRepo.GitCommand(t, "commit", "-m", "initial", "--allow-empty")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating commit")
 
 	// The lexicographical order of these tags is important, hence
 	// their strange names.
-	cmd = repo.GitCommand(t, "tag", "-m", "tag 1", "tag", "master")
+	cmd = testRepo.GitCommand(t, "tag", "-m", "tag 1", "tag", "master")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 1")
 
-	cmd = repo.GitCommand(t, "tag", "-m", "tag 2", "bag", "tag")
+	cmd = testRepo.GitCommand(t, "tag", "-m", "tag 2", "bag", "tag")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 2")
 
-	cmd = repo.GitCommand(t, "tag", "-m", "tag 3", "wag", "bag")
+	cmd = testRepo.GitCommand(t, "tag", "-m", "tag 3", "wag", "bag")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating tag 3")
 
+	repo := testRepo.Repository(t)
+
+	refRoots, err := sizes.CollectReferences(ctx, repo, refGrouper{})
+	require.NoError(t, err)
+
+	roots := make([]sizes.Root, 0, len(refRoots))
+	for _, refRoot := range refRoots {
+		roots = append(roots, refRoot)
+	}
+
 	h, err := sizes.ScanRepositoryUsingGraph(
-		repo.Repository(t),
-		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
+		context.Background(), repo,
+		roots, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(3), h.MaxTagDepth, "tag depth")
@@ -646,20 +724,32 @@ func TestTaggedTags(t *testing.T) {
 func TestFromSubdir(t *testing.T) {
 	t.Parallel()
 
-	repo := testutils.NewTestRepo(t, false, "subdir")
-	defer repo.Remove(t)
+	ctx := context.Background()
+
+	testRepo := testutils.NewTestRepo(t, false, "subdir")
+	defer testRepo.Remove(t)
 
 	timestamp := time.Unix(1112911993, 0)
 
-	repo.AddFile(t, "subdir/file.txt", "Hello, world!\n")
+	testRepo.AddFile(t, "subdir/file.txt", "Hello, world!\n")
 
-	cmd := repo.GitCommand(t, "commit", "-m", "initial")
+	cmd := testRepo.GitCommand(t, "commit", "-m", "initial")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating commit")
 
+	repo := testRepo.Repository(t)
+
+	refRoots, err := sizes.CollectReferences(ctx, repo, refGrouper{})
+	require.NoError(t, err)
+
+	roots := make([]sizes.Root, 0, len(refRoots))
+	for _, refRoot := range refRoots {
+		roots = append(roots, refRoot)
+	}
+
 	h, err := sizes.ScanRepositoryUsingGraph(
-		repo.Repository(t),
-		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
+		context.Background(), testRepo.Repository(t),
+		roots, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.MaxPathDepth, "max path depth")
@@ -667,6 +757,8 @@ func TestFromSubdir(t *testing.T) {
 
 func TestSubmodule(t *testing.T) {
 	t.Parallel()
+
+	ctx := context.Background()
 
 	tmp, err := ioutil.TempDir("", "submodule")
 	require.NoError(t, err, "creating temporary directory")
@@ -677,42 +769,52 @@ func TestSubmodule(t *testing.T) {
 
 	timestamp := time.Unix(1112911993, 0)
 
-	submRepo := testutils.TestRepo{
+	submTestRepo := testutils.TestRepo{
 		Path: filepath.Join(tmp, "subm"),
 	}
-	submRepo.Init(t, false)
-	submRepo.AddFile(t, "submfile1.txt", "Hello, submodule!\n")
-	submRepo.AddFile(t, "submfile2.txt", "Hello again, submodule!\n")
-	submRepo.AddFile(t, "submfile3.txt", "Hello again, submodule!\n")
+	submTestRepo.Init(t, false)
+	submTestRepo.AddFile(t, "submfile1.txt", "Hello, submodule!\n")
+	submTestRepo.AddFile(t, "submfile2.txt", "Hello again, submodule!\n")
+	submTestRepo.AddFile(t, "submfile3.txt", "Hello again, submodule!\n")
 
-	cmd := submRepo.GitCommand(t, "commit", "-m", "subm initial")
+	cmd := submTestRepo.GitCommand(t, "commit", "-m", "subm initial")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating subm commit")
 
-	mainRepo := testutils.TestRepo{
+	mainTestRepo := testutils.TestRepo{
 		Path: filepath.Join(tmp, "main"),
 	}
-	mainRepo.Init(t, false)
+	mainTestRepo.Init(t, false)
 
-	mainRepo.AddFile(t, "mainfile.txt", "Hello, main!\n")
+	mainTestRepo.AddFile(t, "mainfile.txt", "Hello, main!\n")
 
-	cmd = mainRepo.GitCommand(t, "commit", "-m", "main initial")
+	cmd = mainTestRepo.GitCommand(t, "commit", "-m", "main initial")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "creating main commit")
 
 	// Make subm a submodule of main:
-	cmd = mainRepo.GitCommand(t, "-c", "protocol.file.allow=always", "submodule", "add", submRepo.Path, "sub")
-	cmd.Dir = mainRepo.Path
+	cmd = mainTestRepo.GitCommand(t, "-c", "protocol.file.allow=always", "submodule", "add", submTestRepo.Path, "sub")
+	cmd.Dir = mainTestRepo.Path
 	require.NoError(t, cmd.Run(), "adding submodule")
 
-	cmd = mainRepo.GitCommand(t, "commit", "-m", "add submodule")
+	cmd = mainTestRepo.GitCommand(t, "commit", "-m", "add submodule")
 	testutils.AddAuthorInfo(cmd, &timestamp)
 	require.NoError(t, cmd.Run(), "committing submodule to main")
 
+	mainRepo := mainTestRepo.Repository(t)
+
+	mainRefRoots, err := sizes.CollectReferences(ctx, mainRepo, refGrouper{})
+	require.NoError(t, err)
+
+	mainRoots := make([]sizes.Root, 0, len(mainRefRoots))
+	for _, refRoot := range mainRefRoots {
+		mainRoots = append(mainRoots, refRoot)
+	}
+
 	// Analyze the main repo:
 	h, err := sizes.ScanRepositoryUsingGraph(
-		mainRepo.Repository(t),
-		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
+		context.Background(), mainTestRepo.Repository(t),
+		mainRoots, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")
@@ -720,12 +822,23 @@ func TestSubmodule(t *testing.T) {
 	assert.Equal(t, counts.Count32(1), h.MaxExpandedSubmoduleCount, "max expanded submodule count")
 
 	// Analyze the submodule:
-	submRepo2 := testutils.TestRepo{
-		Path: filepath.Join(mainRepo.Path, "sub"),
+	submTestRepo2 := testutils.TestRepo{
+		Path: filepath.Join(mainTestRepo.Path, "sub"),
 	}
+
+	submRepo2 := submTestRepo2.Repository(t)
+
+	submRefRoots2, err := sizes.CollectReferences(ctx, submRepo2, refGrouper{})
+	require.NoError(t, err)
+
+	submRoots2 := make([]sizes.Root, 0, len(submRefRoots2))
+	for _, refRoot := range submRefRoots2 {
+		submRoots2 = append(submRoots2, refRoot)
+	}
+
 	h, err = sizes.ScanRepositoryUsingGraph(
-		submRepo2.Repository(t),
-		refGrouper{}, sizes.NameStyleNone, meter.NoProgressMeter,
+		context.Background(), submRepo2,
+		submRoots2, sizes.NameStyleNone, meter.NoProgressMeter,
 	)
 	require.NoError(t, err, "scanning repository")
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")

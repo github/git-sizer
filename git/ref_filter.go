@@ -83,15 +83,23 @@ func (_ allReferencesFilter) Filter(_ string) bool {
 
 var AllReferencesFilter allReferencesFilter
 
+type noReferencesFilter struct{}
+
+func (_ noReferencesFilter) Filter(_ string) bool {
+	return false
+}
+
+var NoReferencesFilter noReferencesFilter
+
 // PrefixFilter returns a `ReferenceFilter` that matches references
 // whose names start with the specified `prefix`, which must match at
 // a component boundary. For example,
 //
-// * Prefix "refs/foo" matches "refs/foo" and "refs/foo/bar" but not
-//   "refs/foobar".
+//   - Prefix "refs/foo" matches "refs/foo" and "refs/foo/bar" but not
+//     "refs/foobar".
 //
-// * Prefix "refs/foo/" matches "refs/foo/bar" but not "refs/foo" or
-//   "refs/foobar".
+//   - Prefix "refs/foo/" matches "refs/foo/bar" but not "refs/foo" or
+//     "refs/foobar".
 func PrefixFilter(prefix string) ReferenceFilter {
 	if prefix == "" {
 		return AllReferencesFilter

@@ -7,11 +7,11 @@ Most people can just install a released version of `git-sizer`, [as described in
 
 1.  Make sure that you have a recent version of the [Go language toolchain](https://golang.org/doc/install) installed and that you have set `GOPATH`.
 
-2.  Get `git-sizer` using `go get`:
+2.  Get `git-sizer` using `go install`:
 
-        go get github.com/github/git-sizer
+        go install github.com/github/git-sizer@latest
 
-    This should fetch and compile the source code and write the executable file to `$GOPATH/bin/`.
+    This should install the executable file to `$GOPATH/bin/`.
 
 3.  Either add `$GOPATH/bin` to your `PATH`, or copy the executable file (`git-sizer` or `git-sizer.exe`) to a directory that is already in your `PATH`.
 

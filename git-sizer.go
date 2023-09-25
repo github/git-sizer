@@ -306,22 +306,27 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		progressMeter = meter.NewProgressMeter(stderr, 100*time.Millisecond)
 	}
 
-	refRoots, err := sizes.CollectReferences(ctx, repo, rg)
-	if err != nil {
-		return fmt.Errorf("determining which reference to scan: %w", err)
-	}
-
-	roots := make([]sizes.Root, 0, len(refRoots)+len(flags.Args()))
-	for _, refRoot := range refRoots {
-		roots = append(roots, refRoot)
-	}
-
-	for _, arg := range flags.Args() {
-		oid, err := repo.ResolveObject(arg)
-		if err != nil {
-			return fmt.Errorf("resolving command-line argument %q: %w", arg, err)
+	var roots []sizes.Root
+	// If arguments are provided, use them as explicit roots.
+	if len(flags.Args()) > 0 {
+		roots = make([]sizes.Root, 0, len(flags.Args()))
+		for _, arg := range flags.Args() {
+			oid, err := repo.ResolveObject(arg)
+			if err != nil {
+				return fmt.Errorf("resolving command-line argument %q: %w", arg, err)
+			}
+			roots = append(roots, sizes.NewExplicitRoot(arg, oid))
 		}
-		roots = append(roots, sizes.NewExplicitRoot(arg, oid))
+	} else {
+		refs, err := sizes.CollectReferences(ctx, repo, rg)
+		if err != nil {
+			return fmt.Errorf("determining which reference to scan: %w", err)
+		}
+
+		roots = make([]sizes.Root, 0, len(refs))
+		for _, ref := range refs {
+			roots = append(roots, ref)
+		}
 	}
 
 	historySize, err := sizes.ScanRepositoryUsingGraph(

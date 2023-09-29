@@ -343,6 +343,10 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		return fmt.Errorf("error scanning repository: %w", err)
 	}
 
+	formatOptions := sizes.FormatOptions{
+		WithoutReferenceCount: git.IsNoReferencesFilter(rgb.GetTopLevelGroup().GetFilter()),
+	}
+
 	if jsonOutput {
 		var j []byte
 		var err error
@@ -350,7 +354,7 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		case 1:
 			j, err = json.MarshalIndent(historySize, "", "    ")
 		case 2:
-			j, err = historySize.JSON(rg.Groups(), threshold, nameStyle)
+			j, err = historySize.JSON(rg.Groups(), threshold, nameStyle, formatOptions)
 		default:
 			return fmt.Errorf("JSON version must be 1 or 2")
 		}
@@ -360,7 +364,7 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		fmt.Fprintf(stdout, "%s\n", j)
 	} else {
 		if _, err := io.WriteString(
-			stdout, historySize.TableString(rg.Groups(), threshold, nameStyle),
+			stdout, historySize.TableString(rg.Groups(), threshold, nameStyle, formatOptions),
 		); err != nil {
 			return fmt.Errorf("writing output: %w", err)
 		}

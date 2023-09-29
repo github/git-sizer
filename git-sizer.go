@@ -307,26 +307,33 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 	}
 
 	var roots []sizes.Root
+	var explicitRoots []sizes.Root
 	// If arguments are provided, use them as explicit roots.
 	if len(flags.Args()) > 0 {
-		roots = make([]sizes.Root, 0, len(flags.Args()))
+		explicitRoots = make([]sizes.Root, 0, len(flags.Args()))
 		for _, arg := range flags.Args() {
 			oid, err := repo.ResolveObject(arg)
 			if err != nil {
 				return fmt.Errorf("resolving command-line argument %q: %w", arg, err)
 			}
-			roots = append(roots, sizes.NewExplicitRoot(arg, oid))
+			explicitRoots = append(explicitRoots, sizes.NewExplicitRoot(arg, oid))
 		}
+	}
+
+	// If no reference filters and no explicit roots were provided
+	if git.IsNoReferencesFilter(rgb.GetTopLevelGroup().GetFilter()) {
+		roots = explicitRoots
 	} else {
-		refs, err := sizes.CollectReferences(ctx, repo, rg)
+		refRoots, err := sizes.CollectReferences(ctx, repo, rg)
 		if err != nil {
 			return fmt.Errorf("determining which reference to scan: %w", err)
 		}
 
-		roots = make([]sizes.Root, 0, len(refs))
-		for _, ref := range refs {
-			roots = append(roots, ref)
+		roots = make([]sizes.Root, 0, len(refRoots)+len(explicitRoots))
+		for _, refRoot := range refRoots {
+			roots = append(roots, refRoot)
 		}
+		roots = append(roots, explicitRoots...)
 	}
 
 	historySize, err := sizes.ScanRepositoryUsingGraph(

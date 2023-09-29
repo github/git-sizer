@@ -22,6 +22,10 @@ type RefGroupBuilder struct {
 	groups        map[sizes.RefGroupSymbol]*refGroup
 }
 
+func (rgb *RefGroupBuilder) GetTopLevelGroup() *refGroup {
+	return rgb.topLevelGroup
+}
+
 // NewRefGroupBuilder creates and returns a `RefGroupBuilder`
 // instance.
 func NewRefGroupBuilder(configger Configger) (*RefGroupBuilder, error) {

@@ -352,7 +352,7 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		var err error
 		switch jsonVersion {
 		case 1:
-			j, err = json.MarshalIndent(historySize, "", "    ")
+			j, err = json.MarshalIndent(historySize.JsonV1Format(&formatOptions), "", "    ")
 		case 2:
 			j, err = historySize.JSON(rg.Groups(), threshold, nameStyle, formatOptions)
 		default:

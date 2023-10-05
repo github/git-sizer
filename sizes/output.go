@@ -41,6 +41,19 @@ func (s TagSize) String() string {
 	return fmt.Sprintf("tag_depth=%d", s.TagDepth)
 }
 
+func (s *HistorySize) JsonV1Format(opts *FormatOptions) *HistorySize {
+	if opts == nil {
+		return s
+	}
+
+	if opts.WithoutReferenceCount {
+		s.ReferenceCount = 0
+		s.ReferenceGroups = nil
+	}
+
+	return s
+}
+
 func (s *HistorySize) String() string {
 	return fmt.Sprintf(
 		"unique_commit_count=%d, unique_commit_count = %d, max_commit_size = %d, "+

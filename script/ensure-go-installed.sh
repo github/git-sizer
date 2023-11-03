@@ -4,17 +4,17 @@ if [ -z "$ROOTDIR" ]; then
     echo 1>&2 'ensure-go-installed.sh invoked without ROOTDIR set!'
 fi
 
-# Is go installed, and at least 1.16?
+# Is go installed, and at least 1.21?
 go_ok() {
     set -- $(go version 2>/dev/null |
                 sed -n 's/.*go\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2/p' |
                 head -n 1)
-    [ $# -eq 2 ] && [ "$1" -eq 1 ] && [ "$2" -ge 16 ]
+    [ $# -eq 2 ] && [ "$1" -eq 1 ] && [ "$2" -ge 21 ]
 }
 
 # If a local go is installed, use it.
 set_up_vendored_go() {
-    GO_VERSION=go1.16.3
+    GO_VERSION=go1.21.3
     VENDORED_GOROOT="$ROOTDIR/vendor/$GO_VERSION/go"
     if [ -x "$VENDORED_GOROOT/bin/go" ]; then
         export GOROOT="$VENDORED_GOROOT"

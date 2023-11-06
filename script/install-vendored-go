@@ -1,20 +1,21 @@
 #!/bin/sh
 
 # The checksums below must correspond to the downloads for this version.
-GO_VERSION=go1.16.3
+# The checksums can be found on https://go.dev/dl
+GO_VERSION=go1.21.3
 
 case "$(uname -s):$(uname -m)" in
 Linux:x86_64)
     GO_PKG=${GO_VERSION}.linux-amd64.tar.gz
-    GO_PKG_SHA=951a3c7c6ce4e56ad883f97d9db74d3d6d80d5fec77455c6ada6c1f7ac4776d2
+    GO_PKG_SHA=1241381b2843fae5a9707eec1f8fb2ef94d827990582c7c7c32f5bdfbfd420c8
     ;;
 Darwin:x86_64)
     GO_PKG=${GO_VERSION}.darwin-amd64.tar.gz
-    GO_PKG_SHA=6bb1cf421f8abc2a9a4e39140b7397cdae6aca3e8d36dcff39a1a77f4f1170ac
+    GO_PKG_SHA=27014fc69e301d7588a169ca239b3cc609f0aa1abf38528bf0d20d3b259211eb
     ;;
 Darwin:arm64)
     GO_PKG=${GO_VERSION}.darwin-arm64.tar.gz
-    GO_PKG_SHA=f4e96bbcd5d2d1942f5b55d9e4ab19564da4fad192012f6d7b0b9b055ba4208f
+    GO_PKG_SHA=65302a7a9f7a4834932b3a7a14cb8be51beddda757b567a2f9e0cbd0d7b5a6ab
     ;;
 *)
     echo 1>&2 "I don't know how to install Go on your platform."

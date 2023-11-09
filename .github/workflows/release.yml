@@ -1,0 +1,34 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup
+        uses:
+          actions/setup-go@v4
+        with:
+          go-version: 1.21
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build releases
+        run: |
+          make releases VERSION=$GITHUB_REF_NAME
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          files: |
+            releases/git-sizer-*

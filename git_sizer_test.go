@@ -25,6 +25,13 @@ import (
 	"github.com/github/git-sizer/sizes"
 )
 
+func TestMain(m *testing.M) {
+	// Allow Git to access the bare repositories of these tests, even if
+	// the user configured `safe.bareRepository=explicit` globally.
+	os.Setenv("GIT_CONFIG_PARAMETERS", "'safe.bareRepository=all'")
+	os.Exit(m.Run())
+}
+
 func sizerExe(t *testing.T) string {
 	t.Helper()
 

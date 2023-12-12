@@ -272,7 +272,10 @@ func TestRefSelections(t *testing.T) {
 				args := []string{"--show-refs", "--no-progress", "--json", "--json-version=2"}
 				args = append(args, p.args...)
 				cmd := exec.Command(executable, args...)
-				cmd.Dir = repo.Path
+				cmd.Env = append(
+					os.Environ(),
+					"GIT_DIR="+repo.Path,
+				)
 				var stdout bytes.Buffer
 				cmd.Stdout = &stdout
 				var stderr bytes.Buffer
@@ -519,7 +522,10 @@ References (included references marked with '+'):
 
 				args := append([]string{"--show-refs", "-v", "--no-progress"}, p.args...)
 				cmd := exec.Command(executable, args...)
-				cmd.Dir = repo.Path
+				cmd.Env = append(
+					os.Environ(),
+					"GIT_DIR="+repo.Path,
+				)
 				var stdout bytes.Buffer
 				cmd.Stdout = &stdout
 				var stderr bytes.Buffer

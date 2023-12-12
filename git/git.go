@@ -64,8 +64,7 @@ func NewRepository(path string) (*Repository, error) {
 	gitDir := smartJoin(path, string(bytes.TrimSpace(out)))
 
 	//nolint:gosec // `gitBin` is chosen carefully.
-	cmd = exec.Command(gitBin, "rev-parse", "--git-path", "shallow")
-	cmd.Dir = gitDir
+	cmd = exec.Command(gitBin, "--git-dir", gitDir, "rev-parse", "--git-path", "shallow")
 	out, err = cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf(

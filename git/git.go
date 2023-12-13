@@ -26,9 +26,10 @@ type Repository struct {
 	gitBin string
 }
 
-// smartJoin returns the path that can be described as `relPath`
-// relative to `path`, given that `path` is either absolute or is
-// relative to the current directory.
+// smartJoin returns `relPath` if it is an absolute path. If not, it
+// assumes that `relPath` is relative to `path`, so it joins them
+// together and returns the result. In that case, if `path` itself is
+// relative, then the return value is also relative.
 func smartJoin(path, relPath string) string {
 	if filepath.IsAbs(relPath) {
 		return relPath

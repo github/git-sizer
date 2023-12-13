@@ -20,6 +20,7 @@ import (
 // TestRepo represents a git repository used for tests.
 type TestRepo struct {
 	Path string
+	bare bool
 }
 
 // NewTestRepo creates and initializes a test repository in a
@@ -37,6 +38,7 @@ func NewTestRepo(t *testing.T, bare bool, pattern string) *TestRepo {
 
 	return &TestRepo{
 		Path: path,
+		bare: bare,
 	}
 }
 
@@ -89,9 +91,15 @@ func (repo *TestRepo) Clone(t *testing.T, pattern string) *TestRepo {
 func (repo *TestRepo) Repository(t *testing.T) *git.Repository {
 	t.Helper()
 
-	r, err := git.NewRepositoryFromPath(repo.Path)
-	require.NoError(t, err)
-	return r
+	if repo.bare {
+		r, err := git.NewRepositoryFromGitDir(repo.Path)
+		require.NoError(t, err)
+		return r
+	} else {
+		r, err := git.NewRepositoryFromPath(repo.Path)
+		require.NoError(t, err)
+		return r
+	}
 }
 
 // localEnvVars is a list of the variable names that should be cleared

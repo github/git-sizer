@@ -37,8 +37,36 @@ func smartJoin(path, relPath string) string {
 	return filepath.Join(path, relPath)
 }
 
-// NewRepository creates a new repository object that can be used for
-// running `git` commands within that repository.
+// NewRepositoryFromGitDir creates a new `Repository` object that can
+// be used for running `git` commands, given the value of `GIT_DIR`
+// for the repository.
+func NewRepositoryFromGitDir(gitDir string) (*Repository, error) {
+	// Find the `git` executable to be used:
+	gitBin, err := findGitBin()
+	if err != nil {
+		return nil, fmt.Errorf(
+			"could not find 'git' executable (is it in your PATH?): %w", err,
+		)
+	}
+
+	repo := Repository{
+		gitDir: gitDir,
+		gitBin: gitBin,
+	}
+
+	full, err := repo.IsFull()
+	if err != nil {
+		return nil, fmt.Errorf("determining whether the repository is a full clone: %w", err)
+	}
+	if !full {
+		return nil, errors.New("this appears to be a shallow clone; full clone required")
+	}
+
+	return &repo, nil
+}
+
+// NewRepository creates a new `Repository` object that can be used
+// for running `git` commands within `path`.
 func NewRepository(path string) (*Repository, error) {
 	// Find the `git` executable to be used:
 	gitBin, err := findGitBin()
@@ -68,20 +96,7 @@ func NewRepository(path string) (*Repository, error) {
 	}
 	gitDir := smartJoin(path, string(bytes.TrimSpace(out)))
 
-	repo := Repository{
-		gitDir: gitDir,
-		gitBin: gitBin,
-	}
-
-	full, err := repo.IsFull()
-	if err != nil {
-		return nil, fmt.Errorf("determining whether the repository is a full clone: %w", err)
-	}
-	if !full {
-		return nil, errors.New("this appears to be a shallow clone; full clone required")
-	}
-
-	return &repo, nil
+	return NewRepositoryFromGitDir(gitDir)
 }
 
 // IsFull returns `true` iff `repo` appears to be a full clone.

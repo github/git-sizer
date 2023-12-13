@@ -66,25 +66,22 @@ func NewRepository(path string) (*Repository, error) {
 	}
 	gitDir := smartJoin(path, string(bytes.TrimSpace(out)))
 
-	//nolint:gosec // `gitBin` is chosen carefully.
-	cmd = exec.Command(gitBin, "rev-parse", "--git-path", "shallow")
-	cmd.Dir = gitDir
-	out, err = cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf(
-			"could not run 'git rev-parse --git-path shallow': %w", err,
-		)
+	repo := Repository{
+		gitDir: gitDir,
+		gitBin: gitBin,
 	}
-	shallow := smartJoin(gitDir, string(bytes.TrimSpace(out)))
+
+	shallow, err := repo.GitPath("shallow")
+	if err != nil {
+		return nil, err
+	}
+
 	_, err = os.Lstat(shallow)
 	if err == nil {
 		return nil, errors.New("this appears to be a shallow clone; full clone required")
 	}
 
-	return &Repository{
-		gitDir: gitDir,
-		gitBin: gitBin,
-	}, nil
+	return &repo, nil
 }
 
 func (repo *Repository) GitCommand(callerArgs ...string) *exec.Cmd {
@@ -118,4 +115,21 @@ func (repo *Repository) GitCommand(callerArgs ...string) *exec.Cmd {
 // or it might be relative to the current directory.
 func (repo *Repository) GitDir() string {
 	return repo.gitDir
+}
+
+// GitPath returns that path of a file within the git repository, by
+// calling `git rev-parse --git-path $relPath`. The returned path is
+// relative to the current directory.
+func (repo *Repository) GitPath(relPath string) (string, error) {
+	cmd := repo.GitCommand("rev-parse", "--git-path", relPath)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf(
+			"running 'git rev-parse --git-path %s': %w", relPath, err,
+		)
+	}
+	// `git rev-parse --git-path` is documented to return the path
+	// relative to the current directory. Since we haven't changed the
+	// current directory, we can use it as-is:
+	return string(bytes.TrimSpace(out)), nil
 }

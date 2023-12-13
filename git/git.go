@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,17 +72,36 @@ func NewRepository(path string) (*Repository, error) {
 		gitBin: gitBin,
 	}
 
-	shallow, err := repo.GitPath("shallow")
+	full, err := repo.IsFull()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("determining whether the repository is a full clone: %w", err)
 	}
-
-	_, err = os.Lstat(shallow)
-	if err == nil {
+	if !full {
 		return nil, errors.New("this appears to be a shallow clone; full clone required")
 	}
 
 	return &repo, nil
+}
+
+// IsFull returns `true` iff `repo` appears to be a full clone.
+func (repo *Repository) IsFull() (bool, error) {
+	shallow, err := repo.GitPath("shallow")
+	if err != nil {
+		return false, err
+	}
+
+	_, err = os.Lstat(shallow)
+	if err == nil {
+		return false, nil
+	}
+
+	if !errors.Is(err, fs.ErrNotExist) {
+		return false, err
+	}
+
+	// The `shallow` file is absent, which is what we expect
+	// for a full clone.
+	return true, nil
 }
 
 func (repo *Repository) GitCommand(callerArgs ...string) *exec.Cmd {

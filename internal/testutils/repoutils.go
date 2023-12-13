@@ -89,7 +89,7 @@ func (repo *TestRepo) Clone(t *testing.T, pattern string) *TestRepo {
 func (repo *TestRepo) Repository(t *testing.T) *git.Repository {
 	t.Helper()
 
-	r, err := git.NewRepository(repo.Path)
+	r, err := git.NewRepositoryFromPath(repo.Path)
 	require.NoError(t, err)
 	return r
 }

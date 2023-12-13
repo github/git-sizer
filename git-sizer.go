@@ -134,7 +134,7 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 
 	// Try to open the repository, but it's not an error yet if this
 	// fails, because the user might only be asking for `--help`.
-	repo, repoErr := git.NewRepository(".")
+	repo, repoErr := git.NewRepositoryFromPath(".")
 
 	flags := pflag.NewFlagSet("git-sizer", pflag.ContinueOnError)
 	flags.Usage = func() {

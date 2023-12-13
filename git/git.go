@@ -65,10 +65,11 @@ func NewRepositoryFromGitDir(gitDir string) (*Repository, error) {
 	return &repo, nil
 }
 
-// NewRepository creates a new `Repository` object that can be used
-// for running `git` commands within `path`.
-func NewRepository(path string) (*Repository, error) {
-	// Find the `git` executable to be used:
+// NewRepositoryFromPath creates a new `Repository` object that can be
+// used for running `git` commands within `path`. It does so by asking
+// `git` what `GIT_DIR` to use. Git, in turn, bases its decision on
+// the path and the environment.
+func NewRepositoryFromPath(path string) (*Repository, error) {
 	gitBin, err := findGitBin()
 	if err != nil {
 		return nil, fmt.Errorf(

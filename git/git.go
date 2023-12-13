@@ -15,7 +15,10 @@ type ObjectType string
 
 // Repository represents a Git repository on disk.
 type Repository struct {
-	path string
+	// gitDir is the path to the `GIT_DIR` for this repository. It
+	// might be absolute or it might be relative to the current
+	// directory.
+	gitDir string
 
 	// gitBin is the path of the `git` executable that should be used
 	// when running commands in this repository.
@@ -79,7 +82,7 @@ func NewRepository(path string) (*Repository, error) {
 	}
 
 	return &Repository{
-		path:   gitDir,
+		gitDir: gitDir,
 		gitBin: gitBin,
 	}, nil
 }
@@ -103,7 +106,7 @@ func (repo *Repository) GitCommand(callerArgs ...string) *exec.Cmd {
 
 	cmd.Env = append(
 		os.Environ(),
-		"GIT_DIR="+repo.path,
+		"GIT_DIR="+repo.gitDir,
 		// Disable grafts when running our commands:
 		"GIT_GRAFT_FILE="+os.DevNull,
 	)
@@ -111,7 +114,8 @@ func (repo *Repository) GitCommand(callerArgs ...string) *exec.Cmd {
 	return cmd
 }
 
-// Path returns the path to `repo`.
-func (repo *Repository) Path() string {
-	return repo.path
+// GitDir returns the path to `repo`'s `GIT_DIR`. It might be absolute
+// or it might be relative to the current directory.
+func (repo *Repository) GitDir() string {
+	return repo.gitDir
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,7 +28,7 @@ type TestRepo struct {
 func NewTestRepo(t *testing.T, bare bool, pattern string) *TestRepo {
 	t.Helper()
 
-	path, err := ioutil.TempDir("", pattern)
+	path, err := os.MkdirTemp("", pattern)
 	require.NoError(t, err)
 
 	repo := TestRepo{Path: path}
@@ -73,7 +72,7 @@ func (repo *TestRepo) Remove(t *testing.T) {
 func (repo *TestRepo) Clone(t *testing.T, pattern string) *TestRepo {
 	t.Helper()
 
-	path, err := ioutil.TempDir("", pattern)
+	path, err := os.MkdirTemp("", pattern)
 	require.NoError(t, err)
 
 	err = repo.GitCommand(

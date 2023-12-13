@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -760,7 +759,7 @@ func TestSubmodule(t *testing.T) {
 
 	ctx := context.Background()
 
-	tmp, err := ioutil.TempDir("", "submodule")
+	tmp, err := os.MkdirTemp("", "submodule")
 	require.NoError(t, err, "creating temporary directory")
 
 	defer func() {

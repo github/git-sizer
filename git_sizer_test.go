@@ -849,3 +849,40 @@ func TestSubmodule(t *testing.T) {
 	assert.Equal(t, counts.Count32(2), h.UniqueBlobCount, "unique blob count")
 	assert.Equal(t, counts.Count32(3), h.MaxExpandedBlobCount, "max expanded blob count")
 }
+
+func TestSHA256(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	t.Helper()
+
+	path, err := os.MkdirTemp("", "sha256")
+	require.NoError(t, err)
+
+	testRepo := testutils.TestRepo{Path: path}
+	defer testRepo.Remove(t)
+
+	// Don't use `GitCommand()` because the directory might not
+	// exist yet:
+	cmd := exec.Command("git", "init", "--object-format", "sha256", testRepo.Path)
+	cmd.Env = testutils.CleanGitEnv()
+	err = cmd.Run()
+	require.NoError(t, err)
+
+	timestamp := time.Unix(1112911993, 0)
+
+	testRepo.AddFile(t, "hello.txt", "Hello, world!\n")
+	cmd = testRepo.GitCommand(t, "commit", "-m", "initial")
+	testutils.AddAuthorInfo(cmd, &timestamp)
+	require.NoError(t, cmd.Run(), "creating initial commit")
+
+	cmd = testRepo.GitCommand(t, "commit", "-m", "initial", "--allow-empty")
+	testutils.AddAuthorInfo(cmd, &timestamp)
+	require.NoError(t, cmd.Run(), "creating commit")
+
+	repo := testRepo.Repository(t)
+
+	_, err = sizes.CollectReferences(ctx, repo, refGrouper{})
+	require.NoError(t, err)
+}

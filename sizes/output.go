@@ -279,10 +279,10 @@ func (t *Threshold) Type() string {
 // A `pflag.Value` that can be used as a boolean option that sets a
 // `Threshold` variable to a fixed value. For example,
 //
-//		pflag.Var(
-//			sizes.NewThresholdFlagValue(&threshold, 30),
-//			"critical", "only report critical statistics",
-//		)
+//	pflag.Var(
+//		sizes.NewThresholdFlagValue(&threshold, 30),
+//		"critical", "only report critical statistics",
+//	)
 //
 // adds a `--critical` flag that sets `threshold` to 30.
 type thresholdFlagValue struct {

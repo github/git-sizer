@@ -10,13 +10,14 @@ import (
 
 // Tree represents a Git tree object.
 type Tree struct {
-	data string
+	data     string
+	hashSize int
 }
 
 // ParseTree parses the tree object whose contents are contained in
 // `data`. `oid` is currently unused.
 func ParseTree(oid OID, data []byte) (*Tree, error) {
-	return &Tree{string(data)}, nil
+	return &Tree{string(data), oid.hashSize}, nil
 }
 
 // Size returns the size of the tree object.
@@ -36,13 +37,15 @@ type TreeEntry struct {
 // TreeIter is an iterator over the entries in a Git tree object.
 type TreeIter struct {
 	// The as-yet-unread part of the tree's data.
-	data string
+	data     string
+	hashSize int
 }
 
 // Iter returns an iterator over the entries in `tree`.
 func (tree *Tree) Iter() *TreeIter {
 	return &TreeIter{
-		data: tree.data,
+		data:     tree.data,
+		hashSize: tree.hashSize,
 	}
 }
 
@@ -74,12 +77,12 @@ func (iter *TreeIter) NextEntry() (TreeEntry, bool, error) {
 	entry.Name = iter.data[:nulAt]
 
 	iter.data = iter.data[nulAt+1:]
-	if len(iter.data) < 20 {
+	if len(iter.data) < iter.hashSize {
 		return TreeEntry{}, false, errors.New("tree entry ends unexpectedly")
 	}
-
-	copy(entry.OID.v[0:20], iter.data[0:20])
-	iter.data = iter.data[20:]
+	entry.OID.hashSize = iter.hashSize
+	copy(entry.OID.v[0:iter.hashSize], iter.data[0:iter.hashSize])
+	iter.data = iter.data[iter.hashSize:]
 
 	return entry, true, nil
 }

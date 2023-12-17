@@ -27,7 +27,7 @@ type Reference struct {
 // `Reference`. It is assumed that `line` is formatted like the output
 // of
 //
-//     git for-each-ref --format='%(objectname) %(objecttype) %(objectsize) %(refname)'
+//	git for-each-ref --format='%(objectname) %(objecttype) %(objectsize) %(refname)'
 func ParseReference(line string) (Reference, error) {
 	words := strings.Split(line, " ")
 	if len(words) != 4 {

@@ -37,6 +37,7 @@ func ScanRepositoryUsingGraph(
 	nameStyle NameStyle,
 	progressMeter meter.Progress,
 ) (HistorySize, error) {
+	nullOID := repo.HashAlgo().NullOID()
 	graph := NewGraph(nameStyle)
 
 	objIter, err := repo.NewObjectIter(ctx)
@@ -134,7 +135,7 @@ func ScanRepositoryUsingGraph(
 		case "tree":
 			trees = append(trees, ObjectHeader{obj.OID, obj.ObjectSize})
 		case "commit":
-			commits = append(commits, CommitHeader{ObjectHeader{obj.OID, obj.ObjectSize}, git.NullOID})
+			commits = append(commits, CommitHeader{ObjectHeader{obj.OID, obj.ObjectSize}, nullOID})
 		case "tag":
 			tags = append(tags, ObjectHeader{obj.OID, obj.ObjectSize})
 		default:

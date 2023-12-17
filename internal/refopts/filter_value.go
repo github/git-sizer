@@ -76,9 +76,9 @@ func (v *filterValue) Set(s string) error {
 //
 // * If it is bracketed with `/` characters, treat it as a regexp.
 //
-// * If it starts with `@`, then consider it a refgroup name. That
-//   refgroup must already be defined. Use its filter. This construct
-//   is only allowed at the top level.
+//   - If it starts with `@`, then consider it a refgroup name. That
+//     refgroup must already be defined. Use its filter. This construct
+//     is only allowed at the top level.
 //
 // * Otherwise treat it as a prefix.
 func (v *filterValue) interpretFlexibly(s string) (git.ReferenceFilter, error) {

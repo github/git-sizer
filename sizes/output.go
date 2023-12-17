@@ -155,7 +155,7 @@ func (i *item) Emit(t *table) {
 }
 
 func (i *item) Footnote(nameStyle NameStyle) string {
-	if i.path == nil || i.path.OID == git.NullOID {
+	if i.path == nil || git.IsNullOID(i.path.OID) {
 		return ""
 	}
 	switch nameStyle {
@@ -214,7 +214,7 @@ func (i *item) MarshalJSON() ([]byte, error) {
 		LevelOfConcern: float64(value) / i.scale,
 	}
 
-	if i.path != nil && i.path.OID != git.NullOID {
+	if i.path != nil && !git.IsNullOID(i.path.OID) {
 		stat.ObjectName = i.path.OID.String()
 		stat.ObjectDescription = i.path.Path()
 	}
@@ -279,10 +279,10 @@ func (t *Threshold) Type() string {
 // A `pflag.Value` that can be used as a boolean option that sets a
 // `Threshold` variable to a fixed value. For example,
 //
-//		pflag.Var(
-//			sizes.NewThresholdFlagValue(&threshold, 30),
-//			"critical", "only report critical statistics",
-//		)
+//	pflag.Var(
+//		sizes.NewThresholdFlagValue(&threshold, 30),
+//		"critical", "only report critical statistics",
+//	)
 //
 // adds a `--critical` flag that sets `threshold` to 30.
 type thresholdFlagValue struct {

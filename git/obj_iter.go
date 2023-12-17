@@ -30,7 +30,7 @@ func (repo *Repository) NewObjectIter(ctx context.Context) (*ObjectIter, error) 
 		errCh:    make(chan error),
 		headerCh: make(chan BatchHeader),
 	}
-
+	hashHexSize := repo.HashSize() * 2
 	iter.p.Add(
 		// Read OIDs from `iter.oidCh` and write them to `git
 		// rev-list`:
@@ -68,10 +68,10 @@ func (repo *Repository) NewObjectIter(ctx context.Context) (*ObjectIter, error) 
 		pipe.LinewiseFunction(
 			"copy-oids",
 			func(_ context.Context, _ pipe.Env, line []byte, stdout *bufio.Writer) error {
-				if len(line) < 40 {
+				if len(line) < hashHexSize {
 					return fmt.Errorf("line too short: '%s'", line)
 				}
-				if _, err := stdout.Write(line[:40]); err != nil {
+				if _, err := stdout.Write(line[:hashHexSize]); err != nil {
 					return fmt.Errorf("writing OID to 'git cat-file': %w", err)
 				}
 				if err := stdout.WriteByte('\n'); err != nil {

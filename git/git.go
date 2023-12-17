@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,16 +16,20 @@ type ObjectType string
 
 // Repository represents a Git repository on disk.
 type Repository struct {
-	path string
+	// gitDir is the path to the `GIT_DIR` for this repository. It
+	// might be absolute or it might be relative to the current
+	// directory.
+	gitDir string
 
 	// gitBin is the path of the `git` executable that should be used
 	// when running commands in this repository.
 	gitBin string
 }
 
-// smartJoin returns the path that can be described as `relPath`
-// relative to `path`, given that `path` is either absolute or is
-// relative to the current directory.
+// smartJoin returns `relPath` if it is an absolute path. If not, it
+// assumes that `relPath` is relative to `path`, so it joins them
+// together and returns the result. In that case, if `path` itself is
+// relative, then the return value is also relative.
 func smartJoin(path, relPath string) string {
 	if filepath.IsAbs(relPath) {
 		return relPath
@@ -32,10 +37,39 @@ func smartJoin(path, relPath string) string {
 	return filepath.Join(path, relPath)
 }
 
-// NewRepository creates a new repository object that can be used for
-// running `git` commands within that repository.
-func NewRepository(path string) (*Repository, error) {
+// NewRepositoryFromGitDir creates a new `Repository` object that can
+// be used for running `git` commands, given the value of `GIT_DIR`
+// for the repository.
+func NewRepositoryFromGitDir(gitDir string) (*Repository, error) {
 	// Find the `git` executable to be used:
+	gitBin, err := findGitBin()
+	if err != nil {
+		return nil, fmt.Errorf(
+			"could not find 'git' executable (is it in your PATH?): %w", err,
+		)
+	}
+
+	repo := Repository{
+		gitDir: gitDir,
+		gitBin: gitBin,
+	}
+
+	full, err := repo.IsFull()
+	if err != nil {
+		return nil, fmt.Errorf("determining whether the repository is a full clone: %w", err)
+	}
+	if !full {
+		return nil, errors.New("this appears to be a shallow clone; full clone required")
+	}
+
+	return &repo, nil
+}
+
+// NewRepositoryFromPath creates a new `Repository` object that can be
+// used for running `git` commands within `path`. It does so by asking
+// `git` what `GIT_DIR` to use. Git, in turn, bases its decision on
+// the path and the environment.
+func NewRepositoryFromPath(path string) (*Repository, error) {
 	gitBin, err := findGitBin()
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -63,25 +97,28 @@ func NewRepository(path string) (*Repository, error) {
 	}
 	gitDir := smartJoin(path, string(bytes.TrimSpace(out)))
 
-	//nolint:gosec // `gitBin` is chosen carefully.
-	cmd = exec.Command(gitBin, "rev-parse", "--git-path", "shallow")
-	cmd.Dir = gitDir
-	out, err = cmd.Output()
+	return NewRepositoryFromGitDir(gitDir)
+}
+
+// IsFull returns `true` iff `repo` appears to be a full clone.
+func (repo *Repository) IsFull() (bool, error) {
+	shallow, err := repo.GitPath("shallow")
 	if err != nil {
-		return nil, fmt.Errorf(
-			"could not run 'git rev-parse --git-path shallow': %w", err,
-		)
-	}
-	shallow := smartJoin(gitDir, string(bytes.TrimSpace(out)))
-	_, err = os.Lstat(shallow)
-	if err == nil {
-		return nil, errors.New("this appears to be a shallow clone; full clone required")
+		return false, err
 	}
 
-	return &Repository{
-		path:   gitDir,
-		gitBin: gitBin,
-	}, nil
+	_, err = os.Lstat(shallow)
+	if err == nil {
+		return false, nil
+	}
+
+	if !errors.Is(err, fs.ErrNotExist) {
+		return false, err
+	}
+
+	// The `shallow` file is absent, which is what we expect
+	// for a full clone.
+	return true, nil
 }
 
 func (repo *Repository) GitCommand(callerArgs ...string) *exec.Cmd {
@@ -103,7 +140,7 @@ func (repo *Repository) GitCommand(callerArgs ...string) *exec.Cmd {
 
 	cmd.Env = append(
 		os.Environ(),
-		"GIT_DIR="+repo.path,
+		"GIT_DIR="+repo.gitDir,
 		// Disable grafts when running our commands:
 		"GIT_GRAFT_FILE="+os.DevNull,
 	)
@@ -111,7 +148,25 @@ func (repo *Repository) GitCommand(callerArgs ...string) *exec.Cmd {
 	return cmd
 }
 
-// Path returns the path to `repo`.
-func (repo *Repository) Path() string {
-	return repo.path
+// GitDir returns the path to `repo`'s `GIT_DIR`. It might be absolute
+// or it might be relative to the current directory.
+func (repo *Repository) GitDir() string {
+	return repo.gitDir
+}
+
+// GitPath returns that path of a file within the git repository, by
+// calling `git rev-parse --git-path $relPath`. The returned path is
+// relative to the current directory.
+func (repo *Repository) GitPath(relPath string) (string, error) {
+	cmd := repo.GitCommand("rev-parse", "--git-path", relPath)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf(
+			"running 'git rev-parse --git-path %s': %w", relPath, err,
+		)
+	}
+	// `git rev-parse --git-path` is documented to return the path
+	// relative to the current directory. Since we haven't changed the
+	// current directory, we can use it as-is:
+	return string(bytes.TrimSpace(out)), nil
 }

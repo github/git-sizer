@@ -41,6 +41,19 @@ func (s TagSize) String() string {
 	return fmt.Sprintf("tag_depth=%d", s.TagDepth)
 }
 
+func (s *HistorySize) JsonV1Format(opts *FormatOptions) *HistorySize {
+	if opts == nil {
+		return s
+	}
+
+	if opts.WithoutReferenceCount {
+		s.ReferenceCount = 0
+		s.ReferenceGroups = nil
+	}
+
+	return s
+}
+
 func (s *HistorySize) String() string {
 	return fmt.Sprintf(
 		"unique_commit_count=%d, unique_commit_count = %d, max_commit_size = %d, "+
@@ -86,14 +99,14 @@ type section struct {
 	contents []tableContents
 }
 
-func newSection(name string, contents ...tableContents) *section {
-	return &section{
+func newSection(name string, contents ...tableContents) section {
+	return section{
 		name:     name,
 		contents: contents,
 	}
 }
 
-func (s *section) Emit(t *table) {
+func (s section) Emit(t *table) {
 	for _, c := range s.contents {
 		subTable := t.subTable(s.name)
 		c.Emit(subTable)
@@ -101,7 +114,7 @@ func (s *section) Emit(t *table) {
 	}
 }
 
-func (s *section) CollectItems(items map[string]*item) {
+func (s section) CollectItems(items map[string]*item) {
 	for _, c := range s.contents {
 		c.CollectItems(items)
 	}
@@ -141,7 +154,7 @@ func newItem(
 	}
 }
 
-func (i *item) Emit(t *table) {
+func (i item) Emit(t *table) {
 	levelOfConcern, interesting := i.levelOfConcern(t.threshold)
 	if !interesting {
 		return
@@ -154,7 +167,7 @@ func (i *item) Emit(t *table) {
 	)
 }
 
-func (i *item) Footnote(nameStyle NameStyle) string {
+func (i item) Footnote(nameStyle NameStyle) string {
 	if i.path == nil || i.path.OID == git.NullOID {
 		return ""
 	}
@@ -173,7 +186,7 @@ func (i *item) Footnote(nameStyle NameStyle) string {
 // If this item's alert level is at least as high as the threshold,
 // return the string that should be used as its "level of concern" and
 // `true`; otherwise, return `"", false`.
-func (i *item) levelOfConcern(threshold Threshold) (string, bool) {
+func (i item) levelOfConcern(threshold Threshold) (string, bool) {
 	value, overflow := i.value.ToUint64()
 	if overflow {
 		return "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", true
@@ -188,11 +201,11 @@ func (i *item) levelOfConcern(threshold Threshold) (string, bool) {
 	return stars[:int(alert)], true
 }
 
-func (i *item) CollectItems(items map[string]*item) {
-	items[i.symbol] = i
+func (i item) CollectItems(items map[string]*item) {
+	items[i.symbol] = &i
 }
 
-func (i *item) MarshalJSON() ([]byte, error) {
+func (i item) MarshalJSON() ([]byte, error) {
 	// How we want to emit an item as JSON.
 	value, _ := i.value.ToUint64()
 
@@ -224,7 +237,7 @@ func (i *item) MarshalJSON() ([]byte, error) {
 
 // Indented returns an `item` that is just like `i`, but indented by
 // `depth` more levels.
-func (i *item) Indented(depth int) tableContents {
+func (i item) Indented(depth int) tableContents {
 	return &indentedItem{
 		tableContents: i,
 		depth:         depth,
@@ -236,7 +249,7 @@ type indentedItem struct {
 	depth int
 }
 
-func (i *indentedItem) Emit(t *table) {
+func (i indentedItem) Emit(t *table) {
 	subTable := t.indented("", i.depth)
 	i.tableContents.Emit(subTable)
 	t.addSection(subTable)
@@ -373,8 +386,9 @@ type table struct {
 
 func (s *HistorySize) TableString(
 	refGroups []RefGroup, threshold Threshold, nameStyle NameStyle,
+	opts FormatOptions,
 ) string {
-	contents := s.contents(refGroups)
+	contents := s.contents(refGroups, opts)
 	t := table{
 		threshold: threshold,
 		nameStyle: nameStyle,
@@ -454,17 +468,20 @@ func (t *table) formatRow(
 	)
 }
 
+type FormatOptions struct {
+	WithoutReferenceCount bool
+}
+
 func (s *HistorySize) JSON(
-	refGroups []RefGroup, threshold Threshold, nameStyle NameStyle,
-) ([]byte, error) {
-	contents := s.contents(refGroups)
+	refGroups []RefGroup, threshold Threshold, nameStyle NameStyle, opts FormatOptions) ([]byte, error) {
+	contents := s.contents(refGroups, opts)
 	items := make(map[string]*item)
 	contents.CollectItems(items)
 	j, err := json.MarshalIndent(items, "", "    ")
 	return j, err
 }
 
-func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
+func (s *HistorySize) contents(refGroups []RefGroup, opts FormatOptions) tableContents {
 	S := newSection
 	I := newItem
 	metric := counts.Metric
@@ -487,6 +504,20 @@ func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
 		)
 		indent := strings.Count(string(rg.Symbol), ".")
 		rgis = append(rgis, rgi.Indented(indent))
+	}
+
+	var refCountSection section
+	if !opts.WithoutReferenceCount {
+		refCountSection = S(
+			"References",
+			I("referenceCount", "Count",
+				"The total number of references",
+				nil, s.ReferenceCount, metric, "", 25e3),
+			S(
+				"",
+				rgis...,
+			),
+		)
 	}
 
 	return S(
@@ -533,16 +564,7 @@ func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
 					nil, s.UniqueTagCount, metric, "", 25e3),
 			),
 
-			S(
-				"References",
-				I("referenceCount", "Count",
-					"The total number of references",
-					nil, s.ReferenceCount, metric, "", 25e3),
-				S(
-					"",
-					rgis...,
-				),
-			),
+			refCountSection,
 		),
 
 		S("Biggest objects",

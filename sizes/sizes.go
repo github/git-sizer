@@ -158,11 +158,11 @@ type HistorySize struct {
 	// The number of references analyzed. Note that we don't eliminate
 	// duplicates if the user passes the same reference more than
 	// once.
-	ReferenceCount counts.Count32 `json:"reference_count"`
+	ReferenceCount counts.Count32 `json:"reference_count,omitempty"`
 
 	// ReferenceGroups keeps track of how many references in each
 	// reference group were scanned.
-	ReferenceGroups map[RefGroupSymbol]*counts.Count32 `json:"reference_groups"`
+	ReferenceGroups map[RefGroupSymbol]*counts.Count32 `json:"reference_groups,omitempty"`
 
 	// The maximum TreeSize in the analyzed history (where each
 	// attribute is maximized separately).

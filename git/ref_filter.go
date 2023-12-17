@@ -140,3 +140,8 @@ type regexpFilter struct {
 func (f regexpFilter) Filter(refname string) bool {
 	return f.re.MatchString(refname)
 }
+
+func IsNoReferencesFilter(val interface{}) bool {
+	_, ok := val.(noReferencesFilter)
+	return ok
+}

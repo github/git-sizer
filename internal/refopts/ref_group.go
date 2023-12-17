@@ -30,6 +30,10 @@ type refGroup struct {
 	otherRefGroup *sizes.RefGroup
 }
 
+func (rg *refGroup) GetFilter() git.ReferenceFilter {
+	return rg.filter
+}
+
 func (rg *refGroup) collectSymbols(refname string) (bool, []sizes.RefGroupSymbol) {
 	walk := false
 	var symbols []sizes.RefGroupSymbol

@@ -306,22 +306,34 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		progressMeter = meter.NewProgressMeter(stderr, 100*time.Millisecond)
 	}
 
-	refRoots, err := sizes.CollectReferences(ctx, repo, rg)
-	if err != nil {
-		return fmt.Errorf("determining which reference to scan: %w", err)
-	}
-
-	roots := make([]sizes.Root, 0, len(refRoots)+len(flags.Args()))
-	for _, refRoot := range refRoots {
-		roots = append(roots, refRoot)
-	}
-
-	for _, arg := range flags.Args() {
-		oid, err := repo.ResolveObject(arg)
-		if err != nil {
-			return fmt.Errorf("resolving command-line argument %q: %w", arg, err)
+	var roots []sizes.Root
+	var explicitRoots []sizes.Root
+	// If arguments are provided, use them as explicit roots.
+	if len(flags.Args()) > 0 {
+		explicitRoots = make([]sizes.Root, 0, len(flags.Args()))
+		for _, arg := range flags.Args() {
+			oid, err := repo.ResolveObject(arg)
+			if err != nil {
+				return fmt.Errorf("resolving command-line argument %q: %w", arg, err)
+			}
+			explicitRoots = append(explicitRoots, sizes.NewExplicitRoot(arg, oid))
 		}
-		roots = append(roots, sizes.NewExplicitRoot(arg, oid))
+	}
+
+	// If no reference filters and no explicit roots were provided
+	if git.IsNoReferencesFilter(rgb.GetTopLevelGroup().GetFilter()) {
+		roots = explicitRoots
+	} else {
+		refRoots, err := sizes.CollectReferences(ctx, repo, rg)
+		if err != nil {
+			return fmt.Errorf("determining which reference to scan: %w", err)
+		}
+
+		roots = make([]sizes.Root, 0, len(refRoots)+len(explicitRoots))
+		for _, refRoot := range refRoots {
+			roots = append(roots, refRoot)
+		}
+		roots = append(roots, explicitRoots...)
 	}
 
 	historySize, err := sizes.ScanRepositoryUsingGraph(
@@ -331,14 +343,18 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		return fmt.Errorf("error scanning repository: %w", err)
 	}
 
+	formatOptions := sizes.FormatOptions{
+		WithoutReferenceCount: git.IsNoReferencesFilter(rgb.GetTopLevelGroup().GetFilter()),
+	}
+
 	if jsonOutput {
 		var j []byte
 		var err error
 		switch jsonVersion {
 		case 1:
-			j, err = json.MarshalIndent(historySize, "", "    ")
+			j, err = json.MarshalIndent(historySize.JsonV1Format(&formatOptions), "", "    ")
 		case 2:
-			j, err = historySize.JSON(rg.Groups(), threshold, nameStyle)
+			j, err = historySize.JSON(rg.Groups(), threshold, nameStyle, formatOptions)
 		default:
 			return fmt.Errorf("JSON version must be 1 or 2")
 		}
@@ -348,7 +364,7 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		fmt.Fprintf(stdout, "%s\n", j)
 	} else {
 		if _, err := io.WriteString(
-			stdout, historySize.TableString(rg.Groups(), threshold, nameStyle),
+			stdout, historySize.TableString(rg.Groups(), threshold, nameStyle, formatOptions),
 		); err != nil {
 			return fmt.Errorf("writing output: %w", err)
 		}

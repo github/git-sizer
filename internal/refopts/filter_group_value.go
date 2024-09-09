@@ -64,7 +64,7 @@ func (f refGroupFilter) Filter(refname string) bool {
 		refGroupMatches(f.refGroup, refname)
 }
 
-// refGroupMatches retruns true iff `rg` would allow `refname`
+// refGroupMatches returns true iff `rg` would allow `refname`
 // through, not considering its parents. If `rg` doesn't have its own
 // filter, this consults its children.
 func refGroupMatches(rg *refGroup, refname string) bool {

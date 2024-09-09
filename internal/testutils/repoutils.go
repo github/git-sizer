@@ -68,7 +68,7 @@ func (repo *TestRepo) Remove(t *testing.T) {
 	_ = os.RemoveAll(repo.Path)
 }
 
-// Clone creates a clone of `repo` at a temporary path constructued
+// Clone creates a clone of `repo` at a temporary path constructed
 // using `pattern`. The caller is responsible for removing it when
 // done by calling `Remove()`.
 func (repo *TestRepo) Clone(t *testing.T, pattern string) *TestRepo {

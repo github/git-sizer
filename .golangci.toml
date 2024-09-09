@@ -36,7 +36,7 @@
                                 # return it. Creating errors with errors.New("some message") makes a magic error that no one
                                 # can handle, so either create it as a sentinel, or give it a type that people can check against.
         "goimports",        # check that all code is formatted with goimports
-                                # Formating is good. goimports is better (and formats imports slightly differently than gofmt).
+                                # Formatting is good. goimports is better (and formats imports slightly differently than gofmt).
         "gosec",            # Inspects source code for security problems
                                 # high quality linter that finds real bugs
         "govet",            # reports suspicious constructs like printf calls that don't have the right # of arguments

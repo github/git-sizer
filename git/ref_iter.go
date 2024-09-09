@@ -9,7 +9,7 @@ import (
 	"github.com/github/go-pipe/pipe"
 )
 
-// ReferenceIter is an iterator that interates over references.
+// ReferenceIter is an iterator that iterates over references.
 type ReferenceIter struct {
 	refCh chan Reference
 	errCh chan error

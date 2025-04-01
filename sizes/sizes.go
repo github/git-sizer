@@ -210,6 +210,9 @@ type HistorySize struct {
 
 	// The tree with the maximum expanded submodule count.
 	MaxExpandedSubmoduleCountTree *Path `json:"max_expanded_submodule_count_tree,omitempty"`
+	
+	// The actual size of the .git directory on disk
+	GitDirSize counts.Count64 `json:"git_dir_size"`
 }
 
 // Convenience function: forget `*path` if it is non-nil and overwrite

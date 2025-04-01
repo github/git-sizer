@@ -150,8 +150,11 @@ func (repo *Repository) GitCommand(callerArgs ...string) *exec.Cmd {
 
 // GitDir returns the path to `repo`'s `GIT_DIR`. It might be absolute
 // or it might be relative to the current directory.
-func (repo *Repository) GitDir() string {
-	return repo.gitDir
+func (repo *Repository) GitDir() (string, error) {
+	if repo.gitDir == "" {
+		return "", errors.New("gitDir is not set")
+	}
+	return repo.gitDir, nil
 }
 
 // GitPath returns that path of a file within the git repository, by

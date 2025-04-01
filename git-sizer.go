@@ -331,6 +331,19 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		return fmt.Errorf("error scanning repository: %w", err)
 	}
 
+	// Calculate the actual size of the .git directory
+	gitDir, err := repo.GitDir()
+	if err != nil {
+		return fmt.Errorf("error getting Git directory path: %w", err)
+	}
+	
+	gitDirSize, err := sizes.CalculateGitDirSize(gitDir)
+	if err != nil {
+		return fmt.Errorf("error calculating Git directory size: %w", err)
+	}
+	
+	historySize.GitDirSize = gitDirSize
+
 	if jsonOutput {
 		var j []byte
 		var err error

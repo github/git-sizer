@@ -336,12 +336,12 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 	if err != nil {
 		return fmt.Errorf("error getting Git directory path: %w", err)
 	}
-	
+
 	gitDirSize, err := sizes.CalculateGitDirSize(gitDir)
 	if err != nil {
 		return fmt.Errorf("error calculating Git directory size: %w", err)
 	}
-	
+
 	historySize.GitDirSize = gitDirSize
 
 	if jsonOutput {

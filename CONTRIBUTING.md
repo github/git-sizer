@@ -15,10 +15,10 @@ Please note that this project is released with a [Contributor Code of Conduct][c
 
 
 2. Configure and install the dependencies
-   - On Unix-y machines: `script/bootstrap`
+   - On Unix-like machines: `script/bootstrap`
    - On Windows: `script/bootstrap.ps1` (requires PowerShell 7+) 
 3. Make sure the tests pass on your machine
-   - On Unix-y machines: `make test`
+   - On Unix-like machines: `make test`
    - On Windows machines: `make -f Makefile.win test` (because there's a different Makefile when building on Windows)
 4. Create a new branch: `git checkout -b my-branch-name`
 5. Make your change, add tests, and make sure the tests still pass

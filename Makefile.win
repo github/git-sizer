@@ -5,11 +5,10 @@ GO111MODULES := 1
 
 # Use the project's go wrapper script via the -File parameter to avoid loading your profile
 GOSCRIPT := $(CURDIR)/script/go.ps1
-# GOSCRIPTCORRECTED := $(shell pwsh.exe -NoProfile -ExecutionPolicy Bypass -Command "$(GOSCRIPT) -replace '/', '\'")
 GO := pwsh.exe -NoProfile -ExecutionPolicy Bypass -File $(GOSCRIPT)
 
 # Get the build version from git using try/catch instead of "||"
-BUILD_VERSION := $(shell pwsh.exe -NoProfile -ExecutionPolicy Bypass -Command "try { git describe --tags --always --dirty 2>$null } catch { Write-Output 'unknown' }")
+BUILD_VERSION := $(shell pwsh.exe -NoProfile -ExecutionPolicy Bypass -Command "try { git describe --tags --always --dirty 2>$$null } catch { Write-Output 'unknown' }")
 LDFLAGS := -X github.com/github/git-sizer/main.BuildVersion=$(BUILD_VERSION)
 GOFLAGS := -mod=readonly
 
@@ -17,16 +16,21 @@ ifdef USE_ISATTY
 GOFLAGS := $(GOFLAGS) --tags isatty
 endif
 
+# Find all Go source files
+GO_SRC_FILES := $(shell powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -Path . -Filter *.go -Recurse | Select-Object -ExpandProperty FullName")
+
 # Default target
 all: bin/git-sizer.exe
 
-# Main binary target
-bin/git-sizer.exe:
+# Main binary target - depend on all Go source files
+bin/git-sizer.exe: $(GO_SRC_FILES)
 	@powershell -NoProfile -ExecutionPolicy Bypass -Command "if (-not (Test-Path bin)) { New-Item -ItemType Directory -Path bin | Out-Null }"
-	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o .\bin\git-sizer.exe .
+	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -a -o .\bin\git-sizer.exe .
 
-# Test target
-test: bin/git-sizer.exe gotest
+# Test target - explicitly run the build first to ensure binary is up to date
+test:
+	@$(MAKE) -f Makefile.win bin/git-sizer.exe
+	@$(MAKE) -f Makefile.win gotest
 
 # Run go tests
 gotest:
@@ -48,4 +52,3 @@ help:
 	@powershell -NoProfile -ExecutionPolicy Bypass -Command "Write-Host 'Example usage:' -ForegroundColor Green"
 	@powershell -NoProfile -ExecutionPolicy Bypass -Command "Write-Host '  nmake -f Makefile.win'"
 	@powershell -NoProfile -ExecutionPolicy Bypass -Command "Write-Host '  nmake -f Makefile.win test'"
-	

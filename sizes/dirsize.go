@@ -13,8 +13,11 @@ func CalculateGitDirSize(gitDir string) (counts.Count64, error) {
 
 	err := filepath.Walk(gitDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			// Skip files we can't access.
-			return nil
+			// Only skip errors for files we cannot access.
+			if os.IsNotExist(err) || os.IsPermission(err) {
+				return nil
+			}
+			return err
 		}
 
 		// Only count files, not directories.

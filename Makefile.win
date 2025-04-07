@@ -27,31 +27,31 @@ all: bin/git-sizer.exe
 
 # Main binary target - depend on all Go source files
 bin/git-sizer.exe: $(GO_SRC_FILES)
-    $(PWSH) "if (-not (Test-Path bin)) { New-Item -ItemType Directory -Path bin | Out-Null }"
-    $(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -a -o .\bin\git-sizer.exe .
+	$(PWSH) "if (-not (Test-Path bin)) { New-Item -ItemType Directory -Path bin | Out-Null }"
+	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -a -o .\bin\git-sizer.exe .
 
 # Test target - explicitly run the build first to ensure binary is up to date
 test:
-    @$(MAKE) -f Makefile.win bin/git-sizer.exe
-    @$(MAKE) -f Makefile.win gotest
+	@$(MAKE) -f Makefile.win bin/git-sizer.exe
+	@$(MAKE) -f Makefile.win gotest
 
 # Run go tests
 gotest:
-    $(GO) test -timeout 60s $(GOFLAGS) -ldflags "$(LDFLAGS)" ./...
+	$(GO) test -timeout 60s $(GOFLAGS) -ldflags "$(LDFLAGS)" ./...
 
 # Clean up builds
 clean:
-    $(PWSH) "if (Test-Path bin) { Remove-Item -Recurse -Force bin }"
+	$(PWSH) "if (Test-Path bin) { Remove-Item -Recurse -Force bin }"
 
 # Help target
 help:
-    $(PWSH) "Write-Host 'Windows Makefile for git-sizer' -ForegroundColor Cyan"
-    $(PWSH) "Write-Host ''"
-    $(PWSH) "Write-Host 'Targets:' -ForegroundColor Green"
-    $(PWSH) "Write-Host '  all        - Build git-sizer (default)'"
-    $(PWSH) "Write-Host '  test       - Run tests'"
-    $(PWSH) "Write-Host '  clean      - Clean build artifacts'"
-    $(PWSH) "Write-Host ''"
-    $(PWSH) "Write-Host 'Example usage:' -ForegroundColor Green"
-    $(PWSH) "Write-Host '  nmake -f Makefile.win'"
-    $(PWSH) "Write-Host '  nmake -f Makefile.win test'"
+	$(PWSH) "Write-Host 'Windows Makefile for git-sizer' -ForegroundColor Cyan"
+	$(PWSH) "Write-Host ''"
+	$(PWSH) "Write-Host 'Targets:' -ForegroundColor Green"
+	$(PWSH) "Write-Host '  all        - Build git-sizer (default)'"
+	$(PWSH) "Write-Host '  test       - Run tests'"
+	$(PWSH) "Write-Host '  clean      - Clean build artifacts'"
+	$(PWSH) "Write-Host ''"
+	$(PWSH) "Write-Host 'Example usage:' -ForegroundColor Green"
+	$(PWSH) "Write-Host '  make -f Makefile.win'"
+	$(PWSH) "Write-Host '  make -f Makefile.win test'"

@@ -1,7 +1,7 @@
 # This script is meant to be sourced with ROOTDIR set.
 
 if (-not $env:ROOTDIR) {
-    Write-Error 'ensure-go-installed.ps1 invoked without ROOTDIR set!'
+    $env:ROOTDIR = (Resolve-Path (Join-Path $scriptDir "..")).Path
 }
 
 # Function to check if Go is installed and at least version 1.21

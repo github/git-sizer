@@ -353,7 +353,7 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		historySize.ShowUnreachable = true
 		unreachableStats, err := repo.GetUnreachableStats()
 		if err == nil {
-			historySize.UnreachableObjectCount = counts.Count32(unreachableStats.Count)
+			historySize.UnreachableObjectCount = counts.Count64(unreachableStats.Count)
 			historySize.UnreachableObjectSize = counts.Count64(unreachableStats.Size)
 		}
 	}

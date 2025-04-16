@@ -213,6 +213,14 @@ type HistorySize struct {
 
 	// The actual size of the .git directory on disk.
 	GitDirSize counts.Count64 `json:"git_dir_size"`
+
+	// The total number of unreachable objects in the repository.
+	UnreachableObjectCount counts.Count64 `json:"unreachable_object_count"`
+
+	// The total size of unreachable objects in the repository.
+	UnreachableObjectSize counts.Count64 `json:"unreachable_object_size"`
+
+	ShowUnreachable bool `json:"-"`
 }
 
 // Convenience function: forget `*path` if it is non-nil and overwrite

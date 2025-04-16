@@ -489,8 +489,7 @@ func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
 		rgis = append(rgis, rgi.Indented(indent))
 	}
 
-	return S(
-		"",
+	sections := []tableContents{
 		S(
 			"Repository statistics",
 			S(
@@ -532,7 +531,6 @@ func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
 					"The actual on-disk size of the .git directory",
 					nil, s.GitDirSize, binary, "B", 1e9),
 			),
-
 			S(
 				"Annotated tags",
 				I("uniqueTagCount", "Count",
@@ -610,5 +608,19 @@ func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
 				"The maximum number of submodules in any checkout",
 				s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, metric, "", 100),
 		),
-	)
+	}
+
+	if s.ShowUnreachable {
+		sections = append(sections, S(
+			"Unreachable objects",
+			I("unreachableObjectCount", "Count",
+				"The total number of unreachable objects in the repository",
+				nil, s.UnreachableObjectCount, metric, "", 1e7),
+			I("unreachableObjectSize", "Uncompressed total size",
+				"The total size of unreachable objects in the repository",
+				nil, s.UnreachableObjectSize, binary, "B", 1e9),
+		))
+	}
+
+	return S("", sections...)
 }

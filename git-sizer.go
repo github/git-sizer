@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/github/git-sizer/counts"
 	"github.com/github/git-sizer/git"
 	"github.com/github/git-sizer/internal/refopts"
 	"github.com/github/git-sizer/isatty"
@@ -46,6 +47,7 @@ const usage = `usage: git-sizer [OPTS] [ROOT...]
                                gitconfig: 'sizer.jsonVersion'.
       --[no-]progress          report (don't report) progress to stderr. Can
                                be set via gitconfig: 'sizer.progress'.
+      --include-unreachable    include unreachable objects
       --version                only report the git-sizer version number
 
  Object selection:
@@ -131,6 +133,7 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 	var progress bool
 	var version bool
 	var showRefs bool
+	var includeUnreachable bool
 
 	// Try to open the repository, but it's not an error yet if this
 	// fails, because the user might only be asking for `--help`.
@@ -207,6 +210,7 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 	rgb.AddRefopts(flags)
 
 	flags.BoolVar(&showRefs, "show-refs", false, "list the references being processed")
+	flags.BoolVar(&includeUnreachable, "include-unreachable", false, "include unreachable objects")
 
 	flags.SortFlags = false
 
@@ -343,6 +347,16 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 	}
 
 	historySize.GitDirSize = gitDirSize
+
+	// Get unreachable object stats and add to output if requested
+	if includeUnreachable {
+		historySize.ShowUnreachable = true
+		unreachableStats, err := repo.GetUnreachableStats()
+		if err == nil {
+			historySize.UnreachableObjectCount = counts.Count32(unreachableStats.Count)
+			historySize.UnreachableObjectSize = counts.Count64(unreachableStats.Size)
+		}
+	}
 
 	if jsonOutput {
 		var j []byte

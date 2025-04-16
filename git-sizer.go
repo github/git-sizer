@@ -47,7 +47,7 @@ const usage = `usage: git-sizer [OPTS] [ROOT...]
                                gitconfig: 'sizer.jsonVersion'.
       --[no-]progress          report (don't report) progress to stderr. Can
                                be set via gitconfig: 'sizer.progress'.
-      --include-unreachable    include unreachable objects
+      --include-unreachable    include unreachable objects in the analysis
       --version                only report the git-sizer version number
 
  Object selection:
@@ -353,8 +353,15 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		historySize.ShowUnreachable = true
 		unreachableStats, err := repo.GetUnreachableStats()
 		if err == nil {
-			historySize.UnreachableObjectCount = counts.Count64(unreachableStats.Count)
-			historySize.UnreachableObjectSize = counts.Count64(unreachableStats.Size)
+			// Store per-type unreachable stats for output
+			historySize.UnreachableBlobsCount = counts.Count64(unreachableStats.Blobs.Count)
+			historySize.UnreachableBlobsSize = counts.Count64(unreachableStats.Blobs.Size)
+			historySize.UnreachableTreesCount = counts.Count64(unreachableStats.Trees.Count)
+			historySize.UnreachableTreesSize = counts.Count64(unreachableStats.Trees.Size)
+			historySize.UnreachableCommitsCount = counts.Count64(unreachableStats.Commits.Count)
+			historySize.UnreachableCommitsSize = counts.Count64(unreachableStats.Commits.Size)
+			historySize.UnreachableTagsCount = counts.Count64(unreachableStats.Tags.Count)
+			historySize.UnreachableTagsSize = counts.Count64(unreachableStats.Tags.Size)
 		}
 	}
 
@@ -374,6 +381,8 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		}
 		fmt.Fprintf(stdout, "%s\n", j)
 	} else {
+		// Print a blank line between progress output and the table
+		fmt.Fprintln(stdout)
 		if _, err := io.WriteString(
 			stdout, historySize.TableString(rg.Groups(), threshold, nameStyle),
 		); err != nil {

@@ -177,45 +177,91 @@ func (repo *Repository) GitPath(relPath string) (string, error) {
 	return string(bytes.TrimSpace(out)), nil
 }
 
-// UnreachableStats holds the count and size of unreachable objects.
+// UnreachableStats holds the count and size of unreachable objects, broken out by type.
 type UnreachableStats struct {
-	Count int64
-	Size  int64
+	Blobs struct {
+		Count int64
+		Size  int64
+	}
+	Trees struct {
+		Count int64
+		Size  int64
+	}
+	Commits struct {
+		Count int64
+		Size  int64
+	}
+	Tags struct {
+		Count int64
+		Size  int64
+	}
 }
 
-// GetUnreachableStats runs 'git fsck --unreachable --no-reflogs --full'
-// and returns the count and total size of unreachable objects.
-// This implementation collects all OIDs from fsck output and then uses
-// batch mode to efficiently retrieve their sizes.
+// GetUnreachableStats runs 'git fsck --unreachable --no-reflogs'
+// and returns the count and total size of unreachable objects, broken out by type.
 func (repo *Repository) GetUnreachableStats() (UnreachableStats, error) {
-	// Run git fsck. Using CombinedOutput captures both stdout and stderr.
-	cmd := repo.GitCommand("fsck", "--unreachable", "--no-reflogs", "--full")
+	cmd := repo.GitCommand("fsck", "--unreachable", "--no-reflogs")
 	output, err := cmd.Output()
 	if err != nil {
-		return UnreachableStats{Count: 0, Size: 0}, fmt.Errorf(
-			"running 'git fsck --unreachable --no-reflogs --full': %w", err,
+		return UnreachableStats{}, fmt.Errorf(
+			"running 'git fsck --unreachable --no-reflogs': %w", err,
 		)
 	}
 
-	var oids []string
-	count := int64(0)
+	// Collect OIDs by type
+
+	oidsByType := map[string][]string{
+		"blob":   {},
+		"tree":   {},
+		"commit": {},
+		"tag":    {},
+	}
+	countsByType := map[string]int64{
+		"blob":   0,
+		"tree":   0,
+		"commit": 0,
+		"tag":    0,
+	}
+
 	for _, line := range bytes.Split(output, []byte{'\n'}) {
 		fields := bytes.Fields(line)
 		// Expected line format: "unreachable <type> <oid> ..."
 		if len(fields) >= 3 && string(fields[0]) == "unreachable" {
-			count++
-			oid := string(fields[2])
-			oids = append(oids, oid)
+			typeStr := string(fields[1])
+			if _, ok := oidsByType[typeStr]; ok {
+				oid := string(fields[2])
+				oidsByType[typeStr] = append(oidsByType[typeStr], oid)
+				countsByType[typeStr]++
+			}
 		}
 	}
 
-	// Retrieve the total size using batch mode.
-	totalSize, err := repo.getTotalSizeFromOids(oids)
-	if err != nil {
-		return UnreachableStats{}, fmt.Errorf("failed to get sizes via batch mode: %w", err)
+	var stats UnreachableStats
+	var errBlob, errTree, errCommit, errTag error
+	stats.Blobs.Count = countsByType["blob"]
+	stats.Trees.Count = countsByType["tree"]
+	stats.Commits.Count = countsByType["commit"]
+	stats.Tags.Count = countsByType["tag"]
+
+	stats.Blobs.Size, errBlob = repo.getTotalSizeFromOids(oidsByType["blob"])
+	stats.Trees.Size, errTree = repo.getTotalSizeFromOids(oidsByType["tree"])
+	stats.Commits.Size, errCommit = repo.getTotalSizeFromOids(oidsByType["commit"])
+	stats.Tags.Size, errTag = repo.getTotalSizeFromOids(oidsByType["tag"])
+
+	if errBlob != nil {
+		return stats, fmt.Errorf("failed to get blob sizes: %w", errBlob)
+	}
+	if errTree != nil {
+		return stats, fmt.Errorf("failed to get tree sizes: %w", errTree)
+	}
+	if errCommit != nil {
+		return stats, fmt.Errorf("failed to get commit sizes: %w", errCommit)
+	}
+	if errTag != nil {
+		return stats, fmt.Errorf("failed to get tag sizes: %w", errTag)
 	}
 
-	return UnreachableStats{Count: count, Size: totalSize}, nil
+	return stats, nil
 }
 
 // getTotalSizeFromOids uses 'git cat-file --batch-check' to retrieve sizes for

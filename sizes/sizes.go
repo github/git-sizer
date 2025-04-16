@@ -214,11 +214,29 @@ type HistorySize struct {
 	// The actual size of the .git directory on disk.
 	GitDirSize counts.Count64 `json:"git_dir_size"`
 
-	// The total number of unreachable objects in the repository.
-	UnreachableObjectCount counts.Count64 `json:"unreachable_object_count"`
+	// The total number of unreachable blobs in the repository.
+	UnreachableBlobsCount counts.Count64 `json:"unreachable_blobs_count"`
 
-	// The total size of unreachable objects in the repository.
-	UnreachableObjectSize counts.Count64 `json:"unreachable_object_size"`
+	// The total size of unreachable blobs in the repository.
+	UnreachableBlobsSize counts.Count64 `json:"unreachable_blobs_size"`
+
+	// The total number of unreachable trees in the repository.
+	UnreachableTreesCount counts.Count64 `json:"unreachable_trees_count"`
+
+	// The total size of unreachable trees in the repository.
+	UnreachableTreesSize counts.Count64 `json:"unreachable_trees_size"`
+
+	// The total number of unreachable commits in the repository.
+	UnreachableCommitsCount counts.Count64 `json:"unreachable_commits_count"`
+
+	// The total size of unreachable commits in the repository.
+	UnreachableCommitsSize counts.Count64 `json:"unreachable_commits_size"`
+
+	// The total number of unreachable tags in the repository.
+	UnreachableTagsCount counts.Count64 `json:"unreachable_tags_count"`
+
+	// The total size of unreachable tags in the repository.
+	UnreachableTagsSize counts.Count64 `json:"unreachable_tags_size"`
 
 	ShowUnreachable bool `json:"-"`
 }

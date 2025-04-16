@@ -89,66 +89,71 @@ Is your Git repository bursting at the seams?
 
 ## Usage
 
-By default, `git-sizer` outputs its results in tabular format. For example, let's use it to analyze [the Linux repository](https://github.com/torvalds/linux), using the `--verbose` option so that all statistics are output:
+By default, `git-sizer` outputs its results in tabular format. For example, let's use it to analyze [the Linux repository](https://github.com/torvalds/linux) (as of April, 2025), using the `--verbose` option so that all statistics are output:
 
 ```
 $ git-sizer --verbose
-Processing blobs: 1652370
-Processing trees: 3396199
-Processing commits: 722647
-Matching commits to trees: 722647
-Processing annotated tags: 534
-Processing references: 539
+Processing blobs: 2928490
+Processing trees: 6510174
+Processing commits: 1351500
+Matching commits to trees: 1351500
+Processing annotated tags: 877
+Processing references: 883
+
 | Name                         | Value     | Level of concern               |
 | ---------------------------- | --------- | ------------------------------ |
-| Overall repository size      |           |                                |
+| Repository statistics        |           |                                |
 | * Commits                    |           |                                |
-|   * Count                    |   723 k   | *                              |
-|   * Total size               |   525 MiB | **                             |
+|   * Count                    |  1.35 M   | **                             |
+|   * Total size               |  1.11 GiB | ****                           |
 | * Trees                      |           |                                |
-|   * Count                    |  3.40 M   | **                             |
-|   * Total size               |  9.00 GiB | ****                           |
-|   * Total tree entries       |   264 M   | *****                          |
+|   * Count                    |  6.51 M   | ****                           |
+|   * Total size               |  19.0 GiB | **********                     |
+|   * Total tree entries       |   547 M   | **********                     |
 | * Blobs                      |           |                                |
-|   * Count                    |  1.65 M   | *                              |
-|   * Total size               |  55.8 GiB | *****                          |
+|   * Count                    |  2.93 M   | *                              |
+|   * Uncompressed total size  |   115 GiB | ************                   |
+| * On-disk size               |           |                                |
+|   * Compressed total size    |  5.68 GiB | ******                         |
 | * Annotated tags             |           |                                |
-|   * Count                    |   534     |                                |
+|   * Count                    |   877     |                                |
 | * References                 |           |                                |
-|   * Count                    |   539     |                                |
+|   * Count                    |   883     |                                |
+|     * Branches               |     1     |                                |
+|     * Tags                   |   880     |                                |
+|     * Remote-tracking refs   |     2     |                                |
 |                              |           |                                |
 | Biggest objects              |           |                                |
 | * Commits                    |           |                                |
 |   * Maximum size         [1] |  72.7 KiB | *                              |
 |   * Maximum parents      [2] |    66     | ******                         |
 | * Trees                      |           |                                |
-|   * Maximum entries      [3] |  1.68 k   | *                              |
+|   * Maximum entries      [3] |  2.60 k   | **                             |
 | * Blobs                      |           |                                |
-|   * Maximum size         [4] |  13.5 MiB | *                              |
+|   * Maximum size         [4] |  22.8 MiB | **                             |
 |                              |           |                                |
 | History structure            |           |                                |
-| * Maximum history depth      |   136 k   |                                |
+| * Maximum history depth      |   198 k   |                                |
 | * Maximum tag depth      [5] |     1     |                                |
 |                              |           |                                |
 | Biggest checkouts            |           |                                |
-| * Number of directories  [6] |  4.38 k   | **                             |
-| * Maximum path depth     [7] |    13     | *                              |
-| * Maximum path length    [8] |   134 B   | *                              |
-| * Number of files        [9] |  62.3 k   | *                              |
-| * Total size of files    [9] |   747 MiB |                                |
-| * Number of symlinks    [10] |    40     |                                |
+| * Number of directories  [6] |  5.89 k   | **                             |
+| * Maximum path depth     [6] |    14     | *                              |
+| * Maximum path length    [7] |   134 B   | *                              |
+| * Number of files        [8] |  88.7 k   | *                              |
+| * Total size of files    [9] |  1.41 GiB | *                              |
+| * Number of symlinks     [6] |    78     |                                |
 | * Number of submodules       |     0     |                                |
 
 [1]  91cc53b0c78596a73fa708cceb7313e7168bb146
 [2]  2cde51fbd0f310c8a2c5f977e665c0ac3945b46d
-[3]  4f86eed5893207aca2c2da86b35b38f2e1ec1fc8 (refs/heads/master:arch/arm/boot/dts)
-[4]  a02b6794337286bc12c907c33d5d75537c240bd0 (refs/heads/master:drivers/gpu/drm/amd/include/asic_reg/vega10/NBIO/nbio_6_1_sh_mask.h)
+[3]  ac1d84c335bcbd5fc5d82b8e985d8a9cc4c67d79 (6a1d798feb65d2a67e6e2cafb0b0e4f430603226:arch/arm/boot/dts)
+[4]  c20bf730dc553e5ae44ad9e769b1f8dface9fa9e (refs/heads/master:drivers/gpu/drm/amd/include/asic_reg/dcn/dcn_3_2_0_sh_mask.h)
 [5]  5dc01c595e6c6ec9ccda4f6f69c131c0dd945f8c (refs/tags/v2.6.11)
-[6]  1459754b9d9acc2ffac8525bed6691e15913c6e2 (589b754df3f37ca0a1f96fccde7f91c59266f38a^{tree})
-[7]  78a269635e76ed927e17d7883f2d90313570fdbc (dae09011115133666e47c35673c0564b0a702db7^{tree})
-[8]  ce5f2e31d3bdc1186041fdfd27a5ac96e728f2c5 (refs/heads/master^{tree})
-[9]  532bdadc08402b7a72a4b45a2e02e5c710b7d626 (e9ef1fe312b533592e39cddc1327463c30b0ed8d^{tree})
-[10] f29a5ea76884ac37e1197bef1941f62fda3f7b99 (f5308d1b83eba20e69df5e0926ba7257c8dd9074^{tree})
+[6]  549fc717f82345cf115dfa586ce076a8d1f296a6 (refs/heads/master^{tree})
+[7]  b0da5ce619daec8138cf92dfcf00e7a51ce856a9 (d8763340d2cb6262fb86424315a1f92cabc0e23c^{tree})
+[8]  fd94fec4e9c4e08df8e919e57fcc974c52c88c3c (3491aa04787f4d7e00da98d94b1b10001c398b5a^{tree})
+[9]  80e16948c5baba02ea2eeda7aa4b2478b68bbaf0 (524c03585fda36584cc7ada49a1827666d37eb4e^{tree})
 ```
 
 The output is a table showing the thing that was measured, its numerical value, and a rough indication of which values might be a cause for concern. In all cases, only objects that are reachable from references are included (i.e., not unreachable objects, nor objects that are reachable only from the reflogs).

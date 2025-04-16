@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/github/git-sizer/counts"
 	"github.com/github/git-sizer/git"
 	"github.com/github/git-sizer/internal/refopts"
 	"github.com/github/git-sizer/isatty"
@@ -46,6 +47,7 @@ const usage = `usage: git-sizer [OPTS] [ROOT...]
                                gitconfig: 'sizer.jsonVersion'.
       --[no-]progress          report (don't report) progress to stderr. Can
                                be set via gitconfig: 'sizer.progress'.
+      --include-unreachable    include unreachable objects in the analysis
       --version                only report the git-sizer version number
 
  Object selection:
@@ -131,6 +133,7 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 	var progress bool
 	var version bool
 	var showRefs bool
+	var includeUnreachable bool
 
 	// Try to open the repository, but it's not an error yet if this
 	// fails, because the user might only be asking for `--help`.
@@ -207,6 +210,7 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 	rgb.AddRefopts(flags)
 
 	flags.BoolVar(&showRefs, "show-refs", false, "list the references being processed")
+	flags.BoolVar(&includeUnreachable, "include-unreachable", false, "include unreachable objects")
 
 	flags.SortFlags = false
 
@@ -331,6 +335,36 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		return fmt.Errorf("error scanning repository: %w", err)
 	}
 
+	// Calculate the actual size of the .git directory.
+	gitDir, err := repo.GitDir()
+	if err != nil {
+		return fmt.Errorf("error getting Git directory path: %w", err)
+	}
+
+	gitDirSize, err := sizes.CalculateGitDirSize(gitDir)
+	if err != nil {
+		return fmt.Errorf("error calculating Git directory size: %w", err)
+	}
+
+	historySize.GitDirSize = gitDirSize
+
+	// Get unreachable object stats and add to output if requested
+	if includeUnreachable {
+		historySize.ShowUnreachable = true
+		unreachableStats, err := repo.GetUnreachableStats()
+		if err == nil {
+			// Store per-type unreachable stats for output
+			historySize.UnreachableBlobsCount = counts.Count64(unreachableStats.Blobs.Count)
+			historySize.UnreachableBlobsSize = counts.Count64(unreachableStats.Blobs.Size)
+			historySize.UnreachableTreesCount = counts.Count64(unreachableStats.Trees.Count)
+			historySize.UnreachableTreesSize = counts.Count64(unreachableStats.Trees.Size)
+			historySize.UnreachableCommitsCount = counts.Count64(unreachableStats.Commits.Count)
+			historySize.UnreachableCommitsSize = counts.Count64(unreachableStats.Commits.Size)
+			historySize.UnreachableTagsCount = counts.Count64(unreachableStats.Tags.Count)
+			historySize.UnreachableTagsSize = counts.Count64(unreachableStats.Tags.Size)
+		}
+	}
+
 	if jsonOutput {
 		var j []byte
 		var err error
@@ -347,6 +381,8 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		}
 		fmt.Fprintf(stdout, "%s\n", j)
 	} else {
+		// Print a blank line between progress output and the table
+		fmt.Fprintln(stdout)
 		if _, err := io.WriteString(
 			stdout, historySize.TableString(rg.Groups(), threshold, nameStyle),
 		); err != nil {

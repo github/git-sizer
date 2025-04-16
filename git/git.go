@@ -1,13 +1,16 @@
 package git
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // ObjectType represents the type of a Git object ("blob", "tree",
@@ -150,11 +153,14 @@ func (repo *Repository) GitCommand(callerArgs ...string) *exec.Cmd {
 
 // GitDir returns the path to `repo`'s `GIT_DIR`. It might be absolute
 // or it might be relative to the current directory.
-func (repo *Repository) GitDir() string {
-	return repo.gitDir
+func (repo *Repository) GitDir() (string, error) {
+	if repo.gitDir == "" {
+		return "", errors.New("gitDir is not set")
+	}
+	return repo.gitDir, nil
 }
 
-// GitPath returns that path of a file within the git repository, by
+// GitPath returns the path of a file within the git repository, by
 // calling `git rev-parse --git-path $relPath`. The returned path is
 // relative to the current directory.
 func (repo *Repository) GitPath(relPath string) (string, error) {
@@ -169,4 +175,148 @@ func (repo *Repository) GitPath(relPath string) (string, error) {
 	// relative to the current directory. Since we haven't changed the
 	// current directory, we can use it as-is:
 	return string(bytes.TrimSpace(out)), nil
+}
+
+// UnreachableStats holds the count and size of unreachable objects, broken out by type.
+type UnreachableStats struct {
+	Blobs struct {
+		Count int64
+		Size  int64
+	}
+	Trees struct {
+		Count int64
+		Size  int64
+	}
+	Commits struct {
+		Count int64
+		Size  int64
+	}
+	Tags struct {
+		Count int64
+		Size  int64
+	}
+}
+
+// GetUnreachableStats runs 'git fsck --unreachable --no-reflogs'
+// and returns the count and total size of unreachable objects, broken out by type.
+func (repo *Repository) GetUnreachableStats() (UnreachableStats, error) {
+	cmd := repo.GitCommand("fsck", "--unreachable", "--no-reflogs")
+	output, err := cmd.Output()
+	if err != nil {
+		return UnreachableStats{}, fmt.Errorf(
+			"running 'git fsck --unreachable --no-reflogs': %w", err,
+		)
+	}
+
+	// Collect OIDs by type
+
+	oidsByType := map[string][]string{
+		"blob":   {},
+		"tree":   {},
+		"commit": {},
+		"tag":    {},
+	}
+	countsByType := map[string]int64{
+		"blob":   0,
+		"tree":   0,
+		"commit": 0,
+		"tag":    0,
+	}
+
+	for _, line := range bytes.Split(output, []byte{'\n'}) {
+		fields := bytes.Fields(line)
+		// Expected line format: "unreachable <type> <oid> ..."
+		if len(fields) >= 3 && string(fields[0]) == "unreachable" {
+			typeStr := string(fields[1])
+			if _, ok := oidsByType[typeStr]; ok {
+				oid := string(fields[2])
+				oidsByType[typeStr] = append(oidsByType[typeStr], oid)
+				countsByType[typeStr]++
+			}
+		}
+	}
+
+	var stats UnreachableStats
+	var errBlob, errTree, errCommit, errTag error
+	stats.Blobs.Count = countsByType["blob"]
+	stats.Trees.Count = countsByType["tree"]
+	stats.Commits.Count = countsByType["commit"]
+	stats.Tags.Count = countsByType["tag"]
+
+	stats.Blobs.Size, errBlob = repo.getTotalSizeFromOids(oidsByType["blob"])
+	stats.Trees.Size, errTree = repo.getTotalSizeFromOids(oidsByType["tree"])
+	stats.Commits.Size, errCommit = repo.getTotalSizeFromOids(oidsByType["commit"])
+	stats.Tags.Size, errTag = repo.getTotalSizeFromOids(oidsByType["tag"])
+
+	if errBlob != nil {
+		return stats, fmt.Errorf("failed to get blob sizes: %w", errBlob)
+	}
+	if errTree != nil {
+		return stats, fmt.Errorf("failed to get tree sizes: %w", errTree)
+	}
+	if errCommit != nil {
+		return stats, fmt.Errorf("failed to get commit sizes: %w", errCommit)
+	}
+	if errTag != nil {
+		return stats, fmt.Errorf("failed to get tag sizes: %w", errTag)
+	}
+
+	return stats, nil
+}
+
+// getTotalSizeFromOids uses 'git cat-file --batch-check' to retrieve sizes for
+// the provided OIDs. It writes each OID to stdin and reads back lines in the
+// format: "<oid> <type> <size>".
+func (repo *Repository) getTotalSizeFromOids(oids []string) (int64, error) {
+	cmd := repo.GitCommand("cat-file", "--batch-check")
+	stdinPipe, err := cmd.StdinPipe()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get stdin pipe: %w", err)
+	}
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get stdout pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return 0, fmt.Errorf("failed to start git cat-file batch: %w", err)
+	}
+
+	// Write all OIDs to the batch process.
+	go func() {
+		defer func() {
+			if err := stdinPipe.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to close stdin pipe: %v\n", err)
+			}
+		}()
+		for _, oid := range oids {
+			if _, err := io.WriteString(stdinPipe, oid+"\n"); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to write to stdin pipe: %v\n", err)
+				return
+			}
+		}
+	}()
+
+	var totalSize int64
+	scanner := bufio.NewScanner(stdoutPipe)
+	// Each line is expected to be: "<oid> <type> <size>"
+	for scanner.Scan() {
+		parts := strings.Fields(scanner.Text())
+		if len(parts) == 3 {
+			var size int64
+			if _, err := fmt.Sscanf(parts[2], "%d", &size); err != nil {
+				return 0, fmt.Errorf("failed to parse size from output: %w", err)
+			}
+			totalSize += size
+		} else {
+			return 0, fmt.Errorf("unexpected output format: %s", scanner.Text())
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return 0, fmt.Errorf("error reading git cat-file output: %w", err)
+	}
+	if err := cmd.Wait(); err != nil {
+		return 0, fmt.Errorf("git cat-file batch process error: %w", err)
+	}
+	return totalSize, nil
 }

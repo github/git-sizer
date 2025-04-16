@@ -279,10 +279,10 @@ func (t *Threshold) Type() string {
 // A `pflag.Value` that can be used as a boolean option that sets a
 // `Threshold` variable to a fixed value. For example,
 //
-//		pflag.Var(
-//			sizes.NewThresholdFlagValue(&threshold, 30),
-//			"critical", "only report critical statistics",
-//		)
+//	pflag.Var(
+//		sizes.NewThresholdFlagValue(&threshold, 30),
+//		"critical", "only report critical statistics",
+//	)
 //
 // adds a `--critical` flag that sets `threshold` to 30.
 type thresholdFlagValue struct {
@@ -489,10 +489,9 @@ func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
 		rgis = append(rgis, rgi.Indented(indent))
 	}
 
-	return S(
-		"",
+	sections := []tableContents{
 		S(
-			"Overall repository size",
+			"Repository statistics",
 			S(
 				"Commits",
 				I("uniqueCommitCount", "Count",
@@ -521,11 +520,17 @@ func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
 				I("uniqueBlobCount", "Count",
 					"The total number of distinct blob objects",
 					nil, s.UniqueBlobCount, metric, "", 1.5e6),
-				I("uniqueBlobSize", "Total size",
+				I("uniqueBlobSize", "Uncompressed total size",
 					"The total size of all distinct blob objects",
 					nil, s.UniqueBlobSize, binary, "B", 10e9),
 			),
 
+			S(
+				"On-disk size",
+				I("gitDirSize", "Compressed total size",
+					"The actual on-disk size of the .git directory",
+					nil, s.GitDirSize, binary, "B", 1e9),
+			),
 			S(
 				"Annotated tags",
 				I("uniqueTagCount", "Count",
@@ -603,5 +608,45 @@ func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
 				"The maximum number of submodules in any checkout",
 				s.MaxExpandedSubmoduleCountTree, s.MaxExpandedSubmoduleCount, metric, "", 100),
 		),
-	)
+	}
+
+	if s.ShowUnreachable {
+		sections = append(sections, S(
+			"Unreachable objects",
+			S("Blobs",
+				I("unreachableBlobsCount", "Count",
+					"The total number of unreachable blobs in the repository",
+					nil, s.UnreachableBlobsCount, metric, "", 1.5e6),
+				I("unreachableBlobsSize", "Uncompressed total size",
+					"The total size of unreachable blobs in the repository",
+					nil, s.UnreachableBlobsSize, binary, "B", 1e9),
+			),
+			S("Trees",
+				I("unreachableTreesCount", "Count",
+					"The total number of unreachable trees in the repository",
+					nil, s.UnreachableTreesCount, metric, "", 1.5e6),
+				I("unreachableTreesSize", "Total size",
+					"The total size of unreachable trees in the repository",
+					nil, s.UnreachableTreesSize, binary, "B", 2e9),
+			),
+			S("Commits",
+				I("unreachableCommitsCount", "Count",
+					"The total number of unreachable commits in the repository",
+					nil, s.UnreachableCommitsCount, metric, "", 500e3),
+				I("unreachableCommitsSize", "Total size",
+					"The total size of unreachable commits in the repository",
+					nil, s.UnreachableCommitsSize, binary, "B", 250e6),
+			),
+			S("Tags",
+				I("unreachableTagsCount", "Count",
+					"The total number of unreachable tags in the repository",
+					nil, s.UnreachableTagsCount, metric, "", 25e3),
+				I("unreachableTagsSize", "Total size",
+					"The total size of unreachable tags in the repository",
+					nil, s.UnreachableTagsSize, binary, "B", 250e6),
+			),
+		))
+	}
+
+	return S("", sections...)
 }

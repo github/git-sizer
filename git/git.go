@@ -189,7 +189,11 @@ type UnreachableStats struct {
 // batch mode to efficiently retrieve their sizes.
 func (repo *Repository) GetUnreachableStats() (UnreachableStats, error) {
 	// Run git fsck. Using CombinedOutput captures both stdout and stderr.
-	cmd := exec.Command(repo.gitBin, "-C", repo.gitDir, "fsck", "--unreachable", "--no-reflogs", "--full")
+	gitDir, err := repo.GitDir()
+	if err != nil {
+		return UnreachableStats{Count: 0, Size: 0}, fmt.Errorf("failed to retrieve Git directory: %w", err)
+	}
+	cmd := exec.Command(repo.gitBin, "-C", gitDir, "fsck", "--unreachable", "--no-reflogs", "--full")
 	cmd.Env = os.Environ()
 	output, err := cmd.CombinedOutput()
 	if err != nil {

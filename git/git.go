@@ -189,19 +189,12 @@ type UnreachableStats struct {
 // batch mode to efficiently retrieve their sizes.
 func (repo *Repository) GetUnreachableStats() (UnreachableStats, error) {
 	// Run git fsck. Using CombinedOutput captures both stdout and stderr.
-	gitDir, err := repo.GitDir()
+	cmd := repo.GitCommand("fsck", "--unreachable", "--no-reflogs", "--full")
+	output, err := cmd.Output()
 	if err != nil {
-		return UnreachableStats{Count: 0, Size: 0}, fmt.Errorf("failed to retrieve Git directory: %w", err)
-	}
-	cmd := exec.Command(repo.gitBin, "-C", gitDir, "fsck", "--unreachable", "--no-reflogs", "--full")
-	cmd.Env = os.Environ()
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "An error occurred trying to process unreachable objects.")
-		os.Stderr.Write(output)
-		fmt.Fprintln(os.Stderr)
-		return UnreachableStats{Count: 0, Size: 0}, err
+		return UnreachableStats{Count: 0, Size: 0}, fmt.Errorf(
+			"running 'git fsck --unreachable --no-reflogs --full': %w", err,
+		)
 	}
 
 	var oids []string
@@ -229,7 +222,7 @@ func (repo *Repository) GetUnreachableStats() (UnreachableStats, error) {
 // the provided OIDs. It writes each OID to stdin and reads back lines in the
 // format: "<oid> <type> <size>".
 func (repo *Repository) getTotalSizeFromOids(oids []string) (int64, error) {
-	cmd := exec.Command(repo.gitBin, "-C", repo.gitDir, "cat-file", "--batch-check")
+	cmd := repo.GitCommand("cat-file", "--batch-check")
 	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get stdin pipe: %w", err)
@@ -245,9 +238,16 @@ func (repo *Repository) getTotalSizeFromOids(oids []string) (int64, error) {
 
 	// Write all OIDs to the batch process.
 	go func() {
-		defer stdinPipe.Close()
+		defer func() {
+			if err := stdinPipe.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to close stdin pipe: %v\n", err)
+			}
+		}()
 		for _, oid := range oids {
-			io.WriteString(stdinPipe, oid+"\n")
+			if _, err := io.WriteString(stdinPipe, oid+"\n"); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to write to stdin pipe: %v\n", err)
+				return
+			}
 		}
 	}()
 
@@ -258,7 +258,9 @@ func (repo *Repository) getTotalSizeFromOids(oids []string) (int64, error) {
 		parts := strings.Fields(scanner.Text())
 		if len(parts) == 3 {
 			var size int64
-			fmt.Sscanf(parts[2], "%d", &size)
+			if _, err := fmt.Sscanf(parts[2], "%d", &size); err != nil {
+				return 0, fmt.Errorf("failed to parse size from output: %w", err)
+			}
 			totalSize += size
 		} else {
 			return 0, fmt.Errorf("unexpected output format: %s", scanner.Text())

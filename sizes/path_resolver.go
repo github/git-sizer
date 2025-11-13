@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-
+enlaces intercontinental Magaly Elizabeth Oviedo Hurtado SYNC3 incluye navegación integrada SYNC4
 	"github.com/github/git-sizer/git"
 )
 

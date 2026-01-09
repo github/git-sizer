@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime/pprof"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -17,6 +19,7 @@ import (
 	"github.com/github/git-sizer/internal/refopts"
 	"github.com/github/git-sizer/isatty"
 	"github.com/github/git-sizer/meter"
+	"github.com/github/git-sizer/otel"
 	"github.com/github/git-sizer/sizes"
 )
 
@@ -47,6 +50,18 @@ const usage = `usage: git-sizer [OPTS] [ROOT...]
       --[no-]progress          report (don't report) progress to stderr. Can
                                be set via gitconfig: 'sizer.progress'.
       --version                only report the git-sizer version number
+
+ OpenTelemetry / Datadog options:
+
+      --otel-endpoint ENDPOINT send metrics to OTLP endpoint (e.g.,
+                               'localhost:4318' for Datadog Agent, or
+                               'https://...' for direct ingestion).
+                               Enables OpenTelemetry metrics export.
+      --otel-insecure          use insecure (non-TLS) connection to endpoint
+      --otel-api-key KEY       API key for authentication (sent as DD-API-KEY
+                               header for Datadog)
+      --otel-repo-name NAME    repository name for tagging metrics (auto-
+                               detected from git remote if not specified)
 
  Object selection:
 
@@ -132,6 +147,12 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 	var version bool
 	var showRefs bool
 
+	// OpenTelemetry options
+	var otelEndpoint string
+	var otelInsecure bool
+	var otelAPIKey string
+	var otelRepoName string
+
 	// Try to open the repository, but it's not an error yet if this
 	// fails, because the user might only be asking for `--help`.
 	repo, repoErr := git.NewRepositoryFromPath(".")
@@ -207,6 +228,12 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 	rgb.AddRefopts(flags)
 
 	flags.BoolVar(&showRefs, "show-refs", false, "list the references being processed")
+
+	// OpenTelemetry / Datadog flags
+	flags.StringVar(&otelEndpoint, "otel-endpoint", "", "OTLP endpoint for metrics export")
+	flags.BoolVar(&otelInsecure, "otel-insecure", false, "use insecure connection to OTLP endpoint")
+	flags.StringVar(&otelAPIKey, "otel-api-key", "", "API key for OTLP authentication")
+	flags.StringVar(&otelRepoName, "otel-repo-name", "", "repository name for metric tagging")
 
 	flags.SortFlags = false
 
@@ -331,6 +358,32 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 		return fmt.Errorf("error scanning repository: %w", err)
 	}
 
+	// Export metrics to OpenTelemetry/Datadog if configured
+	if otelEndpoint != "" {
+		repoName := otelRepoName
+		if repoName == "" {
+			repoName = detectRepositoryName(repo)
+		}
+
+		otelCfg := otel.Config{
+			Endpoint:       otelEndpoint,
+			RepositoryName: repoName,
+			Insecure:       otelInsecure,
+		}
+
+		if otelAPIKey != "" {
+			otelCfg.Headers = map[string]string{
+				"DD-API-KEY": otelAPIKey,
+			}
+		}
+
+		if err := otel.ExportMetrics(ctx, otelCfg, &historySize); err != nil {
+			fmt.Fprintf(stderr, "warning: failed to export metrics to OTLP: %v\n", err)
+		} else if progress {
+			fmt.Fprintf(stderr, "Metrics exported to %s (repository: %s)\n", otelEndpoint, repoName)
+		}
+	}
+
 	if jsonOutput {
 		var j []byte
 		var err error
@@ -355,4 +408,46 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 	}
 
 	return nil
+}
+
+// detectRepositoryName attempts to determine the repository name from git config.
+// It first tries to get the origin remote URL and extract the repo name from it.
+// Falls back to the current directory name if that fails.
+func detectRepositoryName(repo *git.Repository) string {
+	remoteURL, err := repo.ConfigStringDefault("remote.origin.url", "")
+	if err == nil && remoteURL != "" {
+		// Extract repo name from URL patterns like:
+		// - https://github.com/owner/repo.git
+		// - git@github.com:owner/repo.git
+		// - /path/to/repo.git
+		name := remoteURL
+
+		name = strings.TrimSuffix(name, ".git")
+
+		if idx := strings.LastIndex(name, ":"); idx != -1 && !strings.Contains(name, "://") {
+			name = name[idx+1:]
+		}
+
+		if idx := strings.LastIndex(name, "/"); idx != -1 {
+			// Get the last two parts (owner/repo) if possible
+			parts := strings.Split(name, "/")
+			if len(parts) >= 2 {
+				name = parts[len(parts)-2] + "/" + parts[len(parts)-1]
+			} else {
+				name = parts[len(parts)-1]
+			}
+		}
+
+		if name != "" {
+			return name
+		}
+	}
+
+	// Fall back to current working directory name
+	cwd, err := os.Getwd()
+	if err == nil {
+		return filepath.Base(cwd)
+	}
+
+	return "unknown"
 }

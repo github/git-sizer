@@ -12,12 +12,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: '1.21.3'
 
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
 
       - name: Get full repo history
         run: git fetch --prune --unshallow --tags

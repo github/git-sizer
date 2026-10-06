@@ -1,0 +1,57 @@
+# Windows-specific Makefile for git-sizer designed for PowerShell
+
+PACKAGE := github.com/github/git-sizer
+GO111MODULES := 1
+
+# Use the project's go wrapper script via the -File parameter to avoid loading your profile
+GOSCRIPT := $(CURDIR)/script/go.ps1
+GO := pwsh.exe -NoProfile -ExecutionPolicy Bypass -File $(GOSCRIPT)
+
+# Get the build version from git using try/catch instead of "||"
+BUILD_VERSION := $(shell pwsh.exe -NoProfile -ExecutionPolicy Bypass -Command "try { git describe --tags --always --dirty 2>$$null } catch { Write-Output 'unknown' }")
+LDFLAGS := -X github.com/github/git-sizer/main.BuildVersion=$(BUILD_VERSION)
+GOFLAGS := -mod=readonly
+
+ifdef USE_ISATTY
+GOFLAGS := $(GOFLAGS) --tags isatty
+endif
+
+# Find all Go source files
+GO_SRC_FILES := $(shell powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -Path . -Filter *.go -Recurse | Select-Object -ExpandProperty FullName")
+
+# Define common PowerShell command
+PWSH := @powershell -NoProfile -ExecutionPolicy Bypass -Command
+
+# Default target
+all: bin/git-sizer.exe
+
+# Main binary target - depend on all Go source files
+bin/git-sizer.exe: $(GO_SRC_FILES)
+	$(PWSH) "if (-not (Test-Path bin)) { New-Item -ItemType Directory -Path bin | Out-Null }"
+	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -a -o .\bin\git-sizer.exe .
+
+# Test target - explicitly run the build first to ensure binary is up to date
+test:
+	@$(MAKE) -f Makefile.win bin/git-sizer.exe
+	@$(MAKE) -f Makefile.win gotest
+
+# Run go tests
+gotest:
+	$(GO) test -timeout 60s $(GOFLAGS) -ldflags "$(LDFLAGS)" ./...
+
+# Clean up builds
+clean:
+	$(PWSH) "if (Test-Path bin) { Remove-Item -Recurse -Force bin }"
+
+# Help target
+help:
+	$(PWSH) "Write-Host 'Windows Makefile for git-sizer' -ForegroundColor Cyan"
+	$(PWSH) "Write-Host ''"
+	$(PWSH) "Write-Host 'Targets:' -ForegroundColor Green"
+	$(PWSH) "Write-Host '  all        - Build git-sizer (default)'"
+	$(PWSH) "Write-Host '  test       - Run tests'"
+	$(PWSH) "Write-Host '  clean      - Clean build artifacts'"
+	$(PWSH) "Write-Host ''"
+	$(PWSH) "Write-Host 'Example usage:' -ForegroundColor Green"
+	$(PWSH) "Write-Host '  make -f Makefile.win'"
+	$(PWSH) "Write-Host '  make -f Makefile.win test'"

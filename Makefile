@@ -41,7 +41,7 @@ define PLATFORM_template =
 .PHONY: bin/git-sizer-$(1)-$(2)$(3)
 bin/git-sizer-$(1)-$(2)$(3):
 	mkdir -p bin
-	GOOS=$(1) GOARCH=$(2) $$(GO) build $$(GOFLAGS) -ldflags "-X main.ReleaseVersion=$$(VERSION)" -o $$@ .
+	CGO_ENABLED=0 GOOS=$(1) GOARCH=$(2) $$(GO) build $$(GOFLAGS) -ldflags "-X main.ReleaseVersion=$$(VERSION)" -o $$@ .
 common-platforms: bin/git-sizer-$(1)-$(2)$(3)
 
 # Note that releases don't include code from vendor (they're only used

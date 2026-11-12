@@ -25,7 +25,7 @@ jobs:
 
       - name: Build releases
         run: |
-          make releases VERSION=$GITHUB_REF_NAME
+          make releases VERSION="${GITHUB_REF_NAME#v}"
 
       - name: Release
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1

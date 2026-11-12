@@ -6,16 +6,8 @@
         git tag -as v$VERSION
         git push origin v$VERSION
 
-2.  Build the release for the major platforms:
+    Pushing the tag triggers `.github/workflows/release.yml`, which builds the release archives for all supported platforms and creates a draft release on GitHub.
 
-        make releases VERSION=$VERSION
+2.  Go to the [releases page](https://github.com/github/git-sizer/releases).
 
-    The output is a bunch of ZIP files written to directory `releases/`.
-
-3.  Go to the [releases page](https://github.com/github/git-sizer/releases).
-
-4.  Click on "Draft a new release".
-
-5.  Select the tag, add the required information, and upload the zip files.
-
-6.  Click "Publish release".
+3.  Open the generated draft release, add the release notes, and click "Publish release".

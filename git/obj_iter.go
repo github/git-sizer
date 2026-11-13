@@ -18,6 +18,13 @@ type ObjectIter struct {
 	headerCh chan BatchHeader
 }
 
+// maxRevListLineLength is the maximum length of a single line of `git
+// rev-list --objects` output that we are willing to process. A line
+// can be much longer than usual if an object has a very long path
+// name. 64 MiB is far larger than any plausible path name while still
+// bounding how much memory a single line can consume.
+const maxRevListLineLength = 64 * 1024 * 1024
+
 // NewObjectIter returns an iterator that iterates over objects in
 // `repo`. The arguments are passed to `git rev-list --objects`. The
 // second return value is the stdin of the `rev-list` command. The
@@ -64,9 +71,29 @@ func (repo *Repository) NewObjectIter(ctx context.Context) (*ObjectIter, error) 
 		),
 
 		// Read the output of `git rev-list --objects`, strip off any
-		// trailing information, and write the OIDs to `git cat-file`:
-		pipe.LinewiseFunction(
+		// trailing information, and write the OIDs to `git cat-file`.
+		//
+		// A single line of `git rev-list --objects` output can be very
+		// long if an object has a very long path name. We therefore
+		// can't use `pipe.LinewiseFunction()`, whose scanner rejects
+		// any line longer than 64 KiB with "bufio.Scanner: token too
+		// long" (see
+		// https://github.com/github/git-sizer/issues/157). Instead, use
+		// `pipe.ScannerFunction()` with a scanner whose buffer starts
+		// small but is allowed to grow up to `maxRevListLineLength`, so
+		// that normal usage stays cheap while pathologically long lines
+		// can still be processed.
+		pipe.ScannerFunction(
 			"copy-oids",
+			func(r io.Reader) (pipe.Scanner, error) {
+				scanner := bufio.NewScanner(r)
+				scanner.Buffer(
+					make([]byte, 0, bufio.MaxScanTokenSize),
+					maxRevListLineLength,
+				)
+				scanner.Split(pipe.ScanLFTerminatedLines)
+				return scanner, nil
+			},
 			func(_ context.Context, _ pipe.Env, line []byte, stdout *bufio.Writer) error {
 				if len(line) < hashHexSize {
 					return fmt.Errorf("line too short: '%s'", line)

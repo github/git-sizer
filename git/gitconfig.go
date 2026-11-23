@@ -90,10 +90,10 @@ func (config *Config) FullKey(key string) string {
 // a component boundary (i.e., at a '.'). If yes, it returns `true`
 // and the part of the key after the prefix; e.g.:
 //
-//     configKeyMatchesPrefix("foo.bar", "foo") → true, "bar"
-//     configKeyMatchesPrefix("foo.bar", "foo.") → true, "bar"
-//     configKeyMatchesPrefix("foo.bar", "foo.bar") → true, ""
-//     configKeyMatchesPrefix("foo.bar", "foo.bar.") → false, ""
+//	configKeyMatchesPrefix("foo.bar", "foo") → true, "bar"
+//	configKeyMatchesPrefix("foo.bar", "foo.") → true, "bar"
+//	configKeyMatchesPrefix("foo.bar", "foo.bar") → true, ""
+//	configKeyMatchesPrefix("foo.bar", "foo.bar.") → false, ""
 func configKeyMatchesPrefix(key, prefix string) (bool, string) {
 	if prefix == "" {
 		return true, key

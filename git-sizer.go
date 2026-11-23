@@ -123,7 +123,7 @@ func main() {
 }
 
 func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []string) error {
-	var nameStyle sizes.NameStyle = sizes.NameStyleFull
+	nameStyle := sizes.NameStyleFull
 	var cpuprofile string
 	var jsonOutput bool
 	var jsonVersion int
@@ -249,10 +249,10 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 				return err
 			}
 			jsonVersion = v
-			if !(jsonVersion == 1 || jsonVersion == 2) {
+			if jsonVersion != 1 && jsonVersion != 2 {
 				return fmt.Errorf("JSON version (read from gitconfig) must be 1 or 2")
 			}
-		} else if !(jsonVersion == 1 || jsonVersion == 2) {
+		} else if jsonVersion != 1 && jsonVersion != 2 {
 			return fmt.Errorf("JSON version must be 1 or 2")
 		}
 	}

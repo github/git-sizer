@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 )
 
 // ObjectType represents the type of a Git object ("blob", "tree",
@@ -133,7 +134,7 @@ func (repo *Repository) IsFull() (bool, error) {
 }
 
 func (repo *Repository) GitCommand(callerArgs ...string) *exec.Cmd {
-	args := []string{
+	args := slices.Concat([]string{
 		// Disable replace references when running our commands:
 		"--no-replace-objects",
 
@@ -141,9 +142,7 @@ func (repo *Repository) GitCommand(callerArgs ...string) *exec.Cmd {
 		// want to set the grafts file to `/dev/null` below (to
 		// disable grafts even where they are supported):
 		"-c", "advice.graftFileDeprecated=false",
-	}
-
-	args = append(args, callerArgs...)
+	}, callerArgs)
 
 	//nolint:gosec // `gitBin` is chosen carefully, and the rest of
 	// the args have been checked.

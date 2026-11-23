@@ -219,7 +219,7 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 	}
 
 	if cpuprofile != "" {
-		f, err := os.Create(cpuprofile)
+		f, err := os.Create(cpuprofile) //nolint:gosec // The user chooses the path.
 		if err != nil {
 			return fmt.Errorf("couldn't set up cpuprofile file: %w", err)
 		}

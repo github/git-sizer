@@ -23,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          go-version: 1.17
+          go-version: '1.27.4'
 
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,7 +33,7 @@ jobs:
           go mod verify
           go mod download
 
-          LINT_VERSION=1.43.0
+          LINT_VERSION=2.15.0
           curl -fsSL https://github.com/golangci/golangci-lint/releases/download/v${LINT_VERSION}/golangci-lint-${LINT_VERSION}-linux-amd64.tar.gz | \
             tar xz --strip-components 1 --wildcards \*/golangci-lint
           mkdir -p bin && mv golangci-lint bin/
@@ -54,6 +54,6 @@ jobs:
           assert-nothing-changed go fmt ./...
           assert-nothing-changed go mod tidy
 
-          bin/golangci-lint run --out-format=github-actions --timeout=3m || STATUS=$?
+          bin/golangci-lint run --timeout=3m || STATUS=$?
 
           exit $STATUS

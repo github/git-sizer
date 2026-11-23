@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -150,8 +151,7 @@ func CleanGitEnv() []string {
 func (repo *TestRepo) GitCommand(t *testing.T, args ...string) *exec.Cmd {
 	t.Helper()
 
-	gitArgs := []string{"-C", repo.Path}
-	gitArgs = append(gitArgs, args...)
+	gitArgs := slices.Concat([]string{"-C", repo.Path}, args)
 
 	//nolint:gosec // The args all come from the test code.
 	cmd := exec.Command("git", gitArgs...)
@@ -229,7 +229,7 @@ func (repo *TestRepo) AddFile(t *testing.T, relativePath, contents string) {
 	}
 
 	filename := filepath.Join(repo.Path, relativePath)
-	f, err := os.Create(filename)
+	f, err := os.Create(filename) //nolint:gosec // The path comes from the test code.
 	require.NoErrorf(t, err, "creating file %q", filename)
 	_, err = f.WriteString(contents)
 	require.NoErrorf(t, err, "writing to file %q", filename)

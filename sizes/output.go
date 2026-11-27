@@ -491,7 +491,7 @@ func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
 	return S(
 		"",
 		S(
-			"Overall repository size",
+			"Repository statistics",
 			S(
 				"Commits",
 				I("uniqueCommitCount", "Count",
@@ -520,9 +520,16 @@ func (s *HistorySize) contents(refGroups []RefGroup) tableContents {
 				I("uniqueBlobCount", "Count",
 					"The total number of distinct blob objects",
 					nil, s.UniqueBlobCount, metric, "", 1.5e6),
-				I("uniqueBlobSize", "Total size",
+				I("uniqueBlobSize", "Uncompressed total size",
 					"The total size of all distinct blob objects",
 					nil, s.UniqueBlobSize, binary, "B", 10e9),
+			),
+
+			S(
+				"On-disk size",
+				I("gitDirSize", "Compressed total size",
+					"The actual on-disk size of the .git directory",
+					nil, s.GitDirSize, binary, "B", 1e9),
 			),
 
 			S(

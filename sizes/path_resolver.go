@@ -58,15 +58,15 @@ func (n NullPathResolver) RequestPath(oid git.OID, objectType string) *Path {
 	}
 }
 
-func (_ NullPathResolver) ForgetPath(p *Path) {}
+func (NullPathResolver) ForgetPath(p *Path) {}
 
-func (_ NullPathResolver) RecordName(name string, oid git.OID) {}
+func (NullPathResolver) RecordName(name string, oid git.OID) {}
 
-func (_ NullPathResolver) RecordTreeEntry(oid git.OID, name string, childOID git.OID) {}
+func (NullPathResolver) RecordTreeEntry(oid git.OID, name string, childOID git.OID) {}
 
-func (_ NullPathResolver) RecordCommit(oid, tree git.OID) {}
+func (NullPathResolver) RecordCommit(oid, tree git.OID) {}
 
-func (_ NullPathResolver) RecordTag(oid git.OID, tag *git.Tag) {}
+func (NullPathResolver) RecordTag(oid git.OID, tag *git.Tag) {}
 
 type InOrderPathResolver struct {
 	lock        sync.Mutex

@@ -36,14 +36,14 @@ func (f intersection) Filter(refname string) bool {
 // If `f1` is `nil`, it is treated as including nothing.
 type include struct{}
 
-func (_ include) Combine(f1, f2 ReferenceFilter) ReferenceFilter {
+func (include) Combine(f1, f2 ReferenceFilter) ReferenceFilter {
 	if f1 == nil {
 		return f2
 	}
 	return union{f1, f2}
 }
 
-func (_ include) Inverted() Combiner {
+func (include) Inverted() Combiner {
 	return Exclude
 }
 
@@ -61,7 +61,7 @@ func (f union) Filter(refname string) bool {
 // If `f1` is `nil`, it is treated as including everything.
 type exclude struct{}
 
-func (_ exclude) Combine(f1, f2 ReferenceFilter) ReferenceFilter {
+func (exclude) Combine(f1, f2 ReferenceFilter) ReferenceFilter {
 	if f1 == nil {
 		return inverse{f2}
 	}
@@ -69,7 +69,7 @@ func (_ exclude) Combine(f1, f2 ReferenceFilter) ReferenceFilter {
 
 }
 
-func (_ exclude) Inverted() Combiner {
+func (exclude) Inverted() Combiner {
 	return include{}
 }
 
@@ -77,7 +77,7 @@ var Exclude exclude
 
 type allReferencesFilter struct{}
 
-func (_ allReferencesFilter) Filter(_ string) bool {
+func (allReferencesFilter) Filter(_ string) bool {
 	return true
 }
 
@@ -85,7 +85,7 @@ var AllReferencesFilter allReferencesFilter
 
 type noReferencesFilter struct{}
 
-func (_ noReferencesFilter) Filter(_ string) bool {
+func (noReferencesFilter) Filter(_ string) bool {
 	return false
 }
 

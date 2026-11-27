@@ -123,7 +123,7 @@ func main() {
 }
 
 func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []string) error {
-	var nameStyle sizes.NameStyle = sizes.NameStyleFull
+	nameStyle := sizes.NameStyleFull
 	var cpuprofile string
 	var jsonOutput bool
 	var jsonVersion int
@@ -219,7 +219,7 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 	}
 
 	if cpuprofile != "" {
-		f, err := os.Create(cpuprofile)
+		f, err := os.Create(cpuprofile) //nolint:gosec // The user chooses the path.
 		if err != nil {
 			return fmt.Errorf("couldn't set up cpuprofile file: %w", err)
 		}
@@ -249,10 +249,10 @@ func mainImplementation(ctx context.Context, stdout, stderr io.Writer, args []st
 				return err
 			}
 			jsonVersion = v
-			if !(jsonVersion == 1 || jsonVersion == 2) {
+			if jsonVersion != 1 && jsonVersion != 2 {
 				return fmt.Errorf("JSON version (read from gitconfig) must be 1 or 2")
 			}
-		} else if !(jsonVersion == 1 || jsonVersion == 2) {
+		} else if jsonVersion != 1 && jsonVersion != 2 {
 			return fmt.Errorf("JSON version must be 1 or 2")
 		}
 	}
